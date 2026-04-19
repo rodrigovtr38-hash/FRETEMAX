@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { MapPin, CheckCircle2, MessageCircle, ArrowLeft } from 'lucide-react';
+import { MapPin, CheckCircle2, MessageCircle, ArrowLeft, AlertTriangle } from 'lucide-react';
 
 export default function Cliente() {
   const [coletaRua, setColetaRua] = useState('');
@@ -16,7 +16,7 @@ export default function Cliente() {
   const [material, setMaterial] = useState('');
   const [weight, setWeight] = useState('');
 
-  const [vehicle, setVehicle] = useState('carro pequeno');
+  const [vehicle, setVehicle] = useState('Carro Pequeno');
   const [urgent, setUrgent] = useState(false);
 
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -24,11 +24,11 @@ export default function Cliente() {
   const [driverContact, setDriverContact] = useState<{name: string, phone: string} | null>(null);
   const [availableDriverCount, setAvailableDriverCount] = useState<number | null>(null);
 
-  // BLINDAGEM MATEMÁTICA PARA EVITAR TELA BRANCA
+  // BLINDAGEM MATEMÁTICA ABSOLUTA
   const getMultiplier = (veh: string) => {
-    const v = veh.toLowerCase();
-    if (v.includes('utilitário')) return 3;
-    if (v.includes('caminhão')) return 5;
+    const v = String(veh || '').toLowerCase();
+    if (v.includes('utilitário') || v.includes('utilitario')) return 3;
+    if (v.includes('caminhão') || v.includes('caminhao')) return 5;
     if (v.includes('carreta')) return 10;
     return 2; // Padrão seguro para Carro Pequeno
   };
@@ -42,6 +42,12 @@ export default function Cliente() {
   if (urgent) {
     valorCliente *= 1.30;
   }
+
+  // TRAVA DE SEGURANÇA PARA A TELA NÃO FICAR BRANCA
+  const formatCurrency = (value: number) => {
+    if (!Number.isFinite(value)) return 'R$ 0,00';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
 
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
     let v = e.target.value.replace(/\D/g, '');
@@ -112,6 +118,7 @@ export default function Cliente() {
         responsavel: company,
         material: material,
         peso: weight,
+        urgente: urgent,
         valorMotorista,
         valorCliente,
         status: 'aguardando_motorista',
@@ -188,29 +195,54 @@ export default function Cliente() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="p-3 border-[1.5px] border-slate-200 rounded-lg bg-slate-50">
-              <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase">Distância</label>
+              <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase">Distância Calculada</label>
               {isCalculating ? <span className="text-blue-600 text-sm font-bold animate-pulse">Calculando...</span> : <span className="text-slate-800 text-sm font-bold">{safeDistance} KM</span>}
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase">Veículo Necessário</label>
+              <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase">Veículo</label>
               <select className="w-full p-3 border-[1.5px] border-slate-200 rounded-lg bg-white text-sm outline-none focus:border-blue-600" value={vehicle} onChange={e => setVehicle(e.target.value)}>
                 <option value="Carro Pequeno">Carro Pequeno</option>
-                <option value="Utilitário">Utilitário</option>
+                <option value="Utilitário">Utilitário (Fiorino, Kangoo)</option>
                 <option value="Caminhão 3/4">Caminhão 3/4</option>
                 <option value="Carreta">Carreta (Até 30t)</option>
               </select>
             </div>
           </div>
 
+          <div className="border-t border-slate-200 pt-4 mt-2">
+            <h3 className="text-[13px] font-bold text-slate-700 mb-3">Dados da Carga (B2B)</h3>
+            <div className="space-y-3">
+              <div>
+                <input className="w-full p-2.5 border-[1.5px] border-slate-200 rounded-lg text-[13px] focus:border-blue-600 outline-none" placeholder="Empresa / Responsável" value={company} onChange={e => setCompany(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <input className="w-full p-2.5 border-[1.5px] border-slate-200 rounded-lg text-[13px] focus:border-blue-600 outline-none" placeholder="Tipo de Material" value={material} onChange={e => setMaterial(e.target.value)} />
+                <input className="w-full p-2.5 border-[1.5px] border-slate-200 rounded-lg text-[13px] focus:border-blue-600 outline-none" placeholder="Peso Aproximado" value={weight} onChange={e => setWeight(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          
+          {availableDriverCount !== null && safeDistance > 0 && (
+            <div className={`p-3 rounded-lg text-[13px] font-medium border flex items-center gap-2 ${availableDriverCount > 0 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>
+              <AlertTriangle className="w-4 h-4" /> 
+              {availableDriverCount > 0 ? `${availableDriverCount} motoristas na região` : 'Poucos motoristas disponíveis (1)'}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-[14px] text-slate-600 font-medium">
+            <input type="checkbox" checked={urgent} onChange={e => setUrgent(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
+            <span>Solicitação Urgente (+30%)</span>
+          </div>
+
           <div className="bg-[#eff6ff] p-5 rounded-lg text-center mt-6">
             <p className="text-[12px] font-bold text-blue-600 uppercase">Valor do Frete</p>
             <p className="text-3xl font-black text-slate-800 mt-1">
-               {safeDistance > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorCliente) : 'R$ 0,00'}
+               {safeDistance > 0 ? formatCurrency(valorCliente) : 'R$ 0,00'}
             </p>
           </div>
 
           <button onClick={handlePagar} disabled={safeDistance <= 0} className="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-300">
-            Confirmar e Chamar Motorista
+            Pagar e Chamar Motorista
           </button>
         </div>
       </div>
