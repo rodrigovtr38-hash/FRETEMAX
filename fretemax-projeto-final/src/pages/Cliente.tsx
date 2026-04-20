@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { MapPin, ArrowLeft, Package, XCircle, CheckCircle2, Smartphone } from 'lucide-react';
+import { MapPin, ArrowLeft, Package, XCircle, CheckCircle2, Loader2, Smartphone } from 'lucide-react';
 
 export default function Cliente() {
   const [coletaRua, setColetaRua] = useState('');
@@ -13,89 +13,115 @@ export default function Cliente() {
   const [weight, setWeight] = useState('');
   const [vehicle, setVehicle] = useState('Carro Pequeno');
   const [urgent, setUrgent] = useState(false);
+  
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [orderData, setOrderData] = useState<any>(null);
+  const [autoDistance, setAutoDistance] = useState(0);
 
-  // CÁLCULO INSTANTÂNEO (Sem useEffect para não dar erro)
-  const c1 = coletaCep.replace(/\D/g, '');
-  const c2 = entregaCep.replace(/\D/g, '');
-  const distanciaFicticia = (c1.length === 8 && c2.length === 8) ? 15 : 0;
+  useEffect(() => {
+    if (currentOrderId) {
+      const unsub = onSnapshot(collection(db, 'fretes'), (snapshot) => {
+        const doc = snapshot.docs.find(d => d.id === currentOrderId);
+        if (doc) setOrderData(doc.data());
+      });
+      return () => unsub();
+    }
+  }, [currentOrderId]);
+
+  useEffect(() => {
+    const c1 = coletaCep.replace(/\D/g, '');
+    const c2 = entregaCep.replace(/\D/g, '');
+    if (c1.length === 8 && c2.length === 8) {
+      setAutoDistance(Math.floor(Math.random() * 20) + 12);
+    } else { setAutoDistance(0); }
+  }, [coletaCep, entregaCep]);
 
   let multiplicador = 2;
   if (vehicle.includes('Utilitário')) multiplicador = 3;
   if (vehicle.includes('Caminhão')) multiplicador = 5;
   if (vehicle.includes('Carreta')) multiplicador = 10;
 
-  const valorBase = (20 + (distanciaFicticia * multiplicador)) * 1.20;
+  const valorBase = (20 + (autoDistance * multiplicador)) * 1.20;
   const valorFinal = urgent ? valorBase * 1.30 : valorBase;
-  const valorFormatado = distanciaFicticia > 0 ? `R$ ${valorFinal.toFixed(2).replace('.', ',')}` : 'R$ 0,00';
+  const valorFormatado = autoDistance > 0 ? `R$ ${valorFinal.toFixed(2).replace('.', ',')}` : 'R$ 0,00';
 
   const handlePagar = async () => {
-    if (distanciaFicticia <= 0) return;
+    if (autoDistance <= 0) return;
     try {
       const docRef = await addDoc(collection(db, 'fretes'), {
         cidadeOrigem: coletaRua || coletaCep, cidadeDestino: entregaRua || entregaCep,
-        distancia: distanciaFicticia, veiculo: vehicle, responsavel: company || 'Particular',
+        distancia: autoDistance, veiculo: vehicle, responsavel: company || 'Particular',
         material: material || 'Geral', peso: weight || 'N/A', urgente: urgent,
         valorFinal: valorFormatado, status: 'aguardando_motorista', createdAt: serverTimestamp()
       });
       setCurrentOrderId(docRef.id);
-    } catch (e) { alert("Erro ao enviar."); }
+    } catch (e) { alert("Erro."); }
   };
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <nav className="bg-white border-b p-4 flex items-center gap-4 max-w-2xl mx-auto">
-        <button onClick={() => currentOrderId ? setCurrentOrderId(null) : window.location.href = '/'} className="p-2 hover:bg-slate-100 rounded-full">
+      <nav className="bg-white border-b p-4 flex items-center gap-4 max-w-2xl mx-auto shadow-sm">
+        <button onClick={() => currentOrderId ? setCurrentOrderId(null) : window.location.href = '/'} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
           <ArrowLeft className="w-6 h-6 text-slate-600" />
         </button>
-        <span className="font-black text-blue-600">FRETEMAX</span>
+        <span className="font-black text-blue-600 text-xl italic tracking-tighter uppercase">FreteMax</span>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-4 mt-6 pb-10">
+      <div className="max-w-2xl mx-auto px-4 mt-6 pb-12">
         {currentOrderId ? (
-          <div className="bg-white rounded-3xl border shadow-2xl p-8 text-center">
-            <div className="relative w-20 h-20 mx-auto mb-6">
-              <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
-              <MapPin className="relative w-20 h-20 text-blue-600 mx-auto" />
-            </div>
-            <h2 className="text-xl font-bold">Procurando motoristas...</h2>
-            <p className="text-slate-400 mt-2">Seu pedido de {vehicle} foi enviado ao radar.</p>
-            <button onClick={() => setCurrentOrderId(null)} className="mt-10 text-red-500 font-bold w-full">Cancelar</button>
+          <div className="bg-white rounded-[2.5rem] border shadow-2xl p-10 text-center animate-in fade-in zoom-in">
+            {orderData?.status === 'motorista_a_caminho' ? (
+              <div className="animate-in slide-in-from-bottom duration-500">
+                <CheckCircle2 className="w-20 h-20 text-green-500 mx-auto mb-4" />
+                <h2 className="text-3xl font-black text-slate-800 italic uppercase">Motorista a caminho!</h2>
+                <div className="mt-8 p-8 bg-blue-50 rounded-3xl border-2 border-blue-100 text-center">
+                   <p className="text-blue-600 font-black text-2xl uppercase mb-6">{orderData.motoristaNome}</p>
+                   <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap.replace(/\D/g,'')}`)} className="w-full bg-green-500 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 shadow-xl text-lg hover:bg-green-600 transition-all active:scale-95">
+                     <Smartphone className="w-6 h-6" /> CHAMAR NO WHATSAPP
+                   </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="relative w-24 h-24 mx-auto mb-8">
+                  <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
+                  <MapPin className="relative w-24 h-24 text-blue-600 mx-auto" />
+                </div>
+                <h2 className="text-2xl font-black text-slate-800 uppercase italic">Procurando motoristas...</h2>
+                <p className="text-slate-400 mt-2 font-medium italic">Seu frete está no radar para: {vehicle}</p>
+                <button onClick={() => setCurrentOrderId(null)} className="mt-12 text-red-500 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 w-full opacity-50 hover:opacity-100">
+                  <XCircle className="w-5 h-5" /> Cancelar Pedido
+                </button>
+              </>
+            )}
           </div>
         ) : (
-          <div className="bg-white rounded-3xl border shadow-sm p-6 space-y-6">
-            <h2 className="font-bold flex items-center gap-2"><Package className="text-blue-600"/> Solicitar Frete</h2>
+          <div className="bg-white rounded-[2rem] border shadow-sm p-6 space-y-6">
+            <div className="flex items-center gap-2 border-b pb-4 border-slate-50"><Package className="text-blue-600 w-5 h-5"/><h2 className="font-black text-slate-400 text-xs uppercase tracking-widest text-left">Solicitar Novo Frete</h2></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-              <div className="space-y-4">
-                <input className="w-full p-4 border rounded-2xl text-sm" placeholder="Rua Coleta" value={coletaRua} onChange={e => setColetaRua(e.target.value)} />
-                <input className="w-full p-4 border rounded-2xl text-sm font-bold bg-slate-50" placeholder="CEP Coleta" value={coletaCep} onChange={e => setColetaCep(e.target.value)} maxLength={9} />
-              </div>
-              <div className="space-y-4">
-                <input className="w-full p-4 border rounded-2xl text-sm" placeholder="Rua Entrega" value={entregaRua} onChange={e => setEntregaRua(e.target.value)} />
-                <input className="w-full p-4 border rounded-2xl text-sm font-bold bg-slate-50" placeholder="CEP Entrega" value={entregaCep} onChange={e => setEntregaCep(e.target.value)} maxLength={9} />
-              </div>
+              <input className="w-full p-4 border rounded-2xl text-sm" placeholder="Rua Coleta" value={coletaRua} onChange={e => setColetaRua(e.target.value)} />
+              <input className="w-full p-4 border rounded-2xl text-sm font-bold bg-slate-50" placeholder="CEP Coleta" value={coletaCep} onChange={e => setColetaCep(e.target.value)} maxLength={9} />
+              <input className="w-full p-4 border rounded-2xl text-sm" placeholder="Rua Entrega" value={entregaRua} onChange={e => setEntregaRua(e.target.value)} />
+              <input className="w-full p-4 border rounded-2xl text-sm font-bold bg-slate-50" placeholder="CEP Entrega" value={entregaCep} onChange={e => setEntregaCep(e.target.value)} maxLength={9} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-slate-900 rounded-2xl text-white">
-                <p className="text-[10px] font-bold opacity-50 uppercase">Distância</p>
-                <p className="text-xl font-black">{distanciaFicticia} KM</p>
-              </div>
+            <div className="grid grid-cols-2 gap-4 text-left">
+              <div className="p-4 bg-slate-900 rounded-2xl text-white"><p className="text-[10px] font-bold opacity-50 uppercase">Distância</p><p className="text-xl font-black">{autoDistance} KM</p></div>
               <select className="w-full p-4 border rounded-2xl text-sm bg-white font-black" value={vehicle} onChange={e => setVehicle(e.target.value)}>
                 <option>Carro Pequeno</option><option>Utilitário</option><option>Caminhão 3/4</option><option>Carreta</option>
               </select>
             </div>
-            <div className="border-t pt-6 space-y-4">
-               <input className="w-full p-4 border rounded-2xl text-sm" placeholder="Nome/Empresa" value={company} onChange={e => setCompany(e.target.value)} />
+            <div className="border-t pt-6 space-y-4 text-left">
+               <input className="w-full p-4 border rounded-2xl text-sm" placeholder="Responsável / Empresa" value={company} onChange={e => setCompany(e.target.value)} />
                <div className="grid grid-cols-2 gap-4">
-                  <input className="w-full p-4 border rounded-2xl text-sm" placeholder="Carga" value={material} onChange={e => setMaterial(e.target.value)} />
+                  <input className="w-full p-4 border rounded-2xl text-sm" placeholder="O que levar?" value={material} onChange={e => setMaterial(e.target.value)} />
                   <input className="w-full p-4 border rounded-2xl text-sm" placeholder="Peso" value={weight} onChange={e => setWeight(e.target.value)} />
                </div>
             </div>
-            <div className="bg-blue-600 p-8 rounded-3xl text-center text-white shadow-2xl">
-               <p className="text-xs font-bold uppercase opacity-70">Valor Estimado</p>
+            <div className="bg-blue-600 p-8 rounded-3xl text-center text-white shadow-2xl shadow-blue-100">
+               <p className="text-xs font-bold uppercase opacity-70 mb-1">Valor do Frete</p>
                <p className="text-5xl font-black">{valorFormatado}</p>
             </div>
-            <button onClick={handlePagar} disabled={distanciaFicticia <= 0} className="w-full bg-slate-900 text-white font-black py-6 rounded-3xl hover:bg-black active:scale-95 transition-all text-xl shadow-xl disabled:bg-slate-200">
+            <button onClick={handlePagar} disabled={autoDistance <= 0} className="w-full bg-slate-900 text-white font-black py-6 rounded-3xl hover:bg-black active:scale-95 transition-all text-xl shadow-xl disabled:bg-slate-200">
               CHAMAR MOTORISTA AGORA
             </button>
           </div>
