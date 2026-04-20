@@ -1,128 +1,122 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, onSnapshot } from 'firebase/firestore';
-import { ShieldCheck, UploadCloud, AlertCircle, ArrowLeft, Loader2, CheckCircle2, Map as MapIcon } from 'lucide-react';
+import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { ShieldCheck, Map as MapIcon, Loader2, Navigation, Smartphone, ArrowLeft, AlertCircle } from 'lucide-react';
 
 const provider = new GoogleAuthProvider();
 
 export default function Motorista() {
   const [user, setUser] = useState<any>(null);
   const [driverData, setDriverData] = useState<any>(null);
-  const [step, setStep] = useState(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availableFretes, setAvailableFretes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [form, setForm] = useState({ nome: '', whatsapp: '', placa: '', renavam: '', categoria: 'Carro Pequeno' });
-
-  // ESCUTA EM TEMPO REAL: Se você mudar o status no Firebase, a tela dele muda na hora!
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (user) {
         setUser(user);
         const q = query(collection(db, 'motoristas_cadastros'), where('email', '==', user.email));
-        const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-          if (!snapshot.empty) {
-            setDriverData(snapshot.docs[0].data());
-          }
+        return onSnapshot(q, (snapshot) => {
+          if (!snapshot.empty) setDriverData(snapshot.docs[0].data());
           setLoading(false);
         });
-        return () => unsubscribeSnapshot();
-      } else {
-        setLoading(false);
-      }
+      } else { setLoading(false); }
     });
     return () => unsubscribeAuth();
   }, []);
 
-  const handleLogin = async () => {
-    try { await signInWithPopup(auth, provider); } catch (error) { console.error(error); }
-  };
-
-  const handleSubmit = async () => {
-    if (!form.nome || !form.placa || !form.renavam) { alert("Preencha tudo."); return; }
-    setIsSubmitting(true);
-    try {
-      await addDoc(collection(db, 'motoristas_cadastros'), {
-        ...form,
-        email: user.email,
-        status: 'pendente_aprovacao',
-        createdAt: serverTimestamp(),
+  useEffect(() => {
+    if (driverData?.status === 'aprovado') {
+      const q = query(collection(db, 'fretes'), where('status', '==', 'aguardando_motorista'), where('veiculo', '==', driverData.categoria));
+      return onSnapshot(q, (snapshot) => {
+        const fretes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAvailableFretes(fretes);
       });
-    } catch (error) { alert("Erro ao salvar."); }
-    setIsSubmitting(false);
+    }
+  }, [driverData]);
+
+  const handleAccept = async (freteId: string) => {
+    const confirm = window.confirm("Deseja aceitar este frete?");
+    if (!confirm) return;
+    try {
+      await updateDoc(doc(db, 'fretes', freteId), {
+        status: 'motorista_a_caminho',
+        motoristaNome: driverData.nome,
+        motoristaZap: driverData.whatsapp || 'Não informado',
+        acceptedAt: serverTimestamp()
+      });
+      alert("Frete aceito! Verifique os detalhes no radar.");
+    } catch (e) { alert("Erro ao aceitar."); }
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin text-blue-600" /></div>;
 
-  // 1. TELA DE LOGIN
-  if (!user) {
-    return (
-      <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-xl shadow-sm border border-slate-200 text-center">
-        <ShieldCheck className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-slate-800">Portal do Parceiro</h1>
-        <button onClick={handleLogin} className="w-full mt-6 bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700">Entrar com Google</button>
-      </div>
-    );
-  }
+  return (
+    <div className="min-h-screen bg-slate-900 text-white">
+      <nav className="bg-slate-800/50 p-4 border-b border-slate-700 flex items-center gap-4">
+        <button onClick={() => window.location.href = '/'} className="p-2 hover:bg-slate-700 rounded-full transition-colors">
+          <ArrowLeft className="w-6 h-6 text-white" />
+        </button>
+        <span className="font-bold text-sm tracking-widest uppercase">Radar do Parceiro</span>
+      </nav>
 
-  // 2. LOGICA DE NAVEGAÇÃO POR STATUS (O CORAÇÃO DO APP)
-  
-  // SE NÃO TEM CADASTRO -> MOSTRA FORMULÁRIO
-  if (!driverData) {
-    if (step === 1) return (
-      <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded-xl border">
-        <h2 className="text-xl font-bold">Cadastro de Motorista</h2>
-        <div className="space-y-4 mt-6">
-          <input placeholder="Nome Completo" onChange={e => setForm({...form, nome: e.target.value})} className="w-full p-3 border rounded-lg" />
-          <input placeholder="WhatsApp (DDD)" onChange={e => setForm({...form, whatsapp: e.target.value})} className="w-full p-3 border rounded-lg" />
-          <input placeholder="Placa" onChange={e => setForm({...form, placa: e.target.value})} className="w-full p-3 border rounded-lg uppercase" />
-          <input placeholder="Renavam" onChange={e => setForm({...form, renavam: e.target.value})} className="w-full p-3 border rounded-lg" />
-          <button onClick={() => setStep(2)} className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl">Próximo</button>
-        </div>
-      </div>
-    );
-    return (
-      <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded-xl border text-center">
-        <UploadCloud className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-        <h2 className="text-xl font-bold">Documentação</h2>
-        <input type="file" className="mt-6 mb-6" />
-        <button onClick={handleSubmit} disabled={isSubmitting} className="w-full bg-green-600 text-white font-bold py-4 rounded-xl">{isSubmitting ? 'Enviando...' : 'Finalizar'}</button>
-      </div>
-    );
-  }
-
-  // SE STATUS === PENDENTE
-  if (driverData.status === 'pendente_aprovacao') {
-    return (
-      <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-xl border text-center">
-        <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-slate-800">Conta em Análise</h2>
-        <p className="text-slate-600 mt-2">Nossa equipe verificará seus dados em até 24h.</p>
-        <button onClick={() => window.location.href = '/'} className="mt-8 text-blue-600 font-bold">Voltar ao site</button>
-      </div>
-    );
-  }
-
-  // SE STATUS === APROVADO -> RADAR EM TEMPO REAL!
-  if (driverData.status === 'aprovado') {
-    return (
-      <div className="min-h-screen bg-slate-900 text-white p-4">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-xl font-bold flex items-center gap-2"><MapIcon className="text-green-400" /> Radar de Fretes</h1>
-            <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-bold animate-pulse">ONLINE</span>
+      <div className="max-w-md mx-auto p-4 pb-20">
+        {!user ? (
+          <div className="mt-10 bg-white p-8 rounded-2xl text-slate-800 text-center">
+            <ShieldCheck className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold">Portal do Parceiro</h1>
+            <button onClick={() => signInWithPopup(auth, provider)} className="w-full mt-6 bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200">Entrar com Google</button>
           </div>
-          
-          <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 text-center">
-            <p className="text-slate-400">Buscando cargas para {driverData.categoria}...</p>
-            <Loader2 className="animate-spin mx-auto mt-6 text-blue-500" />
-            <p className="text-xs text-slate-500 mt-8 uppercase tracking-widest">Aguardando novo frete na região</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+        ) : driverData?.status === 'aprovado' ? (
+          <div className="space-y-6 mt-4">
+            <div className="flex items-center justify-between">
+               <h1 className="text-xl font-black text-green-400">ONLINE</h1>
+               <span className="bg-slate-800 text-[10px] px-3 py-1 rounded-full border border-slate-700">{driverData.categoria}</span>
+            </div>
 
-  return <div>Erro no sistema. Contate o suporte.</div>;
+            {availableFretes.length === 0 ? (
+              <div className="bg-slate-800/50 p-12 rounded-3xl border border-dashed border-slate-700 text-center">
+                <Loader2 className="animate-spin mx-auto mb-4 text-slate-600" />
+                <p className="text-slate-500 text-sm italic">Ouvindo novos fretes na sua região...</p>
+              </div>
+            ) : (
+              availableFretes.map((frete) => (
+                <div key={frete.id} className="bg-white rounded-3xl p-6 text-slate-800 border-l-[12px] border-green-500 shadow-2xl">
+                  <div className="flex justify-between items-center mb-6">
+                    <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase">{frete.veiculo}</span>
+                    <span className="text-green-600 font-black text-2xl">{frete.valorFinal}</span>
+                  </div>
+                  <div className="space-y-4 mb-8">
+                    <div className="flex gap-4">
+                      <div className="flex flex-col items-center gap-1 mt-1">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full border-2 border-blue-100"></div>
+                        <div className="w-0.5 h-8 bg-slate-100"></div>
+                        <Navigation className="w-3 h-3 text-orange-500" />
+                      </div>
+                      <div className="text-[13px] leading-snug">
+                        <p className="text-slate-400 text-[10px] font-bold uppercase">Origem</p>
+                        <p className="font-bold">{frete.cidadeOrigem}</p>
+                        <p className="text-slate-400 text-[10px] font-bold uppercase mt-3">Destino</p>
+                        <p className="font-bold">{frete.cidadeDestino}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => handleAccept(frete.id)} className="w-full bg-green-600 text-white font-black py-5 rounded-2xl hover:bg-green-700 active:scale-95 transition-all shadow-xl shadow-green-100 text-lg uppercase tracking-tighter">
+                    ACEITAR AGORA
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="mt-12 bg-white p-8 rounded-2xl text-center text-slate-800">
+            <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold">Conta em Análise</h2>
+            <p className="text-slate-500 mt-2">Nossa equipe está validando seus documentos.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
