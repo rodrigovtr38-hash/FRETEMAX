@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ShieldCheck, Map as MapIcon, Loader2, Navigation, Smartphone, ArrowLeft, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Map as MapIcon, Loader2, Navigation, Smartphone, ArrowLeft, AlertCircle, Weight, Gauge } from 'lucide-react';
 
 const provider = new GoogleAuthProvider();
 
@@ -37,16 +37,14 @@ export default function Motorista() {
   }, [driverData]);
 
   const handleAccept = async (freteId: string) => {
-    if (!window.confirm("Deseja aceitar este frete e liberar seu contato para o cliente?")) return;
+    if (!window.confirm("Deseja aceitar este frete agora?")) return;
     try {
-      // ATUALIZAÇÃO DO MESMO DOCUMENTO (Lógica Profissional)
       await updateDoc(doc(db, 'fretes', freteId), {
         status: 'motorista_a_caminho',
         motoristaNome: driverData.nome,
         motoristaZap: driverData.whatsapp || 'Não informado',
         acceptedAt: serverTimestamp()
       });
-      alert("Sucesso! O cliente já pode te chamar no WhatsApp.");
     } catch (e) { alert("Erro ao aceitar frete."); }
   };
 
@@ -55,7 +53,7 @@ export default function Motorista() {
   return (
     <div className="min-h-screen bg-slate-900 text-white font-sans">
       <nav className="bg-slate-800 p-4 border-b border-slate-700 flex items-center gap-4">
-        <button onClick={() => window.location.href = '/'} className="p-2 hover:bg-slate-700 rounded-full transition-all"><ArrowLeft className="w-6 h-6" /></button>
+        <button onClick={() => window.location.href = '/'} className="p-2 hover:bg-slate-700 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
         <span className="font-bold uppercase tracking-widest text-[10px]">Radar de Fretes</span>
       </nav>
 
@@ -63,7 +61,7 @@ export default function Motorista() {
         {!user ? (
           <div className="mt-10 bg-white p-8 rounded-3xl text-slate-800 text-center shadow-2xl">
             <ShieldCheck className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-black italic uppercase">Portal do Parceiro</h2>
+            <h2 className="text-2xl font-black uppercase italic">Portal do Parceiro</h2>
             <button onClick={() => signInWithPopup(auth, provider)} className="w-full mt-6 bg-blue-600 text-white font-black py-5 rounded-2xl">ENTRAR COM GOOGLE</button>
           </div>
         ) : driverData?.status === 'aprovado' ? (
@@ -78,16 +76,35 @@ export default function Motorista() {
             {availableFretes.length === 0 ? (
               <div className="bg-slate-800/50 p-12 rounded-[2rem] border border-slate-700 text-center border-dashed">
                 <Loader2 className="animate-spin mx-auto mb-4 text-slate-600" />
-                <p className="text-slate-500 text-sm italic">Ouvindo novos fretes na região...</p>
+                <p className="text-slate-500 text-sm italic">Ouvindo novos fretes...</p>
               </div>
             ) : (
-              availableFretes.map((frete) => (
+              availableFretes.map((frete: any) => (
                 <div key={frete.id} className="bg-white rounded-[2rem] p-6 text-slate-800 border-l-[12px] border-green-500 shadow-2xl animate-in slide-in-from-right duration-500">
-                  <div className="flex justify-between items-center mb-6">
+                  <div className="flex justify-between items-center mb-4">
                     <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-xl text-[10px] font-black uppercase">{frete.veiculo}</span>
                     <span className="text-green-600 font-black text-2xl">{frete.valorFinal}</span>
                   </div>
-                  <div className="space-y-4 mb-8 text-left">
+
+                  {/* NOVAS INFORMAÇÕES ADICIONADAS AQUI */}
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="bg-slate-50 p-3 rounded-xl flex items-center gap-2">
+                       <Weight className="w-4 h-4 text-slate-400" />
+                       <div>
+                         <p className="text-[9px] uppercase font-bold text-slate-400">Peso</p>
+                         <p className="text-xs font-black">{frete.peso || 'N/A'}</p>
+                       </div>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-xl flex items-center gap-2">
+                       <Gauge className="w-4 h-4 text-slate-400" />
+                       <div>
+                         <p className="text-[9px] uppercase font-bold text-slate-400">Distância</p>
+                         <p className="text-xs font-black">{frete.distancia} KM</p>
+                       </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 mb-8 text-left border-t pt-4">
                     <div className="flex gap-4">
                       <div className="flex flex-col items-center gap-1 mt-1">
                         <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
@@ -95,9 +112,9 @@ export default function Motorista() {
                         <Navigation className="w-3 h-3 text-orange-500" />
                       </div>
                       <div className="text-[13px] leading-snug">
-                        <p className="text-slate-400 font-bold uppercase text-[9px]">Local de Coleta</p>
+                        <p className="text-slate-400 font-bold uppercase text-[9px]">Coleta</p>
                         <p className="font-bold mb-3">{frete.cidadeOrigem}</p>
-                        <p className="text-slate-400 font-bold uppercase text-[9px]">Destino Final</p>
+                        <p className="text-slate-400 font-bold uppercase text-[9px]">Entrega</p>
                         <p className="font-bold">{frete.cidadeDestino}</p>
                       </div>
                     </div>
@@ -110,8 +127,8 @@ export default function Motorista() {
         ) : (
           <div className="mt-12 bg-white p-8 rounded-3xl text-center text-slate-800 shadow-xl">
             <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-black italic uppercase">Conta em Análise</h2>
-            <p className="text-slate-500 mt-2">Aguarde a liberação do seu radar pela central.</p>
+            <h2 className="text-2xl font-black italic uppercase text-slate-700">Conta em Análise</h2>
+            <p className="text-slate-500 mt-2">Aguarde a liberação do seu perfil.</p>
           </div>
         )}
       </div>
