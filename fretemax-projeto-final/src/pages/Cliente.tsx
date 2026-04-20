@@ -1,251 +1,162 @@
-import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { MapPin, CheckCircle2, MessageCircle, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { auth, db } from '../firebase';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { ShieldCheck, UploadCloud, AlertCircle, ArrowLeft } from 'lucide-react';
 
-export default function Cliente() {
-  const [coletaRua, setColetaRua] = useState('');
-  const [coletaCep, setColetaCep] = useState('');
-  const [entregaRua, setEntregaRua] = useState('');
-  const [entregaCep, setEntregaCep] = useState('');
+// CORREÇÃO CIRÚRGICA: Criando o provider direto aqui para não depender do firebase.ts
+const provider = new GoogleAuthProvider();
 
-  const [autoDistance, setAutoDistance] = useState(0);
-  const [isCalculating, setIsCalculating] = useState(false);
-  
-  const [company, setCompany] = useState('');
-  const [material, setMaterial] = useState('');
-  const [weight, setWeight] = useState('');
+export default function Motorista() {
+  const [user, setUser] = useState<any>(null);
+  const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [vehicle, setVehicle] = useState('Carro Pequeno');
-  const [urgent, setUrgent] = useState(false);
+  const [form, setForm] = useState({
+    nome: '',
+    whatsapp: '',
+    placa: '',
+    renavam: '',
+    categoria: 'Carro Pequeno'
+  });
 
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [orderStatus, setOrderStatus] = useState<string | null>(null);
-  const [driverContact, setDriverContact] = useState<{name: string, phone: string} | null>(null);
-  const [availableDriverCount, setAvailableDriverCount] = useState<number | null>(null);
-
-  // BLINDAGEM MATEMÁTICA ABSOLUTA
-  const getMultiplier = (veh: string) => {
-    const v = String(veh || '').toLowerCase();
-    if (v.includes('utilitário') || v.includes('utilitario')) return 3;
-    if (v.includes('caminhão') || v.includes('caminhao')) return 5;
-    if (v.includes('carreta')) return 10;
-    return 2; // Padrão seguro para Carro Pequeno
+  const handleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+      setUser(result.user);
+    } catch (error) {
+      console.error("Erro no login:", error);
+    }
   };
 
-  const safeDistance = Number(autoDistance) || 0;
-  const multiplier = getMultiplier(vehicle);
-  const base = 20;
-  
-  const valorMotorista = base + (safeDistance * multiplier);
-  let valorCliente = valorMotorista * 1.20; // Margem de 20%
-  if (urgent) {
-    valorCliente *= 1.30;
+  const handleChange = (e: any) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async () => {
+    if (!form.nome || !form.placa || !form.renavam) {
+        alert("Compliance: Preencha todos os dados obrigatórios do veículo.");
+        return;
+    }
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'motoristas_cadastros'), {
+        ...form,
+        email: user.email,
+        status: 'pendente_aprovacao',
+        createdAt: serverTimestamp(),
+      });
+      setStep(3);
+    } catch (error) {
+      console.error("Erro ao salvar:", error);
+      alert("Erro de conexão. Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // TELA 0: LOGIN INICIAL
+  if (!user) {
+    return (
+      <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-xl shadow-sm border border-slate-200 text-center">
+        <button onClick={() => window.location.href = '/'} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-6 font-medium text-sm">
+            <ArrowLeft className="w-4 h-4" /> Voltar ao site
+        </button>
+        <ShieldCheck className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">Portal do Parceiro</h1>
+        <p className="text-slate-500 mb-8 text-[15px]">Acesso restrito. Faça login com o Google para iniciar seu credenciamento de segurança.</p>
+        <button onClick={handleLogin} className="w-full bg-blue-600 text-white font-bold py-3.5 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+          Entrar com Conta Google
+        </button>
+      </div>
+    );
   }
 
-  // TRAVA DE SEGURANÇA PARA A TELA NÃO FICAR BRANCA
-  const formatCurrency = (value: number) => {
-    if (!Number.isFinite(value)) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
-
-  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
-    let v = e.target.value.replace(/\D/g, '');
-    if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
-    setter(v.slice(0, 9));
-  };
-
-  useEffect(() => {
-    if (coletaCep.length === 9 && entregaCep.length === 9) {
-      setIsCalculating(true);
-      const timer = setTimeout(() => {
-        setAutoDistance(18.5); 
-        setIsCalculating(false);
-      }, 1200);
-      return () => clearTimeout(timer);
-    } else {
-      setAutoDistance(0);
-    }
-  }, [coletaCep, entregaCep]);
-
-  useEffect(() => {
-    const fetchAvail = async () => {
-      if (!coletaCep || !vehicle || autoDistance <= 0) {
-        setAvailableDriverCount(null);
-        return;
-      }
-      try {
-        const q = query(collection(db, 'motoristas_cadastros'), where('categoria', '==', vehicle));
-        const snap = await getDocs(q);
-        setAvailableDriverCount(snap.docs.length);
-      } catch(e) {
-        setAvailableDriverCount(0);
-      }
-    }
-    fetchAvail();
-  }, [coletaCep, vehicle, autoDistance]);
-
-  useEffect(() => {
-    if (!orderId) return;
-    const unsubscribe = onSnapshot(doc(db, 'fretes', orderId), (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setOrderStatus(data.status);
-          if (data.status === 'aceito') {
-            setDriverContact({
-              name: data.motoristaNome || 'Motorista',
-              phone: data.motoristaWhatsapp || '',
-            });
-          }
-        }
-      }
-    );
-    return () => unsubscribe();
-  }, [orderId]);
-
-  const handlePagar = async () => {
-    if (!coletaRua || !coletaCep || !entregaRua || !entregaCep || autoDistance <= 0) {
-      alert("Preencha todos os campos de endereço corretamente.");
-      return;
-    }
-    
-    try {
-      const docRef = await addDoc(collection(db, 'fretes'), {
-        cidadeOrigem: `${coletaRua}, CEP: ${coletaCep}`,
-        cidadeDestino: `${entregaRua}, CEP: ${entregaCep}`,
-        distancia: safeDistance,
-        veiculo: vehicle,
-        responsavel: company,
-        material: material,
-        peso: weight,
-        urgente: urgent,
-        valorMotorista,
-        valorCliente,
-        status: 'aguardando_motorista',
-        createdAt: serverTimestamp()
-      });
-      setOrderId(docRef.id);
-      setOrderStatus('aguardando_motorista');
-    } catch (error) {
-      alert("Erro ao conectar com o banco. Tente novamente.");
-    }
-  };
-
-  if (orderStatus === 'aceito') {
+  // ETAPA 1: DADOS DO VEÍCULO
+  if (step === 1) {
     return (
-      <div className="max-w-md mx-auto mt-10 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col pt-8">
-        <div className="p-6 flex flex-col items-center text-center gap-6 animate-in fade-in">
-          <div className="w-16 h-16 bg-[#dcfce7] text-[#166534] rounded-full flex items-center justify-center">
-            <CheckCircle2 className="w-8 h-8" />
+      <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h2 className="text-[18px] font-bold text-slate-800 mb-1">Etapa 1: Dados Oficiais</h2>
+        <p className="text-sm text-slate-500 mb-5">Preencha os dados exatos do documento.</p>
+        <div className="space-y-4">
+          <div>
+              <label className="block text-[12px] font-bold text-slate-500 mb-1 uppercase">Nome Completo</label>
+              <input name="nome" placeholder="Igual à CNH" onChange={handleChange} className="w-full p-3 border-[1.5px] border-slate-200 rounded-lg text-sm focus:border-blue-600 focus:outline-none" />
           </div>
           <div>
-            <h2 className="text-[18px] font-bold text-slate-800">🚚 Motorista a caminho!</h2>
-            <p className="text-slate-500 mt-2 text-sm">Seu frete foi aceito.</p>
+              <label className="block text-[12px] font-bold text-slate-500 mb-1 uppercase">WhatsApp</label>
+              <input name="whatsapp" placeholder="(00) 00000-0000" onChange={handleChange} className="w-full p-3 border-[1.5px] border-slate-200 rounded-lg text-sm focus:border-blue-600 focus:outline-none" />
           </div>
-          {driverContact && driverContact.phone && (
-            <a href={`https://wa.me/55${driverContact.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="w-full mt-2 p-[14px] flex items-center justify-center gap-2 bg-[#25d366] text-white font-semibold rounded-lg hover:opacity-90">
-              <MessageCircle className="w-5 h-5" /> Falar com {driverContact.name}
-            </a>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (orderStatus === 'aguardando_motorista') {
-    return (
-      <div className="max-w-md mx-auto mt-10 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-          <h2 className="text-[16px] font-semibold text-slate-800">Status do Frete</h2>
-          <span className="px-3 py-1 rounded-full text-[12px] font-bold bg-[#fef3c7] text-[#92400e]">Buscando...</span>
-        </div>
-        <div className="p-8 flex flex-col items-center text-center gap-4">
-          <MapPin className="w-10 h-10 text-blue-600 animate-bounce" />
-          <p className="text-[16px] font-semibold text-slate-800">Procurando motoristas na região...</p>
-          <div className="w-full h-2 bg-slate-100 rounded-full mt-4 overflow-hidden">
-            <div className="w-1/2 h-full bg-blue-600 animate-pulse"></div>
+          <div className="grid grid-cols-2 gap-3">
+              <div>
+                  <label className="block text-[12px] font-bold text-slate-500 mb-1 uppercase">Placa</label>
+                  <input name="placa" placeholder="ABC-1234" onChange={handleChange} className="w-full p-3 border-[1.5px] border-slate-200 rounded-lg uppercase text-sm focus:border-blue-600 focus:outline-none" />
+              </div>
+              <div>
+                  <label className="block text-[12px] font-bold text-slate-500 mb-1 uppercase">RENAVAM</label>
+                  <input name="renavam" placeholder="0000000000" onChange={handleChange} className="w-full p-3 border-[1.5px] border-slate-200 rounded-lg text-sm focus:border-blue-600 focus:outline-none" />
+              </div>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
-      <button onClick={() => window.location.href = '/'} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 mb-6 font-medium text-sm">
-        <ArrowLeft className="w-4 h-4" /> Voltar ao Início
-      </button>
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200 bg-neutral-50"><h2 className="text-[16px] font-semibold text-slate-800">Simulador Automático de Frete</h2></div>
-        <div className="p-6 space-y-5">
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 border-[1.5px] border-slate-200 rounded-lg relative">
-              <span className="absolute -top-[10px] left-3 bg-white px-2 text-[11px] font-bold uppercase text-blue-600">Origem (Coleta)</span>
-              <input className="w-full p-2 mb-2 border-[1.5px] rounded text-sm focus:border-blue-600 outline-none" placeholder="Rua e Número" value={coletaRua} onChange={e => setColetaRua(e.target.value)} />
-              <input className="w-full p-2 border-[1.5px] rounded text-sm focus:border-blue-600 outline-none" placeholder="CEP" value={coletaCep} onChange={e => handleCepChange(e, setColetaCep)} maxLength={9} />
-            </div>
-            <div className="p-4 border-[1.5px] border-slate-200 rounded-lg relative">
-              <span className="absolute -top-[10px] left-3 bg-white px-2 text-[11px] font-bold uppercase text-orange-600">Destino (Entrega)</span>
-              <input className="w-full p-2 mb-2 border-[1.5px] rounded text-sm focus:border-blue-600 outline-none" placeholder="Rua e Número" value={entregaRua} onChange={e => setEntregaRua(e.target.value)} />
-              <input className="w-full p-2 border-[1.5px] rounded text-sm focus:border-blue-600 outline-none" placeholder="CEP" value={entregaCep} onChange={e => handleCepChange(e, setEntregaCep)} maxLength={9} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 border-[1.5px] border-slate-200 rounded-lg bg-slate-50">
-              <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase">Distância Calculada</label>
-              {isCalculating ? <span className="text-blue-600 text-sm font-bold animate-pulse">Calculando...</span> : <span className="text-slate-800 text-sm font-bold">{safeDistance} KM</span>}
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase">Veículo</label>
-              <select className="w-full p-3 border-[1.5px] border-slate-200 rounded-lg bg-white text-sm outline-none focus:border-blue-600" value={vehicle} onChange={e => setVehicle(e.target.value)}>
+          <div>
+              <label className="block text-[12px] font-bold text-slate-500 mb-1 uppercase">Categoria do Veículo</label>
+              <select name="categoria" onChange={handleChange} className="w-full p-3 border-[1.5px] border-slate-200 rounded-lg bg-white text-sm focus:border-blue-600 focus:outline-none">
                 <option value="Carro Pequeno">Carro Pequeno</option>
                 <option value="Utilitário">Utilitário (Fiorino, Kangoo)</option>
                 <option value="Caminhão 3/4">Caminhão 3/4</option>
-                <option value="Carreta">Carreta (Até 30t)</option>
+                <option value="Carreta">Carreta (Até 30 Toneladas)</option>
               </select>
-            </div>
           </div>
-
-          <div className="border-t border-slate-200 pt-4 mt-2">
-            <h3 className="text-[13px] font-bold text-slate-700 mb-3">Dados da Carga (B2B)</h3>
-            <div className="space-y-3">
-              <div>
-                <input className="w-full p-2.5 border-[1.5px] border-slate-200 rounded-lg text-[13px] focus:border-blue-600 outline-none" placeholder="Empresa / Responsável" value={company} onChange={e => setCompany(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input className="w-full p-2.5 border-[1.5px] border-slate-200 rounded-lg text-[13px] focus:border-blue-600 outline-none" placeholder="Tipo de Material" value={material} onChange={e => setMaterial(e.target.value)} />
-                <input className="w-full p-2.5 border-[1.5px] border-slate-200 rounded-lg text-[13px] focus:border-blue-600 outline-none" placeholder="Peso Aproximado" value={weight} onChange={e => setWeight(e.target.value)} />
-              </div>
-            </div>
-          </div>
-          
-          {availableDriverCount !== null && safeDistance > 0 && (
-            <div className={`p-3 rounded-lg text-[13px] font-medium border flex items-center gap-2 ${availableDriverCount > 0 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>
-              <AlertTriangle className="w-4 h-4" /> 
-              {availableDriverCount > 0 ? `${availableDriverCount} motoristas na região` : 'Poucos motoristas disponíveis (1)'}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 text-[14px] text-slate-600 font-medium">
-            <input type="checkbox" checked={urgent} onChange={e => setUrgent(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
-            <span>Solicitação Urgente (+30%)</span>
-          </div>
-
-          <div className="bg-[#eff6ff] p-5 rounded-lg text-center mt-6">
-            <p className="text-[12px] font-bold text-blue-600 uppercase">Valor do Frete</p>
-            <p className="text-3xl font-black text-slate-800 mt-1">
-               {safeDistance > 0 ? formatCurrency(valorCliente) : 'R$ 0,00'}
-            </p>
-          </div>
-
-          <button onClick={handlePagar} disabled={safeDistance <= 0} className="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-300">
-            Pagar e Chamar Motorista
+          <button onClick={() => setStep(2)} className="w-full bg-slate-800 text-white font-bold py-3.5 rounded-lg mt-2 hover:bg-slate-900 transition-colors">
+              Continuar para Documentos
           </button>
         </div>
       </div>
+    );
+  }
+
+  // ETAPA 2: UPLOAD DE DOCUMENTOS
+  if (step === 2) {
+    return (
+      <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+         <h2 className="text-[18px] font-bold text-slate-800 mb-1">Etapa Final: Documentação</h2>
+         <p className="text-sm text-slate-500 mb-5">Envie fotos legíveis para a análise de segurança.</p>
+         <div className="space-y-4">
+            <div className="border-2 border-dashed border-slate-300 p-6 rounded-lg text-center cursor-pointer hover:bg-slate-50 transition-colors">
+                <UploadCloud className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                <p className="text-[15px] font-bold text-slate-700">Foto da CNH</p>
+                <p className="text-[12px] text-slate-500 mb-3">Tire do documento fora do plástico</p>
+                <input type="file" className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+            </div>
+            <div className="border-2 border-dashed border-slate-300 p-6 rounded-lg text-center cursor-pointer hover:bg-slate-50 transition-colors">
+                <UploadCloud className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                <p className="text-[15px] font-bold text-slate-700">Documento do Carro (CRLV)</p>
+                <p className="text-[12px] text-slate-500 mb-3">Pode ser o documento digital (PDF/Print)</p>
+                <input type="file" className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+            </div>
+            <button onClick={handleSubmit} disabled={isSubmitting} className="w-full bg-green-600 text-white font-bold py-3.5 rounded-lg hover:bg-green-700 transition-colors mt-4">
+                {isSubmitting ? 'Criptografando dados...' : 'Enviar para Análise de Segurança'}
+            </button>
+            <button onClick={() => setStep(1)} className="w-full text-slate-500 text-sm font-medium hover:text-slate-700 py-2">
+                Voltar e corrigir dados
+            </button>
+         </div>
+      </div>
+    );
+  }
+
+  // TELA FINAL: COMPLIANCE
+  return (
+    <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-xl shadow-sm border border-slate-200 text-center animate-in fade-in zoom-in duration-300">
+      <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+      <h2 className="text-[22px] font-bold text-slate-800 mb-2">Conta em Análise</h2>
+      <p className="text-slate-600 text-[15px] leading-relaxed">
+        Seus documentos foram recebidos pelo nosso sistema e estão passando pelo rigoroso processo de Background Check (Verificação de Antecedentes).
+      </p>
+      <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
+          <p className="text-slate-800 text-[14px] font-bold uppercase tracking-wide">Prazo de liberação</p>
+          <p className="text-blue-600 font-black text-xl mt-1">Até 24 horas</p>
+      </div>
+      <p className="text-slate-400 mt-6 text-[13px]">Você será notificado via WhatsApp assim que sua conta for ativada para receber fretes.</p>
     </div>
   );
 }
