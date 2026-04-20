@@ -1,179 +1,109 @@
-import { useState, useEffect } from 'react';
-import { db } from '../firebase';
+import { useState } from 'react';
+import { auth, db } from '../firebase';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { MapPin, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, UploadCloud, AlertCircle, ArrowLeft } from 'lucide-react';
 
-export default function Cliente() {
-  const [coletaRua, setColetaRua] = useState('');
-  const [coletaCep, setColetaCep] = useState('');
-  const [entregaRua, setEntregaRua] = useState('');
-  const [entregaCep, setEntregaCep] = useState('');
+const provider = new GoogleAuthProvider();
 
-  const [autoDistance, setAutoDistance] = useState(0);
-  const [isCalculating, setIsCalculating] = useState(false);
-  
-  const [company, setCompany] = useState('');
-  const [material, setMaterial] = useState('');
-  const [weight, setWeight] = useState('');
+export default function Motorista() {
+  const [user, setUser] = useState<any>(null);
+  const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [vehicle, setVehicle] = useState('Carro Pequeno');
-  const [urgent, setUrgent] = useState(false);
+  const [form, setForm] = useState({
+    nome: '',
+    whatsapp: '',
+    placa: '',
+    renavam: '',
+    categoria: 'Carro Pequeno'
+  });
 
-  const [orderStatus, setOrderStatus] = useState<string | null>(null);
+  const handleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+      setUser(result.user);
+    } catch (error) {
+      console.error("Erro no login:", error);
+    }
+  };
 
-  // MOTOR MATEMÁTICO BLINDADO (Sem consulta ao banco na troca do select)
-  let multiplicador = 2;
-  if (vehicle === 'Utilitário' || vehicle === 'Utilitário (Fiorino, Kangoo)') multiplicador = 3;
-  if (vehicle === 'Caminhão' || vehicle === 'Caminhão 3/4') multiplicador = 5;
-  if (vehicle === 'Carreta' || vehicle === 'Carreta (Até 30t)') multiplicador = 10;
+  const handleChange = (e: any) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
-  const distanciaSegura = autoDistance || 0;
-  const base = 20;
-  
-  const valorMotorista = base + (distanciaSegura * multiplicador);
-  let valorCliente = valorMotorista * 1.20; 
-  if (urgent) {
-    valorCliente *= 1.30;
+  const handleSubmit = async () => {
+    if (!form.nome || !form.placa || !form.renavam) {
+        alert("Compliance: Preencha todos os dados obrigatórios do veículo.");
+        return;
+    }
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'motoristas_cadastros'), {
+        ...form,
+        email: user.email,
+        status: 'pendente_aprovacao',
+        createdAt: serverTimestamp(),
+      });
+      setStep(3);
+    } catch (error) {
+      alert("Erro de conexão. Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-xl shadow-sm border border-slate-200 text-center">
+        <button onClick={() => window.location.href = '/'} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-6 font-medium text-sm">
+            <ArrowLeft className="w-4 h-4" /> Voltar ao site
+        </button>
+        <ShieldCheck className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">Portal do Parceiro</h1>
+        <p className="text-slate-500 mb-8 text-[15px]">Acesso restrito. Faça login com o Google para iniciar seu credenciamento.</p>
+        <button onClick={handleLogin} className="w-full bg-blue-600 text-white font-bold py-3.5 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+          Entrar com Conta Google
+        </button>
+      </div>
+    );
   }
 
-  // Formatador à prova de falhas (NUNCA dá tela branca)
-  const valorFormatado = `R$ ${valorCliente.toFixed(2).replace('.', ',')}`;
-
-  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
-    let v = e.target.value.replace(/\D/g, '');
-    if (v.length > 5) v = v.replace(/^(\d{5})(\d)/, '$1-$2');
-    setter(v.slice(0, 9));
-  };
-
-  useEffect(() => {
-    if (coletaCep.length === 9 && entregaCep.length === 9) {
-      setIsCalculating(true);
-      const timer = setTimeout(() => {
-        setAutoDistance(18.5); 
-        setIsCalculating(false);
-      }, 1200);
-      return () => clearTimeout(timer);
-    } else {
-      setAutoDistance(0);
-    }
-  }, [coletaCep, entregaCep]);
-
-  const handlePagar = async () => {
-    if (!coletaRua || !coletaCep || !entregaRua || !entregaCep || autoDistance <= 0) {
-      alert("Preencha todos os campos de endereço corretamente.");
-      return;
-    }
-    
-    setOrderStatus('aguardando_motorista'); // Muda a tela na mesma hora
-    
-    try {
-      await addDoc(collection(db, 'fretes'), {
-        cidadeOrigem: `${coletaRua}, CEP: ${coletaCep}`,
-        cidadeDestino: `${entregaRua}, CEP: ${entregaCep}`,
-        distancia: distanciaSegura,
-        veiculo: vehicle,
-        responsavel: company,
-        material: material,
-        peso: weight,
-        urgente: urgent,
-        valorMotorista,
-        valorCliente,
-        status: 'aguardando_motorista',
-        createdAt: serverTimestamp()
-      });
-    } catch (error) {
-      alert("Aviso: Falha ao salvar no banco de dados, verifique sua conexão.");
-      setOrderStatus(null);
-    }
-  };
-
-  // TELA 2: BUSCANDO MOTORISTA
-  if (orderStatus === 'aguardando_motorista') {
+  if (step === 1) {
     return (
-      <div className="max-w-md mx-auto mt-10 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-          <h2 className="text-[16px] font-semibold text-slate-800">Status do Frete</h2>
-          <span className="px-3 py-1 rounded-full text-[12px] font-bold bg-[#fef3c7] text-[#92400e]">Buscando...</span>
-        </div>
-        <div className="p-8 flex flex-col items-center text-center gap-4">
-          <MapPin className="w-10 h-10 text-blue-600 animate-bounce" />
-          <p className="text-[16px] font-semibold text-slate-800">Procurando motoristas na região...</p>
-          <div className="w-full h-2 bg-slate-100 rounded-full mt-4 overflow-hidden">
-            <div className="w-1/2 h-full bg-blue-600 animate-pulse"></div>
-          </div>
+      <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h2 className="text-[18px] font-bold text-slate-800 mb-1">Etapa 1: Dados Oficiais</h2>
+        <div className="space-y-4 mt-4">
+          <input name="nome" placeholder="Nome Completo (Igual CNH)" onChange={handleChange} className="w-full p-3 border-[1.5px] rounded-lg text-sm" />
+          <input name="placa" placeholder="Placa (ABC-1234)" onChange={handleChange} className="w-full p-3 border-[1.5px] rounded-lg text-sm uppercase" />
+          <input name="renavam" placeholder="Renavam" onChange={handleChange} className="w-full p-3 border-[1.5px] rounded-lg text-sm" />
+          <button onClick={() => setStep(2)} className="w-full bg-slate-800 text-white font-bold py-3.5 rounded-lg mt-2">Continuar</button>
         </div>
       </div>
     );
   }
 
-  // TELA 1: FORMULÁRIO PRINCIPAL
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
-      <button onClick={() => window.location.href = '/'} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 mb-6 font-medium text-sm">
-        <ArrowLeft className="w-4 h-4" /> Voltar ao Início
-      </button>
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200 bg-neutral-50"><h2 className="text-[16px] font-semibold text-slate-800">Simulador Automático de Frete</h2></div>
-        <div className="p-6 space-y-5">
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 border-[1.5px] border-slate-200 rounded-lg relative">
-              <span className="absolute -top-[10px] left-3 bg-white px-2 text-[11px] font-bold uppercase text-blue-600">Origem (Coleta)</span>
-              <input className="w-full p-2 mb-2 border-[1.5px] rounded text-sm focus:border-blue-600 outline-none" placeholder="Rua e Número" value={coletaRua} onChange={e => setColetaRua(e.target.value)} />
-              <input className="w-full p-2 border-[1.5px] rounded text-sm focus:border-blue-600 outline-none" placeholder="CEP" value={coletaCep} onChange={e => handleCepChange(e, setColetaCep)} maxLength={9} />
+  if (step === 2) {
+    return (
+      <div className="max-w-md mx-auto mt-10 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+         <h2 className="text-[18px] font-bold text-slate-800 mb-4">Etapa Final: Documentação</h2>
+         <div className="space-y-4">
+            <div className="border-2 border-dashed border-slate-300 p-6 rounded-lg text-center cursor-pointer">
+                <UploadCloud className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                <p className="font-bold text-slate-700">Foto da CNH</p>
+                <input type="file" className="mt-2 text-sm" />
             </div>
-            <div className="p-4 border-[1.5px] border-slate-200 rounded-lg relative">
-              <span className="absolute -top-[10px] left-3 bg-white px-2 text-[11px] font-bold uppercase text-orange-600">Destino (Entrega)</span>
-              <input className="w-full p-2 mb-2 border-[1.5px] rounded text-sm focus:border-blue-600 outline-none" placeholder="Rua e Número" value={entregaRua} onChange={e => setEntregaRua(e.target.value)} />
-              <input className="w-full p-2 border-[1.5px] rounded text-sm focus:border-blue-600 outline-none" placeholder="CEP" value={entregaCep} onChange={e => handleCepChange(e, setEntregaCep)} maxLength={9} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 border-[1.5px] border-slate-200 rounded-lg bg-slate-50">
-              <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase">Distância Calculada</label>
-              {isCalculating ? <span className="text-blue-600 text-sm font-bold animate-pulse">Calculando...</span> : <span className="text-slate-800 text-sm font-bold">{distanciaSegura} KM</span>}
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 mb-1 uppercase">Veículo</label>
-              <select className="w-full p-3 border-[1.5px] border-slate-200 rounded-lg bg-white text-sm outline-none focus:border-blue-600" value={vehicle} onChange={e => setVehicle(e.target.value)}>
-                <option value="Carro Pequeno">Carro Pequeno</option>
-                <option value="Utilitário (Fiorino, Kangoo)">Utilitário (Fiorino, Kangoo)</option>
-                <option value="Caminhão 3/4">Caminhão 3/4</option>
-                <option value="Carreta (Até 30t)">Carreta (Até 30t)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200 pt-4 mt-2">
-            <h3 className="text-[13px] font-bold text-slate-700 mb-3">Dados da Carga (B2B)</h3>
-            <div className="space-y-3">
-              <div>
-                <input className="w-full p-2.5 border-[1.5px] border-slate-200 rounded-lg text-[13px] focus:border-blue-600 outline-none" placeholder="Empresa / Responsável" value={company} onChange={e => setCompany(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input className="w-full p-2.5 border-[1.5px] border-slate-200 rounded-lg text-[13px] focus:border-blue-600 outline-none" placeholder="Tipo de Material" value={material} onChange={e => setMaterial(e.target.value)} />
-                <input className="w-full p-2.5 border-[1.5px] border-slate-200 rounded-lg text-[13px] focus:border-blue-600 outline-none" placeholder="Peso Aproximado" value={weight} onChange={e => setWeight(e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-[14px] text-slate-600 font-medium">
-            <input type="checkbox" checked={urgent} onChange={e => setUrgent(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
-            <span>Solicitação Urgente (+30%)</span>
-          </div>
-
-          <div className="bg-[#eff6ff] p-5 rounded-lg text-center mt-6">
-            <p className="text-[12px] font-bold text-blue-600 uppercase">Valor do Frete</p>
-            <p className="text-3xl font-black text-slate-800 mt-1">{valorFormatado}</p>
-          </div>
-
-          <button onClick={handlePagar} disabled={distanciaSegura <= 0} className="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-300">
-            Pagar e Chamar Motorista
-          </button>
-        </div>
+            <button onClick={handleSubmit} disabled={isSubmitting} className="w-full bg-green-600 text-white font-bold py-3.5 rounded-lg">Enviar para Análise</button>
+         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="max-w-md mx-auto mt-12 bg-white p-8 rounded-xl shadow-sm border border-slate-200 text-center">
+      <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+      <h2 className="text-[22px] font-bold text-slate-800 mb-2">Conta em Análise</h2>
+      <p className="text-slate-600 text-[15px]">Aguarde a verificação de segurança (Prazo: 24h).</p>
     </div>
   );
 }
