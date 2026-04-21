@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { ArrowLeft, ShieldCheck, Zap, Weight, Truck, Package, Clock } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Zap, Truck, Package, Clock } from 'lucide-react';
 
 export default function Cliente() {
   const [step, setStep] = useState('form'); 
@@ -36,19 +36,50 @@ export default function Cliente() {
 
   const handleContratar = async () => {
     if (dist <= 0) return alert("Preencha os CEPs.");
+    
+    // 1. Muda a tela para carregamento enquanto gera o link
+    setStep('busca'); 
+    
     const horaSolicitada = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
     try {
+      // 2. Salva no Firebase com status 'pendente' (esperando pagamento)
       const docRef = await addDoc(collection(db, 'fretes'), {
         distancia: dist, veiculo: vehicle, valorFinal: valorFormatado,
         origemBairro: coleta.bairro, origemRua: `${coleta.rua}, ${coleta.num}`,
         destinoBairro: entrega.bairro, destinoRua: `${entrega.rua}, ${entrega.num}`,
-        peso: carga.peso, tipoCarga: carga.tipo, status: 'pago',
-        horario: horaSolicitada, // NOVO: REGISTRO DE HORA
+        peso: carga.peso, tipoCarga: carga.tipo, status: 'pendente',
+        horario: horaSolicitada,
         createdAt: serverTimestamp()
       });
+      
       setCurrentOrderId(docRef.id);
-      setStep('busca');
-    } catch (e) { alert("Erro de conexão."); }
+
+      // 3. Chama a API invisível (que criamos na Vercel) para pedir o link de pagamento
+      const mpResponse = await fetch('/api/pagamento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: `Frete FRETOGO - ${vehicle}`,
+          preco: total, // Envia o número exato para cobrar
+          idPedido: docRef.id
+        })
+      });
+
+      const data = await mpResponse.json();
+
+      // 4. Redireciona o cliente para a tela oficial do Mercado Pago
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert("Erro ao gerar link de pagamento.");
+        setStep('form');
+      }
+
+    } catch (e) { 
+      alert("Erro ao processar pagamento. Tente novamente."); 
+      setStep('form');
+    }
   };
 
   return (
@@ -78,9 +109,9 @@ export default function Cliente() {
              ) : (
                <div className="py-8">
                  <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse"><Package className="text-white w-10 h-10" /></div>
-                 <h2 className="text-lg font-black italic uppercase tracking-tight">Aguardando Aceite...</h2>
+                 <h2 className="text-lg font-black italic uppercase tracking-tight">Gerando Pagamento Seguro...</h2>
                  <div className="mt-4 flex items-center justify-center gap-2 text-slate-400 font-bold text-xs">
-                    <Clock className="w-3 h-3" /> SOLICITADO ÀS {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    <Clock className="w-3 h-3" /> AGUARDE O REDIRECIONAMENTO
                  </div>
                </div>
              )}
