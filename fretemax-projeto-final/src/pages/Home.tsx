@@ -90,7 +90,24 @@ export default function Home() {
           </div>
           <span className="font-black text-slate-800 text-sm uppercase tracking-wide">Motoristas<br/>Verificados</span>
         </div>
+        
+        {/* ESTE É O TRECHO QUE ESTAVA FALTANDO NO SEU CÓDIGO */}
         <div className="flex flex-col items-center gap-3">
           <div className="bg-blue-100 p-4 rounded-full">
             <CreditCard className="w-8 h-8 text-blue-600" />
           </div>
+          <span className="font-black text-slate-800 text-sm uppercase tracking-wide">Pagamento<br/>100% Seguro</span>
+        </div>
+        
+        <div className="flex flex-col items-center gap-3">
+          <div className="bg-yellow-100 p-4 rounded-full">
+            <MapPin className="w-8 h-8 text-yellow-600" />
+          </div>
+          <span className="font-black text-slate-800 text-sm uppercase tracking-wide">Fretes na<br/>Sua Região</span>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+         
