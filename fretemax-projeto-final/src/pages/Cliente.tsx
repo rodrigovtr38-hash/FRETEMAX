@@ -12,16 +12,10 @@ export default function Cliente() {
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [orderData, setOrderData] = useState<any>(null);
 
-  // TABELA DE PREÇOS (CTO STRATEGY)
   const precos: any = {
-    'Carro Pequeno': 1.0,
-    'Utilitário / Fiorino': 1.6,
-    'Caminhão Toco': 2.9,
-    'Caminhão Truck': 3.8,
-    'Carreta 30 Ton': 5.5
+    'Carro Pequeno': 1.0, 'Utilitário / Fiorino': 1.6, 'Caminhão Toco': 2.9, 'Caminhão Truck': 3.8, 'Carreta 30 Ton': 5.5
   };
 
-  // ESCUTA O STATUS DO PEDIDO NO FIREBASE
   useEffect(() => {
     if (currentOrderId) {
       const unsub = onSnapshot(collection(db, 'fretes'), (snapshot) => {
@@ -32,44 +26,37 @@ export default function Cliente() {
     }
   }, [currentOrderId]);
 
-  // LÓGICA DE CÁLCULO DIRETA (SEM ERRO)
-  const getDistancia = () => {
-    if (coleta.cep.length >= 8 && entrega.cep.length >= 8) return 25; // Distância base simulada
-    return 0;
-  };
-
+  const getDistancia = () => (coleta.cep.length >= 8 && entrega.cep.length >= 8) ? 25 : 0;
   const dist = getDistancia();
   const valorBase = 35 + (dist * 4.2);
   const total = valorBase * precos[vehicle];
   const valorFormatado = dist > 0 ? `R$ ${total.toFixed(2).replace('.', ',')}` : 'R$ 0,00';
 
+  const handleBack = () => {
+    setCurrentOrderId(null);
+    setStep('form');
+  };
+
   const handleContratar = async () => {
-    if (dist <= 0) return alert("Preencha os CEPs corretamente.");
+    if (dist <= 0) return alert("Preencha os CEPs.");
     try {
       const docRef = await addDoc(collection(db, 'fretes'), {
-        distancia: dist,
-        veiculo: vehicle,
-        valorFinal: valorFormatado,
-        origemBairro: coleta.bairro,
-        origemRua: `${coleta.rua}, ${coleta.num}`,
-        destinoBairro: entrega.bairro,
-        destinoRua: `${entrega.rua}, ${entrega.num}`,
-        peso: carga.peso,
-        tipoCarga: carga.tipo,
-        status: 'pago', // Status para aparecer no radar do motorista
+        distancia: dist, veiculo: vehicle, valorFinal: valorFormatado,
+        origemBairro: coleta.bairro, origemRua: `${coleta.rua}, ${coleta.num}`,
+        destinoBairro: entrega.bairro, destinoRua: `${entrega.rua}, ${entrega.num}`,
+        peso: carga.peso, tipoCarga: carga.tipo, status: 'pago',
         createdAt: serverTimestamp()
       });
       setCurrentOrderId(docRef.id);
       setStep('busca');
-    } catch (e) { alert("Erro ao conectar com servidor."); }
+    } catch (e) { alert("Erro de conexão."); }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-10">
-      {/* Header Fretogo */}
       <nav className="bg-slate-950 p-4 flex items-center justify-between shadow-xl">
         <div className="flex items-center gap-2">
-          {step === 'busca' && <ArrowLeft onClick={() => setStep('form')} className="text-white cursor-pointer" />}
+          {step !== 'form' && <ArrowLeft onClick={handleBack} className="text-white cursor-pointer w-6 h-6 mr-2" />}
           <Zap className="text-yellow-400 w-6 h-6 fill-yellow-400" />
           <span className="font-black text-white text-xl italic tracking-tighter uppercase">FRETOGO</span>
         </div>
@@ -80,26 +67,20 @@ export default function Cliente() {
         {step === 'busca' ? (
           <div className="bg-white rounded-[2.5rem] p-8 text-center shadow-2xl animate-in zoom-in border border-slate-100">
              {orderData?.status === 'motorista_a_caminho' ? (
-               <div className="animate-bounce-in">
-                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Truck className="text-green-600 w-8 h-8" />
-                 </div>
-                 <h2 className="text-xl font-black italic uppercase text-slate-800">Motorista Aceitou!</h2>
+               <div>
+                 <Truck className="text-green-600 w-12 h-12 mx-auto mb-4" />
+                 <h2 className="text-xl font-black italic uppercase">Motorista Confirmado</h2>
                  <div className="mt-6 p-6 bg-slate-900 rounded-3xl text-white">
                     <p className="text-[10px] font-bold text-blue-400 uppercase mb-1">Contato</p>
                     <p className="text-xl font-black mb-4">{orderData.motoristaNome}</p>
-                    <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap}?text=Oi, vi seu frete no FRETOGO!`)} className="w-full bg-green-500 py-4 rounded-xl font-black flex items-center justify-center gap-2">
-                       WHATSAPP
-                    </button>
+                    <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap}?text=Oi, vi seu frete no FRETOGO!`)} className="w-full bg-green-500 py-4 rounded-xl font-black">WHATSAPP</button>
                  </div>
                </div>
              ) : (
-               <div className="py-8">
-                 <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse shadow-blue-200 shadow-2xl">
-                    <Package className="text-white w-10 h-10" />
-                 </div>
+               <div className="py-8 text-center">
+                 <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse"><Package className="text-white w-10 h-10" /></div>
                  <h2 className="text-lg font-black italic uppercase">Buscando Motorista...</h2>
-                 <p className="text-slate-400 text-sm mt-3 px-2">Sua carga de <b>{carga.peso}</b> está visível para motoristas de <b>{vehicle}</b>.</p>
+                 <p className="text-slate-400 text-sm mt-3 italic font-bold leading-tight">"Aguardando aceite para sua carga de {carga.peso}."</p>
                </div>
              )}
           </div>
@@ -109,42 +90,29 @@ export default function Cliente() {
                <p className="text-[10px] font-black uppercase text-yellow-400 mb-1">Logística Instantânea</p>
                <p className="text-base font-bold italic">Preencha os dados para ativar o radar.</p>
             </div>
-
-            {/* Inputs Coleta */}
             <div className="space-y-2">
-               <input className="w-full p-4 bg-white rounded-2xl font-bold shadow-sm border border-slate-200 focus:ring-2 ring-blue-500 outline-none" placeholder="Bairro de Coleta" onChange={e => setColeta({...coleta, bairro: e.target.value})} />
-               <input className="w-full p-4 bg-white rounded-2xl font-bold shadow-sm border border-slate-200" placeholder="CEP Coleta (8 dígitos)" onChange={e => setColeta({...coleta, cep: e.target.value})} />
+               <input className="w-full p-4 bg-white rounded-2xl font-bold shadow-sm border border-slate-200" placeholder="Bairro de Coleta" onChange={e => setColeta({...coleta, bairro: e.target.value})} />
+               <input className="w-full p-4 bg-white rounded-2xl font-bold shadow-sm border border-slate-200" placeholder="CEP Coleta" onChange={e => setColeta({...coleta, cep: e.target.value})} />
             </div>
-
-            {/* Inputs Entrega */}
             <div className="space-y-2">
                <input className="w-full p-4 bg-white rounded-2xl font-bold shadow-sm border border-slate-200" placeholder="Bairro de Entrega" onChange={e => setEntrega({...entrega, bairro: e.target.value})} />
                <input className="w-full p-4 bg-white rounded-2xl font-bold shadow-sm border border-slate-200" placeholder="CEP Entrega" onChange={e => setEntrega({...entrega, cep: e.target.value})} />
             </div>
-
-            {/* Carga */}
             <div className="grid grid-cols-2 gap-2">
                <input className="p-4 bg-white rounded-2xl font-bold border border-slate-200" placeholder="Peso (ex: 500kg)" onChange={e => setCarga({...carga, peso: e.target.value})} />
                <input className="p-4 bg-white rounded-2xl font-bold border border-slate-200" placeholder="O que é?" onChange={e => setCarga({...carga, tipo: e.target.value})} />
             </div>
-
-            {/* Veículo */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200">
-               <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Escolha o Veículo</p>
+               <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Veículo</p>
                <select className="w-full font-black text-base bg-transparent outline-none" value={vehicle} onChange={e => setVehicle(e.target.value)}>
                   {Object.keys(precos).map(v => <option key={v} value={v}>{v}</option>)}
                </select>
             </div>
-
-            {/* Painel de Preço */}
             <div className="bg-slate-950 p-8 rounded-[2.5rem] text-center shadow-2xl border-b-8 border-blue-600">
-               <p className="text-[11px] font-black uppercase text-blue-400 mb-1 tracking-widest">Valor Garantido</p>
+               <p className="text-[11px] font-black uppercase text-blue-400 mb-1 tracking-widest uppercase">Valor Garantido</p>
                <p className="text-5xl font-black text-white italic">{valorFormatado}</p>
             </div>
-
-            <button onClick={handleContratar} disabled={dist <= 0} className="w-full bg-blue-600 text-white font-black py-5 rounded-[2rem] text-xl shadow-xl active:scale-95 transition-all uppercase italic">
-              CONTRATAR FRETE AGORA
-            </button>
+            <button onClick={handleContratar} disabled={dist <= 0} className="w-full bg-blue-600 text-white font-black py-5 rounded-[2rem] text-xl shadow-xl active:scale-95 transition-all uppercase italic">CONTRATAR AGORA</button>
           </div>
         )}
       </div>
