@@ -41,23 +41,27 @@ export default function Cliente() {
     }
   }, [currentOrderId]);
 
-  // --- LÓGICA FINANCEIRA REAL (O CORAÇÃO DO NEGÓCIO) ---
+  // --- LÓGICA FINANCEIRA REAL (O CORAÇÃO DO NEGÓCIO - 20/80) ---
   const getDistancia = () => (coleta.cep.length >= 8 && entrega.cep.length >= 8) ? 25 : 0;
   
   const dist = getDistancia();
-  const TAXA_SAIDA = 35; // Bandeirada mínima
-  const VALOR_POR_KM = 4.20;
+  const TAXA_SAIDA = 32; // Bandeirada mínima competitiva
+  const VALOR_POR_KM = 3.80;
   
-  // Valor calculado: (Saída + KM) * Peso da Categoria
+  // 1. VALOR TOTAL (O que o cliente paga - já embutidos seus 20%)
   const valorTotalBruto = (TAXA_SAIDA + (dist * VALOR_POR_KM)) * precos[vehicle];
   
-  // Divisão de lucros (80/20)
-  const seuLucro = valorTotalBruto * 0.20;
-  const repasseMotorista = valorTotalBruto * 0.80;
+  // 2. REPASSE MOTORISTA (Os 80% que o motorista verá como "Valor do Frete")
+  const valorRepasseMotorista = valorTotalBruto * 0.80;
+  
+  // 3. SEU LUCRO (Os 20% invisíveis)
+  const margemFretogo = valorTotalBruto * 0.20;
 
   const valorFormatado = dist > 0 
     ? `R$ ${valorTotalBruto.toFixed(2).replace('.', ',')}` 
     : 'R$ 0,00';
+
+  const valorMotoristaFormatado = `R$ ${valorRepasseMotorista.toFixed(2).replace('.', ',')}`;
 
   const handleBack = () => { setCurrentOrderId(null); setStep('form'); };
 
@@ -75,10 +79,9 @@ export default function Cliente() {
       const docRef = await addDoc(collection(db, 'fretes'), {
         distancia: dist,
         veiculo: vehicle,
-        valorFinal: valorFormatado,
-        valorNumerico: valorTotalBruto, // Para relatórios financeiros
-        lucroPlataforma: seuLucro,      // Seus 20%
-        repasseMotorista: repasseMotorista, // 80% do motorista
+        valorFinal: valorFormatado,          // O que aparece pro cliente
+        valorMotorista: valorMotoristaFormatado, // O QUE O MOTORISTA VAI VER NO RADAR DELE
+        lucroPlataforma: margemFretogo,      // Seus 20% guardados para relatório
         origemBairro: coleta.bairro,
         origemRua: `${coleta.rua}, ${coleta.num}`,
         destinoBairro: entrega.bairro,
@@ -97,7 +100,7 @@ export default function Cliente() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           titulo: `Frete FRETOGO - ${vehicle}`,
-          preco: valorTotalBruto.toFixed(2), 
+          preco: valorTotalBruto.toFixed(2), // Cobramos o valor CHEIO do cliente
           idPedido: docRef.id
         })
       });
