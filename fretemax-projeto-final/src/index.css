@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+@theme {
+  /* Espaço para customizações futuras */
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
