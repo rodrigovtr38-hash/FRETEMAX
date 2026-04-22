@@ -6,16 +6,18 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' });
 
   try {
-    const { id, origin, destination, price } = req.body;
+    // Aqui está o ajuste: usando os nomes exatos que seu site envia
+    const { titulo, preco, idPedido } = req.body;
+
     const preference = new Preference(client);
 
     const result = await preference.create({
       body: {
         items: [{
-          id: id,
-          title: `Frete FRETOGO - ${origin} para ${destination}`,
+          id: idPedido || 'frete-manual',
+          title: titulo || 'Frete FRETOGO',
           quantity: 1,
-          unit_price: Number(price),
+          unit_price: Number(preco),
           currency_id: 'BRL'
         }],
         payment_methods: {
@@ -36,8 +38,10 @@ export default async function handler(req, res) {
       }
     });
 
-    res.status(200).json({ init_point: result.init_point });
+    // Importante: o site espera 'url', então vamos entregar 'url'
+    res.status(200).json({ url: result.init_point });
   } catch (error) {
+    console.error('Erro MP:', error);
     res.status(500).json({ error: error.message });
   }
 }
