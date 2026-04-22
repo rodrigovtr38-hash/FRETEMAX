@@ -1,41 +1,43 @@
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 
+const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' });
 
   try {
-    // Inicializa o cliente do MP com o seu Token de Produção
-    const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+    const { id, origin, destination, price } = req.body;
     const preference = new Preference(client);
 
-    const { titulo, preco, idPedido } = req.body;
-
-    const response = await preference.create({
+    const result = await preference.create({
       body: {
-        items: [
-          {
-            id: idPedido,
-            title: titulo || 'Frete FRETOGO',
-            quantity: 1,
-            unit_price: Number(preco),
-            currency_id: 'BRL',
-          }
-        ],
+        items: [{
+          id: id,
+          title: `Frete FRETOGO - ${origin} para ${destination}`,
+          quantity: 1,
+          unit_price: Number(price),
+          currency_id: 'BRL'
+        }],
+        payment_methods: {
+          included_payment_types: [
+            { id: 'ticket' }, // Boleto
+            { id: 'bank_transfer' }, // PIX
+            { id: 'credit_card' },
+            { id: 'debit_card' }
+          ],
+          installments: 1
+        },
         back_urls: {
-          success: 'https://fretogo.com.br/cliente',
-          failure: 'https://fretogo.com.br/cliente',
-          pending: 'https://fretogo.com.br/cliente',
+          success: `https://${req.headers.host}/`,
+          failure: `https://${req.headers.host}/`,
+          pending: `https://${req.headers.host}/`
         },
         auto_return: 'approved',
       }
     });
 
-    return res.status(200).json({ url: response.init_point });
-    
+    res.status(200).json({ init_point: result.init_point });
   } catch (error) {
-    console.error("Erro interno do Mercado Pago:", error);
-    return res.status(500).json({ error: 'Erro ao gerar link de pagamento' });
+    res.status(500).json({ error: error.message });
   }
 }
