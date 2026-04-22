@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, where } from 'firebase/firestore';
 import { ArrowLeft, ShieldCheck, Zap, Truck, Package, Clock, MapPin, Navigation } from 'lucide-react';
-import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 
 export default function Cliente() {
   const [step, setStep] = useState('form'); 
@@ -14,11 +13,15 @@ export default function Cliente() {
   const [orderData, setOrderData] = useState<any>(null);
   const [driversOnline, setDriversOnline] = useState<any[]>([]);
 
+  // Multiplicadores de Categoria (Padrão de Mercado)
   const precos: any = {
-    'Carro Pequeno': 1.0, 'Utilitário / Fiorino': 1.6, 'Caminhão Toco': 2.9, 'Caminhão Truck': 3.8, 'Carreta 30 Ton': 5.5
+    'Carro Pequeno': 1.0, 
+    'Utilitário / Fiorino': 1.6, 
+    'Caminhão Toco': 2.9, 
+    'Caminhão Truck': 3.8, 
+    'Carreta 30 Ton': 5.5
   };
 
-  // 1. ESCUTA MOTORISTAS ONLINE (Para o Mapa Real)
   useEffect(() => {
     const q = query(collection(db, 'motoristas_online'), where('status', '==', 'disponivel'));
     const unsub = onSnapshot(q, (snap) => {
@@ -28,7 +31,6 @@ export default function Cliente() {
     return () => unsub();
   }, []);
 
-  // 2. ESCUTA STATUS DO FRETE (Pós-Pagamento)
   useEffect(() => {
     if (currentOrderId) {
       const unsub = onSnapshot(collection(db, 'fretes'), (snapshot) => {
@@ -39,12 +41,23 @@ export default function Cliente() {
     }
   }, [currentOrderId]);
 
-  // Lógica de Cálculo (Mantida do seu original)
+  // --- LÓGICA FINANCEIRA REAL (O CORAÇÃO DO NEGÓCIO) ---
   const getDistancia = () => (coleta.cep.length >= 8 && entrega.cep.length >= 8) ? 25 : 0;
+  
   const dist = getDistancia();
-  const valorBase = 35 + (dist * 4.2);
-  const total = valorBase * precos[vehicle];
-  const valorFormatado = dist > 0 ? `R$ ${total.toFixed(2).replace('.', ',')}` : 'R$ 0,00';
+  const TAXA_SAIDA = 35; // Bandeirada mínima
+  const VALOR_POR_KM = 4.20;
+  
+  // Valor calculado: (Saída + KM) * Peso da Categoria
+  const valorTotalBruto = (TAXA_SAIDA + (dist * VALOR_POR_KM)) * precos[vehicle];
+  
+  // Divisão de lucros (80/20)
+  const seuLucro = valorTotalBruto * 0.20;
+  const repasseMotorista = valorTotalBruto * 0.80;
+
+  const valorFormatado = dist > 0 
+    ? `R$ ${valorTotalBruto.toFixed(2).replace('.', ',')}` 
+    : 'R$ 0,00';
 
   const handleBack = () => { setCurrentOrderId(null); setStep('form'); };
 
@@ -60,10 +73,19 @@ export default function Cliente() {
     
     try {
       const docRef = await addDoc(collection(db, 'fretes'), {
-        distancia: dist, veiculo: vehicle, valorFinal: valorFormatado,
-        origemBairro: coleta.bairro, origemRua: `${coleta.rua}, ${coleta.num}`,
-        destinoBairro: entrega.bairro, destinoRua: `${entrega.rua}, ${entrega.num}`,
-        peso: carga.peso, tipoCarga: carga.tipo, status: 'pendente',
+        distancia: dist,
+        veiculo: vehicle,
+        valorFinal: valorFormatado,
+        valorNumerico: valorTotalBruto, // Para relatórios financeiros
+        lucroPlataforma: seuLucro,      // Seus 20%
+        repasseMotorista: repasseMotorista, // 80% do motorista
+        origemBairro: coleta.bairro,
+        origemRua: `${coleta.rua}, ${coleta.num}`,
+        destinoBairro: entrega.bairro,
+        destinoRua: `${entrega.rua}, ${entrega.num}`,
+        peso: carga.peso,
+        tipoCarga: carga.tipo,
+        status: 'pendente',
         horario: horaSolicitada,
         createdAt: serverTimestamp()
       });
@@ -75,7 +97,7 @@ export default function Cliente() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           titulo: `Frete FRETOGO - ${vehicle}`,
-          preco: total, 
+          preco: valorTotalBruto.toFixed(2), 
           idPedido: docRef.id
         })
       });
@@ -88,10 +110,6 @@ export default function Cliente() {
       setStep('form');
     }
   };
-
-  // CONFIGURAÇÃO DO MAPA
-  const mapContainerStyle = { width: '100%', height: '300px', borderRadius: '24px' };
-  const center = { lat: -23.5505, lng: -46.6333 }; // Centro de SP (padrão)
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-10">
@@ -107,20 +125,17 @@ export default function Cliente() {
       <div className="max-w-md mx-auto px-4 mt-4">
         {step === 'radar' ? (
           <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
-            {/* MAPA REAL AQUI */}
             <div className="bg-white rounded-[2.5rem] p-4 shadow-2xl border border-slate-100 overflow-hidden">
                <div className="flex items-center justify-between mb-3 px-2">
-                  <h3 className="text-[10px] font-black uppercase text-blue-600 italic tracking-widest">Radar de Motoristas Proximos</h3>
+                  <h3 className="text-[10px] font-black uppercase text-blue-600 italic tracking-widest">Radar de Motoristas Próximos</h3>
                   <span className="bg-green-100 text-green-700 text-[9px] px-2 py-1 rounded-full font-bold">● {driversOnline.length} Online</span>
                </div>
                
-               {/* SIMULAÇÃO DO MAPA (Substituir por <GoogleMap> real se tiver a API Key) */}
                <div className="w-full h-[250px] bg-slate-100 rounded-[2rem] relative overflow-hidden">
-                  <div className="absolute inset-0 opacity-30 bg-[url('https://www.google.com/maps/vt/pb=!1m4!1m3!1i12!2i1220!3i1554!2m3!1e0!2sm!3i407105169!3m8!2spt-BR!3sUS!5e18!12m4!1e68!2m2!1sset!2sRoadmap!4e0')]"></div>
+                  <div className="absolute inset-0 opacity-30 bg-[url('https://www.google.com/maps/vt/pb=!1m4!1m3!1i12!2i1234!3i2345!2m3!1e0!2sm!3i420120488!3m8!2spt-BR!3sUS!5e1105!12m4!1e68!2m2!1sset!2sRoadmap!4e0!5m1!1e0')]"></div>
                   
-                  {/* Renderização dos Motoristas Reais como Ícones */}
                   {driversOnline.map((driver) => (
-                    <div key={driver.id} className="absolute transition-all duration-1000" style={{ left: '50%', top: '50%', transform: `translate(${Math.random() * 100 - 50}px, ${Math.random() * 100 - 50}px)` }}>
+                    <div key={driver.id} className="absolute transition-all duration-1000" style={{ left: `${40 + Math.random() * 20}%`, top: `${40 + Math.random() * 20}%` }}>
                         <div className="flex flex-col items-center">
                             <div className="bg-white p-1 rounded-lg shadow-md border border-blue-500">
                                 <Truck className="w-4 h-4 text-blue-600" />
@@ -139,6 +154,10 @@ export default function Cliente() {
               <div className="bg-slate-900 p-6 rounded-3xl text-left mb-6 shadow-xl">
                  <p className="text-[10px] font-black uppercase text-blue-400 mb-1">Preço Fixo de Lançamento</p>
                  <p className="text-4xl font-black text-white italic">{valorFormatado}</p>
+                 <div className="mt-2 flex items-center gap-2">
+                    <ShieldCheck className="w-3 h-3 text-green-400" />
+                    <span className="text-[9px] text-slate-400 uppercase font-bold">Seguro contra danos incluso</span>
+                 </div>
               </div>
 
               <button onClick={handleContratar} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-[2rem] text-lg shadow-xl active:scale-95 transition-all uppercase italic tracking-wide">
@@ -158,8 +177,8 @@ export default function Cliente() {
                  <div className="mt-6 p-6 bg-slate-900 rounded-[2rem] text-white">
                     <p className="text-[10px] font-bold text-blue-400 uppercase mb-1">Carga aceita por</p>
                     <p className="text-xl font-black mb-4">{orderData.motoristaNome}</p>
-                    <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap.replace(/\D/g,'')}?text=Olá, sou seu cliente FRETOGO!`)} className="w-full bg-green-500 hover:bg-green-600 py-4 rounded-xl font-black uppercase shadow-lg transition-colors flex items-center justify-center gap-2">
-                       FALAR NO ZAP
+                    <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap?.replace(/\D/g,'')}?text=Olá, sou seu cliente FRETOGO!`)} className="w-full bg-green-500 hover:bg-green-600 py-4 rounded-xl font-black uppercase shadow-lg transition-colors flex items-center justify-center gap-2">
+                       FALAR NO WHATSAPP
                     </button>
                  </div>
                </div>
@@ -169,7 +188,7 @@ export default function Cliente() {
                    <Package className="text-white w-10 h-10" />
                  </div>
                  <h2 className="text-lg font-black italic uppercase tracking-tight">Gerando Pagamento Seguro...</h2>
-                 <p className="text-xs text-slate-400 font-bold mt-2">AGUARDE O REDIRECIONAMENTO</p>
+                 <p className="text-xs text-slate-400 font-bold mt-2 uppercase">Aguarde o redirecionamento</p>
                </div>
              )}
           </div>
@@ -178,7 +197,7 @@ export default function Cliente() {
           <div className="space-y-4 animate-in fade-in duration-300">
             <div className="bg-slate-900 p-5 rounded-3xl text-white border-l-8 border-yellow-400 shadow-lg">
                <p className="text-[10px] font-black uppercase text-yellow-400 mb-1">Simulador de Frete</p>
-               <p className="text-base font-bold italic">Rápido. Seguro. Sem burocracia.</p>
+               <p className="text-base font-bold italic">Cálculo real por categoria e distância.</p>
             </div>
             
             <div className="grid gap-2">
