@@ -1,23 +1,10 @@
-import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Package, Truck, ShieldCheck, CreditCard, MapPin, Zap } from 'lucide-react';
 
 export default function Home() {
   const navigate = useNavigate();
 
-  // CTO LOGIC: Bloqueio de tráfego recorrente. Se já entrou antes, pula a Landing Page.
-  useEffect(() => {
-    const jaEntrou = localStorage.getItem('usuario_entrou');
-    if (jaEntrou === 'true') {
-      navigate('/cliente');
-    }
-  }, [navigate]);
-
-  const handleSimularFrete = () => {
-    // Grava no navegador que o cliente já passou pelo funil de conversão
-    localStorage.setItem('usuario_entrou', 'true');
-    navigate('/cliente');
-  };
+  // TRAVA DE REDIRECIONAMENTO REMOVIDA. A Home agora é pública e permanente.
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen bg-slate-50 pb-12 animate-in fade-in zoom-in duration-500 font-sans">
@@ -44,7 +31,7 @@ export default function Home() {
         {/* Card Cliente - O Funil Principal */}
         <div 
           className="flex flex-col items-center text-center gap-4 bg-white p-8 rounded-[2rem] border-2 border-blue-100 shadow-xl hover:shadow-2xl hover:border-blue-600 transition-all flex-1 group cursor-pointer relative overflow-hidden" 
-          onClick={handleSimularFrete}
+          onClick={() => navigate('/cliente')}
         >
           <div className="absolute top-0 w-full h-2 bg-blue-600 left-0"></div>
           <div className="bg-blue-600 p-6 rounded-full group-hover:scale-110 transition-transform duration-300 mt-2 shadow-lg shadow-blue-200">
