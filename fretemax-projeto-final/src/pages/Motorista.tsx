@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
-import { auth, db } from '../firebase';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { auth, provider, db } from '../firebase';
+import { signInWithPopup } from 'firebase/auth';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Loader2, Navigation, Zap, Weight, Gauge, Package, MapPin, Clock, Truck, ShieldAlert, Download, MessageCircle, UserCheck } from 'lucide-react';
-
-const provider = new GoogleAuthProvider();
 
 export default function Motorista() {
   const [user, setUser] = useState<any>(null);
@@ -27,12 +25,12 @@ export default function Motorista() {
     }
   };
 
-  // 1. Auth e Puxa dados do Perfil (Incluso Categoria do Veículo)
+  // 1. Auth e Puxa dados do Perfil
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setUser(user);
-        const q = query(collection(db, 'motoristas_cadastros'), where('email', '==', user.email));
+    const unsub = auth.onAuthStateChanged((currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        const q = query(collection(db, 'motoristas_cadastros'), where('email', '==', currentUser.email));
         return onSnapshot(q, (snap) => {
           if (!snap.empty) {
              setDriverData({ id: snap.docs[0].id, ...snap.docs[0].data() });
@@ -46,45 +44,60 @@ export default function Motorista() {
     return () => unsub();
   }, []);
 
-  // 2. GEOLOCALIZAÇÃO: Envia para a coleção 'motoristas_online' com a Categoria
+  // 2. GEOLOCALIZAÇÃO E PROTEÇÃO USER
   useEffect(() => {
-    if (driverData?.status === 'aprovado' && "geolocation" in navigator) {
+    if (user && driverData?.status === 'aprovado' && "geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition((pos) => {
         const { latitude, longitude } = pos.coords;
         setDoc(doc(db, 'motoristas_online', user.uid), {
           nome: driverData.nome,
-          veiculo: driverData.veiculo, // ESTA É A CHAVE DO MATCH (Carro, Caminhão, etc)
+          categoria: driverData.categoria,
           lat: latitude,
           lng: longitude,
           status: 'disponivel',
           lastSeen: serverTimestamp()
         }, { merge: true });
-      }, (err) => console.error(err), { enableHighAccuracy: true });
+      }, (err) => console.error("Erro de GPS:", err), { enableHighAccuracy: true });
 
       return () => navigator.geolocation.clearWatch(watchId);
     }
   }, [driverData, user]);
 
-  // 3. Radar Inteligente: Filtra fretes que batem com o veículo do motorista
+  // 3. RADAR INTELIGENTE (Filtro Padronizado Anti-Erro)
   useEffect(() => {
     if (driverData?.status === 'aprovado') {
-      // Aqui o motorista só vê cargas PAGAS que pedem o veículo DELE
       const q = query(
         collection(db, 'fretes'), 
-        where('status', '==', 'pago'),
-        where('veiculo', '==', driverData.veiculo)
+        where('status', '==', 'aguardando_motorista')
       );
       
       return onSnapshot(q, (snap) => {
-        setAvailableFretes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const fretesComDados = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        // Padronização: Remove espaços e deixa tudo minúsculo para comparar com segurança
+        const categoriaMotorista = String(driverData.categoria || '').trim().toLowerCase();
+        
+        const fretesFiltrados = fretesComDados.filter(f => {
+           const veiculoFrete = String(f.veiculo || '').trim().toLowerCase();
+           return categoriaMotorista === veiculoFrete;
+        });
+        
+        setAvailableFretes(fretesFiltrados);
       });
     }
   }, [driverData]);
 
+  // 4. ACEITE DE CARGA (Duplo Aceite e Atualização Local)
   const handleAccept = async (freteId: string) => {
+    // Segurança: Só avança se logado e aprovado
+    if (!user || driverData?.status !== 'aprovado') return;
     if (!window.confirm(`Confirmar aceite desta carga? O cliente será notificado.`)) return;
     
+    // Atualização Local: Tira o frete da tela na mesma hora para o motorista não clicar duas vezes
+    setAvailableFretes(prev => prev.filter(f => f.id !== freteId));
+    
     try {
+      // Atualiza Status do Frete
       await updateDoc(doc(db, 'fretes', freteId), {
         status: 'motorista_a_caminho', 
         motoristaId: user.uid,
@@ -92,11 +105,16 @@ export default function Motorista() {
         motoristaZap: driverData.whatsapp, 
         acceptedAt: serverTimestamp()
       });
-      // Muda status do motorista para não aparecer no mapa de disponíveis
-      await updateDoc(doc(db, 'motoristas_online', user.uid), { status: 'ocupado' });
+
+      // Atualiza Status do Motorista
+      await setDoc(doc(db, 'motoristas_online', user.uid), {
+        status: 'ocupado',
+        lastSeen: serverTimestamp()
+      }, { merge: true });
+
       alert("Carga Aceita! Contato do cliente liberado.");
     } catch (e) { 
-      alert("Erro ao aceitar. Verifique sua conexão."); 
+      alert("Erro ao aceitar. Esta carga pode já ter sido pega por outro motorista."); 
     }
   };
 
@@ -121,7 +139,7 @@ export default function Motorista() {
         </div>
         {driverData && (
           <div className="flex flex-col items-end">
-            <span className="text-[9px] text-slate-400 font-bold uppercase">{driverData.veiculo}</span>
+            <span className="text-[9px] text-slate-400 font-bold uppercase">{driverData.categoria}</span>
             <div className="flex items-center gap-1">
               <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />
               <span className="text-[10px] font-black uppercase text-green-400 tracking-tighter">Radar On</span>
@@ -151,13 +169,13 @@ export default function Motorista() {
             <div className="bg-blue-600/10 border border-blue-500/20 p-4 rounded-2xl flex items-center gap-4">
               <div className="bg-blue-600 p-3 rounded-xl"><UserCheck className="w-6 h-6" /></div>
               <div>
-                <p className="text-xs text-blue-400 font-bold uppercase">Bem-vindo, {driverData.nome.split(' ')[0]}</p>
-                <p className="text-[10px] text-slate-400">Seu {driverData.veiculo} está ativo no radar.</p>
+                <p className="text-xs text-blue-400 font-bold uppercase">Bem-vindo, {driverData.nome?.split(' ')[0]}</p>
+                <p className="text-[10px] text-slate-400">Seu {driverData.categoria} está ativo no radar.</p>
               </div>
             </div>
 
             <h2 className="text-white font-black italic text-[11px] uppercase tracking-[0.2em] flex items-center gap-2">
-              <div className="w-4 h-0.5 bg-green-500" /> Cargas de {driverData.veiculo} ({availableFretes.length})
+              <div className="w-4 h-0.5 bg-green-500" /> Cargas Disponíveis ({availableFretes.length})
             </h2>
             
             {availableFretes.length === 0 ? (
@@ -166,26 +184,24 @@ export default function Motorista() {
               </div>
             ) : (
               availableFretes.map((f: any) => (
-                <div key={f.id} className="bg-white rounded-[2.5rem] p-6 text-slate-900 shadow-2xl border-b-[10px] border-blue-600 transition-all">
+                <div key={f.id} className="bg-white rounded-[2.5rem] p-6 text-slate-900 shadow-2xl border-b-[10px] border-blue-600 transition-all mb-4">
                   <div className="flex justify-between items-start mb-6">
                     <div>
                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Você Recebe</p>
-                      <p className="text-4xl font-black text-green-600 italic tracking-tighter">R$ {f.valorFinal}</p>
-                    </div>
-                    <div className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-full">
-                       <Clock className="w-3 h-3 text-slate-400" />
-                       <span className="text-[9px] font-black uppercase text-slate-500">{f.horario}</span>
+                      <p className="text-4xl font-black text-green-600 italic tracking-tighter">
+                         R$ {f.valorMotorista ? Number(f.valorMotorista).toFixed(2).replace('.', ',') : '0,00'}
+                      </p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mb-6">
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
                       <Gauge className="w-4 h-4 text-blue-600 mx-auto mb-1" />
-                      <p className="text-[11px] font-black text-slate-800 uppercase">{f.distancia} KM</p>
+                      <p className="text-[11px] font-black text-slate-800 uppercase">{f.distancia || 0} KM</p>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
                       <Weight className="w-4 h-4 text-blue-600 mx-auto mb-1" />
-                      <p className="text-[11px] font-black text-slate-800 uppercase">{f.peso} KG</p>
+                      <p className="text-[11px] font-black text-slate-800 uppercase">{f.peso || 'N/A'}</p>
                     </div>
                   </div>
 
@@ -194,19 +210,19 @@ export default function Motorista() {
                       <div className="mt-1"><MapPin className="w-4 h-4 text-blue-600" /></div>
                       <div>
                         <p className="text-[9px] font-black text-slate-400 uppercase">Origem</p>
-                        <p className="text-sm font-black text-slate-800">{f.origemBairro}</p>
+                        <p className="text-sm font-black text-slate-800">{f.cidadeOrigem}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="mt-1"><Navigation className="w-4 h-4 text-orange-500" /></div>
                       <div>
                         <p className="text-[9px] font-black text-slate-400 uppercase">Destino</p>
-                        <p className="text-sm font-black text-slate-800">{f.destinoBairro}</p>
+                        <p className="text-sm font-black text-slate-800">{f.cidadeDestino}</p>
                       </div>
                     </div>
                     <div className="pt-3 border-t border-slate-200 flex items-center gap-2">
                        <Package className="w-4 h-4 text-slate-400" />
-                       <p className="text-[10px] font-black text-slate-500 uppercase italic">Material: {f.tipoCarga}</p>
+                       <p className="text-[10px] font-black text-slate-500 uppercase italic">Material: {f.material || 'Geral'}</p>
                     </div>
                   </div>
 
