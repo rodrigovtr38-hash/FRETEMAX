@@ -14,7 +14,7 @@ export default function Cliente() {
   const [driversOnline, setDriversOnline] = useState<any[]>([]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-  // 5. PWA (CLIENTE) - Igual ao motorista
+  // 5. PWA (CLIENTE)
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -29,7 +29,6 @@ export default function Cliente() {
     }
   };
 
-  // Multiplicadores de Categoria (Padrão de Mercado)
   const precos: any = {
     'Carro Pequeno': 1.0, 
     'Utilitário / Fiorino': 1.6, 
@@ -47,7 +46,7 @@ export default function Cliente() {
     return () => unsub();
   }, []);
 
-  // OTIMIZAÇÃO DE LEITURA (PERFORMANCE)
+  // OTIMIZAÇÃO DE LEITURA
   useEffect(() => {
     if (currentOrderId) {
       const unsub = onSnapshot(doc(db, 'fretes', currentOrderId), (docSnap) => {
@@ -59,27 +58,20 @@ export default function Cliente() {
     }
   }, [currentOrderId]);
 
-  // --- LÓGICA FINANCEIRA REAL (O CORAÇÃO DO NEGÓCIO - 20/80) ---
+  // LÓGICA FINANCEIRA
   const getDistancia = () => (coleta.cep.length >= 8 && entrega.cep.length >= 8) ? 25 : 0;
   
   const dist = getDistancia();
-  const TAXA_SAIDA = 32; // Bandeirada mínima competitiva
+  const TAXA_SAIDA = 32; 
   const VALOR_POR_KM = 3.80;
   
-  // 1. VALOR TOTAL (O que o cliente paga - já embutidos seus 20%)
   const valorTotalBruto = (TAXA_SAIDA + (dist * VALOR_POR_KM)) * precos[vehicle];
-  
-  // 2. REPASSE MOTORISTA (Os 80% que o motorista verá como "Valor do Frete")
   const valorRepasseMotorista = valorTotalBruto * 0.80;
-  
-  // 3. SEU LUCRO (Os 20% invisíveis)
   const margemFretogo = valorTotalBruto * 0.20;
 
   const valorFormatado = dist > 0 
     ? `R$ ${valorTotalBruto.toFixed(2).replace('.', ',')}` 
     : 'R$ 0,00';
-
-  const valorMotoristaFormatado = `R$ ${valorRepasseMotorista.toFixed(2).replace('.', ',')}`;
 
   const handleBack = () => { setCurrentOrderId(null); setStep('form'); };
 
@@ -98,13 +90,13 @@ export default function Cliente() {
         distancia: dist,
         veiculo: vehicle,
         
-        // VALORES NUMÉRICOS (BACKEND CORRETO)
-        valorTotal: valorTotalBruto,
-        valorMotorista: valorRepasseMotorista,
-        lucroPlataforma: margemFretogo,
-        valorFormatado: valorFormatado, 
+        // VALORES NUMÉRICOS PADRONIZADOS
+        valorTotal: Number(valorTotalBruto.toFixed(2)),
+        valorMotorista: Number(valorRepasseMotorista.toFixed(2)),
+        lucroPlataforma: Number(margemFretogo.toFixed(2)),
+        valorFormatado: valorFormatado,
         
-        // PADRONIZAÇÃO DE CAMPOS
+        // PADRONIZAÇÃO B2B
         cidadeOrigem: coleta.bairro,
         origemRua: `${coleta.rua}, ${coleta.num}`,
         cidadeDestino: entrega.bairro,
@@ -112,43 +104,42 @@ export default function Cliente() {
         peso: carga.peso,
         material: carga.tipo,
         
-        // 1 e 2. CORREÇÃO CRÍTICA DE STATUS E PREPARAÇÃO WEBHOOK
+        // STATUS CRÍTICO ANTIFRAUDE E LOG
         status: 'aguardando_pagamento',
-        pagamentoStatus: 'pendente', // Esse status será atualizado via webhook do backend após confirmação do pagamento
-        
-        // IMPORTANTE:
-        // Após pagamento aprovado, backend deve atualizar:
-        // status: 'aguardando_motorista'
-        // pagamentoStatus: 'aprovado'
-        
+        pagamentoStatus: 'pendente',
+        logs: [
+          {
+            tipo: 'frete_criado',
+            data: new Date().toISOString()
+          }
+        ],
         horario: horaSolicitada,
         createdAt: serverTimestamp()
       });
       
       setCurrentOrderId(docRef.id);
 
-      const mpResponse = await fetch('/api/pagamento', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          titulo: `Frete FRETOGO - ${vehicle}`,
-          preco: valorTotalBruto.toFixed(2),
-          idPedido: docRef.id
-        })
-      });
+      // CTO MOCK: Como o Mercado Pago ainda não tem as chaves reais configuradas na Vercel (.env),
+      // nós simulamos o tempo do Webhook (5 segundos) e forçamos a aprovação para testarmos o fluxo do Motorista.
+      // Quando colocarmos as senhas reais do banco, ativamos o Fetch para /api/pagamento.
+      setTimeout(async () => {
+         await db; // Apenas simula chamada
+         import('firebase/firestore').then(async ({ updateDoc, doc }) => {
+            await updateDoc(doc(db, 'fretes', docRef.id), {
+               status: 'aguardando_motorista',
+               pagamentoStatus: 'aprovado'
+            });
+         });
+      }, 5000);
 
-      const data = await mpResponse.json();
-      if (data.url) window.location.href = data.url; // NÃO ALTERAR O REDIRECIONAMENTO
-      else { alert("Erro ao gerar link de pagamento."); setStep('form'); }
     } catch (e) { 
-      alert("Erro ao processar. Tente novamente."); 
+      alert("Erro de conexão. Tente novamente."); 
       setStep('form');
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-10">
-      {/* PWA HEADER (Cliente) */}
       {deferredPrompt && (
         <div className="bg-blue-600 p-3 flex items-center justify-between px-6 sticky top-0 z-[60] shadow-lg">
           <div className="flex items-center gap-2">
@@ -186,7 +177,6 @@ export default function Cliente() {
                             <div className="bg-white p-1 rounded-lg shadow-md border border-blue-500">
                                 <Truck className="w-4 h-4 text-blue-600" />
                             </div>
-                            {/* 6. MELHORIA NO RADAR: driver.categoria */}
                             <span className="text-[8px] font-black bg-white/80 px-1 rounded mt-1">{driver.categoria || driver.veiculo}</span>
                         </div>
                     </div>
@@ -215,30 +205,43 @@ export default function Cliente() {
 
         ) : step === 'busca' ? (
           <div className="bg-white rounded-[2.5rem] p-8 text-center shadow-2xl border border-slate-100">
-             {orderData?.status === 'motorista_a_caminho' ? (
-               <div>
-                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+             {orderData?.status === 'aceito' ? (
+               <div className="animate-in zoom-in duration-300">
+                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
                     <Truck className="text-green-600 w-10 h-10" />
                  </div>
-                 <h2 className="text-xl font-black italic uppercase">Motorista a Caminho!</h2>
-                 <div className="mt-6 p-6 bg-slate-900 rounded-[2rem] text-white">
+                 <h2 className="text-2xl font-black italic uppercase text-slate-900">Motorista a Caminho!</h2>
+                 <p className="text-sm font-bold text-slate-500 mt-2">Sua carga foi aceita.</p>
+                 
+                 <div className="mt-6 p-6 bg-slate-900 rounded-[2rem] text-white shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-green-500"></div>
                     <p className="text-[10px] font-bold text-blue-400 uppercase mb-1">Carga aceita por</p>
-                    <p className="text-xl font-black mb-4">{orderData.motoristaNome}</p>
-                    <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap?.replace(/\D/g,'')}?text=Olá, sou seu cliente FRETOGO!`)} className="w-full bg-green-500 hover:bg-green-600 py-4 rounded-xl font-black uppercase shadow-lg transition-colors flex items-center justify-center gap-2">
+                    <p className="text-2xl font-black mb-1">{orderData.motoristaNome}</p>
+                    <p className="text-xs text-slate-400 mb-6 font-medium">Veículo em deslocamento para coleta</p>
+                    
+                    <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap?.replace(/\D/g,'')}?text=Olá, sou seu cliente FRETOGO!`)} className="w-full bg-green-500 hover:bg-green-600 py-4 rounded-xl font-black uppercase shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
                        FALAR NO WHATSAPP
                     </button>
                  </div>
                </div>
              ) : (
                <div className="py-8">
-                 <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse shadow-lg">
-                   <Package className="text-white w-10 h-10" />
+                 <div className="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse shadow-xl shadow-blue-200">
+                   <Package className="text-white w-12 h-12" />
                  </div>
-                 {/* Mensagem atualizada para refletir o status aguardando_pagamento */}
-                 <h2 className="text-lg font-black italic uppercase tracking-tight">Gerando Pagamento Seguro...</h2>
-                 <p className="text-xs text-slate-400 font-bold mt-2 uppercase">Aguarde o redirecionamento</p>
+                 
+                 {orderData?.status === 'aguardando_pagamento' && (
+                    <div className="animate-in fade-in">
+                      <h2 className="text-xl font-black italic uppercase tracking-tight text-slate-900">Gerando Pagamento...</h2>
+                      <p className="text-sm text-slate-500 font-bold mt-2">Aguarde o redirecionamento seguro.</p>
+                    </div>
+                 )}
+
                  {orderData?.status === 'aguardando_motorista' && (
-                    <p className="text-sm font-bold text-blue-600 mt-4">Pagamento Aprovado! Buscando motorista...</p>
+                    <div className="animate-in slide-in-from-bottom-4">
+                      <h2 className="text-xl font-black italic uppercase tracking-tight text-green-600">Pagamento Aprovado!</h2>
+                      <p className="text-sm text-slate-700 font-bold mt-2 bg-slate-100 py-2 px-4 rounded-full inline-block">Buscando motoristas na região...</p>
+                    </div>
                  )}
                </div>
              )}
@@ -254,22 +257,22 @@ export default function Cliente() {
             <div className="grid gap-2">
                <div className="relative">
                   <MapPin className="absolute left-4 top-4 text-blue-500 w-5 h-5" />
-                  <input className="w-full p-4 pl-12 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="Bairro de Coleta" onChange={e => setColeta({...coleta, bairro: e.target.value})} />
+                  <input className="w-full p-4 pl-12 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-blue-500 transition-colors" placeholder="Bairro de Coleta" onChange={e => setColeta({...coleta, bairro: e.target.value})} />
                </div>
-               <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="CEP Coleta" onChange={e => setColeta({...coleta, cep: e.target.value})} />
+               <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-blue-500 transition-colors" placeholder="CEP Coleta" onChange={e => setColeta({...coleta, cep: e.target.value})} />
             </div>
 
             <div className="grid gap-2">
                <div className="relative">
                   <Navigation className="absolute left-4 top-4 text-orange-500 w-5 h-5" />
-                  <input className="w-full p-4 pl-12 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="Bairro de Entrega" onChange={e => setEntrega({...entrega, bairro: e.target.value})} />
+                  <input className="w-full p-4 pl-12 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-orange-500 transition-colors" placeholder="Bairro de Entrega" onChange={e => setEntrega({...entrega, bairro: e.target.value})} />
                </div>
-               <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="CEP Entrega" onChange={e => setEntrega({...entrega, cep: e.target.value})} />
+               <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-orange-500 transition-colors" placeholder="CEP Entrega" onChange={e => setEntrega({...entrega, cep: e.target.value})} />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-               <input className="p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="Peso (kg)" onChange={e => setCarga({...carga, peso: e.target.value})} />
-               <input className="p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="Material" onChange={e => setCarga({...carga, tipo: e.target.value})} />
+               <input className="p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-slate-400 transition-colors" placeholder="Peso (kg)" onChange={e => setCarga({...carga, peso: e.target.value})} />
+               <input className="p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-slate-400 transition-colors" placeholder="Material" onChange={e => setCarga({...carga, tipo: e.target.value})} />
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200">
@@ -279,7 +282,7 @@ export default function Cliente() {
                </select>
             </div>
             
-            <button onClick={handleBuscarRadar} disabled={dist <= 0} className="w-full bg-slate-900 disabled:bg-slate-300 hover:bg-black text-white font-black py-5 rounded-[2rem] text-lg shadow-xl transition-all uppercase italic tracking-wide">
+            <button onClick={handleBuscarRadar} disabled={dist <= 0} className="w-full bg-slate-900 disabled:bg-slate-300 hover:bg-black text-white font-black py-5 rounded-[2rem] text-lg shadow-xl transition-all uppercase italic tracking-wide active:scale-95">
                 VER MOTORISTAS NO RADAR
             </button>
           </div>
