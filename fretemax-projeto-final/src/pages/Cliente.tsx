@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, where } from 'firebase/firestore';
-import { ArrowLeft, ShieldCheck, Zap, Truck, Package, Clock, MapPin, Navigation } from 'lucide-react';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, where, doc } from 'firebase/firestore';
+import { ArrowLeft, ShieldCheck, Zap, Truck, Package, Clock, MapPin, Navigation, Download } from 'lucide-react';
 
 export default function Cliente() {
   const [step, setStep] = useState('form'); 
@@ -12,6 +12,22 @@ export default function Cliente() {
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [orderData, setOrderData] = useState<any>(null);
   const [driversOnline, setDriversOnline] = useState<any[]>([]);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  // 5. PWA (CLIENTE) - Igual ao motorista
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
+
+  const handleInstallPWA = () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => setDeferredPrompt(null));
+    }
+  };
 
   // Multiplicadores de Categoria (Padrão de Mercado)
   const precos: any = {
@@ -31,11 +47,13 @@ export default function Cliente() {
     return () => unsub();
   }, []);
 
+  // OTIMIZAÇÃO DE LEITURA (PERFORMANCE)
   useEffect(() => {
     if (currentOrderId) {
-      const unsub = onSnapshot(collection(db, 'fretes'), (snapshot) => {
-        const doc = snapshot.docs.find(d => d.id === currentOrderId);
-        if (doc) setOrderData(doc.data());
+      const unsub = onSnapshot(doc(db, 'fretes', currentOrderId), (docSnap) => {
+        if (docSnap.exists()) {
+           setOrderData(docSnap.data());
+        }
       });
       return () => unsub();
     }
@@ -79,16 +97,30 @@ export default function Cliente() {
       const docRef = await addDoc(collection(db, 'fretes'), {
         distancia: dist,
         veiculo: vehicle,
-        valorFinal: valorFormatado,          // O que aparece pro cliente
-        valorMotorista: valorMotoristaFormatado, // O QUE O MOTORISTA VAI VER NO RADAR DELE
-        lucroPlataforma: margemFretogo,      // Seus 20% guardados para relatório
-        origemBairro: coleta.bairro,
+        
+        // VALORES NUMÉRICOS (BACKEND CORRETO)
+        valorTotal: valorTotalBruto,
+        valorMotorista: valorRepasseMotorista,
+        lucroPlataforma: margemFretogo,
+        valorFormatado: valorFormatado, 
+        
+        // PADRONIZAÇÃO DE CAMPOS
+        cidadeOrigem: coleta.bairro,
         origemRua: `${coleta.rua}, ${coleta.num}`,
-        destinoBairro: entrega.bairro,
+        cidadeDestino: entrega.bairro,
         destinoRua: `${entrega.rua}, ${entrega.num}`,
         peso: carga.peso,
-        tipoCarga: carga.tipo,
-        status: 'pendente',
+        material: carga.tipo,
+        
+        // 1 e 2. CORREÇÃO CRÍTICA DE STATUS E PREPARAÇÃO WEBHOOK
+        status: 'aguardando_pagamento',
+        pagamentoStatus: 'pendente', // Esse status será atualizado via webhook do backend após confirmação do pagamento
+        
+        // IMPORTANTE:
+        // Após pagamento aprovado, backend deve atualizar:
+        // status: 'aguardando_motorista'
+        // pagamentoStatus: 'aprovado'
+        
         horario: horaSolicitada,
         createdAt: serverTimestamp()
       });
@@ -100,13 +132,13 @@ export default function Cliente() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           titulo: `Frete FRETOGO - ${vehicle}`,
-          preco: valorTotalBruto.toFixed(2), // Cobramos o valor CHEIO do cliente
+          preco: valorTotalBruto.toFixed(2),
           idPedido: docRef.id
         })
       });
 
       const data = await mpResponse.json();
-      if (data.url) window.location.href = data.url;
+      if (data.url) window.location.href = data.url; // NÃO ALTERAR O REDIRECIONAMENTO
       else { alert("Erro ao gerar link de pagamento."); setStep('form'); }
     } catch (e) { 
       alert("Erro ao processar. Tente novamente."); 
@@ -116,6 +148,17 @@ export default function Cliente() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-10">
+      {/* PWA HEADER (Cliente) */}
+      {deferredPrompt && (
+        <div className="bg-blue-600 p-3 flex items-center justify-between px-6 sticky top-0 z-[60] shadow-lg">
+          <div className="flex items-center gap-2">
+            <Download className="w-4 h-4 text-white" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white">Baixar App FreteGO</span>
+          </div>
+          <button onClick={handleInstallPWA} className="bg-white text-blue-600 text-[10px] font-black px-4 py-1 rounded-full uppercase shadow-md">Instalar</button>
+        </div>
+      )}
+
       <nav className="bg-slate-950 p-4 flex items-center justify-between shadow-xl sticky top-0 z-50">
         <div className="flex items-center gap-2">
           {(step === 'busca' || step === 'radar') && <ArrowLeft onClick={handleBack} className="text-white cursor-pointer w-6 h-6 mr-2" />}
@@ -143,7 +186,8 @@ export default function Cliente() {
                             <div className="bg-white p-1 rounded-lg shadow-md border border-blue-500">
                                 <Truck className="w-4 h-4 text-blue-600" />
                             </div>
-                            <span className="text-[8px] font-black bg-white/80 px-1 rounded mt-1">{driver.veiculo}</span>
+                            {/* 6. MELHORIA NO RADAR: driver.categoria */}
+                            <span className="text-[8px] font-black bg-white/80 px-1 rounded mt-1">{driver.categoria || driver.veiculo}</span>
                         </div>
                     </div>
                   ))}
@@ -190,8 +234,12 @@ export default function Cliente() {
                  <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse shadow-lg">
                    <Package className="text-white w-10 h-10" />
                  </div>
+                 {/* Mensagem atualizada para refletir o status aguardando_pagamento */}
                  <h2 className="text-lg font-black italic uppercase tracking-tight">Gerando Pagamento Seguro...</h2>
                  <p className="text-xs text-slate-400 font-bold mt-2 uppercase">Aguarde o redirecionamento</p>
+                 {orderData?.status === 'aguardando_motorista' && (
+                    <p className="text-sm font-bold text-blue-600 mt-4">Pagamento Aprovado! Buscando motorista...</p>
+                 )}
                </div>
              )}
           </div>
