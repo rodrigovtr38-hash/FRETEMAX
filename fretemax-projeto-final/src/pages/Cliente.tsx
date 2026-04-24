@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, where, doc } from 'firebase/firestore';
-import { ArrowLeft, ShieldCheck, Zap, Truck, Package, Clock, MapPin, Navigation, Download } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Zap, Truck, Package, MapPin, Navigation, Download } from 'lucide-react';
 
 export default function Cliente() {
   const [step, setStep] = useState('form'); 
@@ -14,7 +14,7 @@ export default function Cliente() {
   const [driversOnline, setDriversOnline] = useState<any[]>([]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-  // 5. PWA (CLIENTE)
+  // PWA (CLIENTE)
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -81,6 +81,7 @@ export default function Cliente() {
     setStep('radar');
   };
 
+  // FLUXO DE PAGAMENTO REAL 
   const handleContratar = async () => {
     setStep('busca');
     const horaSolicitada = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -90,13 +91,11 @@ export default function Cliente() {
         distancia: dist,
         veiculo: vehicle,
         
-        // VALORES NUMÉRICOS PADRONIZADOS
         valorTotal: Number(valorTotalBruto.toFixed(2)),
         valorMotorista: Number(valorRepasseMotorista.toFixed(2)),
         lucroPlataforma: Number(margemFretogo.toFixed(2)),
         valorFormatado: valorFormatado,
         
-        // PADRONIZAÇÃO B2B
         cidadeOrigem: coleta.bairro,
         origemRua: `${coleta.rua}, ${coleta.num}`,
         cidadeDestino: entrega.bairro,
@@ -119,18 +118,26 @@ export default function Cliente() {
       
       setCurrentOrderId(docRef.id);
 
-      // CTO MOCK: Como o Mercado Pago ainda não tem as chaves reais configuradas na Vercel (.env),
-      // nós simulamos o tempo do Webhook (5 segundos) e forçamos a aprovação para testarmos o fluxo do Motorista.
-      // Quando colocarmos as senhas reais do banco, ativamos o Fetch para /api/pagamento.
-      setTimeout(async () => {
-         await db; // Apenas simula chamada
-         import('firebase/firestore').then(async ({ updateDoc, doc }) => {
-            await updateDoc(doc(db, 'fretes', docRef.id), {
-               status: 'aguardando_motorista',
-               pagamentoStatus: 'aprovado'
-            });
-         });
-      }, 5000);
+      // CHAMADA REAL PARA A NOSSA API DE PAGAMENTO (QUE AGORA TEM TOKEN NA VERCEL)
+      const mpResponse = await fetch('/api/pagamento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: `Frete FRETOGO - ${vehicle}`,
+          preco: valorTotalBruto.toFixed(2),
+          idPedido: docRef.id
+        })
+      });
+
+      const data = await mpResponse.json();
+      
+      if (data.url) {
+         // REDIRECIONA O CLIENTE PARA PAGAR O PIX
+         window.location.href = data.url; 
+      } else { 
+         alert("Erro ao gerar link de pagamento."); 
+         setStep('form'); 
+      }
 
     } catch (e) { 
       alert("Erro de conexão. Tente novamente."); 
