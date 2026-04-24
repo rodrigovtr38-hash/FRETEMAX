@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth, provider, db } from '../firebase';
 import { signInWithPopup } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, serverTimestamp, setDoc, runTransaction } from 'firebase/firestore';
 import { Loader2, Navigation, Zap, Weight, Gauge, Package, MapPin, Clock, Truck, ShieldAlert, Download, MessageCircle, UserCheck } from 'lucide-react';
 
 export default function Motorista() {
@@ -87,7 +87,7 @@ export default function Motorista() {
     }
   }, [driverData]);
 
-  // 4. ACEITE DE CARGA (Duplo Aceite e Atualização Local)
+  // 4. ACEITE DE CARGA TRANSAÇÃO SEGURA (Anti Duplo-Aceite)
   const handleAccept = async (freteId: string) => {
     // Segurança: Só avança se logado e aprovado
     if (!user || driverData?.status !== 'aprovado') return;
@@ -97,24 +97,39 @@ export default function Motorista() {
     setAvailableFretes(prev => prev.filter(f => f.id !== freteId));
     
     try {
-      // Atualiza Status do Frete
-      await updateDoc(doc(db, 'fretes', freteId), {
-        status: 'motorista_a_caminho', 
-        motoristaId: user.uid,
-        motoristaNome: driverData.nome, 
-        motoristaZap: driverData.whatsapp, 
-        acceptedAt: serverTimestamp()
+      const freteRef = doc(db, 'fretes', freteId);
+
+      // Transação Atômica: Tranca o banco, checa, atualiza e sai.
+      await runTransaction(db, async (transaction) => {
+        const freteDoc = await transaction.get(freteRef);
+        
+        if (!freteDoc.exists()) {
+          throw new Error("Frete não encontrado.");
+        }
+
+        if (freteDoc.data().status !== 'aguardando_motorista') {
+          throw new Error("Essa carga já foi aceita por outro motorista.");
+        }
+
+        transaction.update(freteRef, {
+          status: 'motorista_a_caminho', 
+          motoristaId: user.uid,
+          motoristaNome: driverData.nome, 
+          motoristaZap: driverData.whatsapp, 
+          acceptedAt: serverTimestamp()
+        });
       });
 
-      // Atualiza Status do Motorista
+      // Atualiza Status do Motorista para Ocupado (depois da transação garantir a carga)
       await setDoc(doc(db, 'motoristas_online', user.uid), {
         status: 'ocupado',
         lastSeen: serverTimestamp()
       }, { merge: true });
 
       alert("Carga Aceita! Contato do cliente liberado.");
-    } catch (e) { 
-      alert("Erro ao aceitar. Esta carga pode já ter sido pega por outro motorista."); 
+    } catch (e: any) { 
+      // Se der erro na transação, exibe a mensagem amigável
+      alert(e.message || "Essa carga já foi aceita por outro motorista."); 
     }
   };
 
