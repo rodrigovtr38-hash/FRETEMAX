@@ -21,17 +21,19 @@ export default function Cliente() {
   const margemFretogo = valorTotalBruto * 0.20;
 
   useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setDeferredPrompt(e); });
+    const handleBeforeInstall = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
   }, []);
 
   const handleInstallPWA = () => { if (deferredPrompt) { deferredPrompt.prompt(); setDeferredPrompt(null); } };
 
   useEffect(() => {
-    if (currentOrderId) {
-      return onSnapshot(doc(db, 'fretes', currentOrderId), (docSnap) => {
-        if (docSnap.exists()) setOrderData(docSnap.data());
-      });
-    }
+    if (!currentOrderId) return;
+    const unsub = onSnapshot(doc(db, 'fretes', currentOrderId), (docSnap) => {
+      if (docSnap.exists()) setOrderData(docSnap.data());
+    });
+    return () => unsub();
   }, [currentOrderId]);
 
   const handleContratar = async () => {
@@ -62,7 +64,11 @@ export default function Cliente() {
       
       if (data.url) window.location.href = data.url;
       else throw new Error("Sem URL");
-    } catch (e) { alert("Erro de conexão."); setStep('form'); setLoadingPay(false); }
+    } catch (e) { 
+      alert("Erro de conexão."); 
+      setStep('form'); 
+      setLoadingPay(false); 
+    }
   };
 
   const handleReset = () => { setStep('form'); setCurrentOrderId(null); setLoadingPay(false); setOrderData(null); };
