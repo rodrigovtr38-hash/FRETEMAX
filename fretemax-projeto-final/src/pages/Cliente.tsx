@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, doc } from 'firebase/firestore';
-import { ArrowLeft, ShieldCheck, Zap, Truck, Package, MapPin, Navigation, Download, XCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Zap, Truck, Package, MapPin, Navigation, XCircle, RefreshCw, Loader2 } from 'lucide-react';
 
 export default function Cliente() {
   const [step, setStep] = useState('form'); 
@@ -15,7 +15,10 @@ export default function Cliente() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const precos: any = { 'Carro Pequeno': 1.0, 'Utilitário / Fiorino': 1.6, 'Caminhão Toco': 2.9, 'Caminhão Truck': 3.8, 'Carreta 30 Ton': 5.5 };
+  
+  // Distância fake provisória para não quebrar (No próximo passo o Google Maps calculará isso)
   const dist = (coleta.cep.length >= 8 && entrega.cep.length >= 8) ? 25 : 0;
+  
   const valorTotalBruto = (32 + (dist * 3.80)) * precos[vehicle];
   const valorRepasseMotorista = valorTotalBruto * 0.80;
   const margemFretogo = valorTotalBruto * 0.20;
@@ -34,9 +37,9 @@ export default function Cliente() {
     const savedOrderId = localStorage.getItem('fretogo_current_order');
     if (savedOrderId && !currentOrderId) {
       setCurrentOrderId(savedOrderId);
-      setStep('busca'); // Força a tela de busca se houver um pedido salvo
+      setStep('busca');
     }
-  }, []);
+  }, [currentOrderId]);
 
   // Escuta o Firestore (A Fonte da Verdade)
   useEffect(() => {
@@ -47,7 +50,7 @@ export default function Cliente() {
         const data = docSnap.data();
         setOrderData(data);
         
-        // Limpa o cache se o pedido for finalizado, cancelado ou falhar
+        // Limpa o cache local se o pedido terminar
         if (['finalizado', 'cancelado', 'erro_pagamento'].includes(data.status)) {
             localStorage.removeItem('fretogo_current_order');
         }
@@ -80,7 +83,7 @@ export default function Cliente() {
       });
       
       setCurrentOrderId(docRef.id);
-      localStorage.setItem('fretogo_current_order', docRef.id); // Salva no celular do cliente
+      localStorage.setItem('fretogo_current_order', docRef.id);
 
       const res = await fetch('/api/pagamento', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -92,7 +95,7 @@ export default function Cliente() {
       else throw new Error("Sem URL do Mercado Pago");
       
     } catch (e) { 
-      alert("Falha ao processar pagamento. Tente novamente."); 
+      alert("Falha ao processar requisição de pagamento. Tente novamente."); 
       setStep('form'); 
       setLoadingPay(false); 
       localStorage.removeItem('fretogo_current_order');
