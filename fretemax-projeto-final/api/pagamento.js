@@ -32,26 +32,25 @@ export default async function handler(req, res) {
 
         notification_url: `https://${req.headers.host}/api/webhook`,
 
-        // 🔥 FORÇA TODOS OS MÉTODOS
         payment_methods: {
           excluded_payment_types: [],
           excluded_payment_methods: [],
           installments: 12
         },
 
-        // 🔥 GARANTE CONTEXTO REAL DE PAGADOR
         payer: {
-          email: "comprador@email.com"
+          email: "test_user_123456@testuser.com"
         },
 
-        // 🔥 REDIRECIONAMENTO LIMPO
         back_urls: {
           success: `https://${req.headers.host}/sucesso`,
           failure: `https://${req.headers.host}/erro`,
           pending: `https://${req.headers.host}/pendente`
         },
 
-        auto_return: "approved"
+        auto_return: "approved",
+
+        binary_mode: true
       })
     });
 
