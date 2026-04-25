@@ -20,6 +20,7 @@ export default function Cliente() {
   const valorRepasseMotorista = valorTotalBruto * 0.80;
   const margemFretogo = valorTotalBruto * 0.20;
 
+  // PWA Install
   useEffect(() => {
     const handleBeforeInstall = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
@@ -28,11 +29,33 @@ export default function Cliente() {
 
   const handleInstallPWA = () => { if (deferredPrompt) { deferredPrompt.prompt(); setDeferredPrompt(null); } };
 
+  // Recupera o ID do Pedido caso o usuário dê F5 na página
+  useEffect(() => {
+    const savedOrderId = localStorage.getItem('fretogo_current_order');
+    if (savedOrderId && !currentOrderId) {
+      setCurrentOrderId(savedOrderId);
+      setStep('busca'); // Força a tela de busca se houver um pedido salvo
+    }
+  }, []);
+
+  // Escuta o Firestore (A Fonte da Verdade)
   useEffect(() => {
     if (!currentOrderId) return;
+    
     const unsub = onSnapshot(doc(db, 'fretes', currentOrderId), (docSnap) => {
-      if (docSnap.exists()) setOrderData(docSnap.data());
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setOrderData(data);
+        
+        // Limpa o cache se o pedido for finalizado, cancelado ou falhar
+        if (['finalizado', 'cancelado', 'erro_pagamento'].includes(data.status)) {
+            localStorage.removeItem('fretogo_current_order');
+        }
+      }
+    }, (error) => {
+        console.error("Erro ao ler o frete:", error);
     });
+
     return () => unsub();
   }, [currentOrderId]);
 
@@ -40,6 +63,7 @@ export default function Cliente() {
     if (loadingPay || dist <= 0) return;
     setLoadingPay(true);
     setStep('busca');
+    
     try {
       const docRef = await addDoc(collection(db, 'fretes'), {
         distancia: dist, veiculo: vehicle,
@@ -54,7 +78,9 @@ export default function Cliente() {
         logs: [{ tipo: 'criado', data: new Date().toISOString() }],
         createdAt: serverTimestamp()
       });
+      
       setCurrentOrderId(docRef.id);
+      localStorage.setItem('fretogo_current_order', docRef.id); // Salva no celular do cliente
 
       const res = await fetch('/api/pagamento', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -63,83 +89,109 @@ export default function Cliente() {
       const data = await res.json();
       
       if (data.url) window.location.href = data.url;
-      else throw new Error("Sem URL");
+      else throw new Error("Sem URL do Mercado Pago");
+      
     } catch (e) { 
-      alert("Erro de conexão."); 
+      alert("Falha ao processar pagamento. Tente novamente."); 
       setStep('form'); 
       setLoadingPay(false); 
+      localStorage.removeItem('fretogo_current_order');
+      setCurrentOrderId(null);
     }
   };
 
-  const handleReset = () => { setStep('form'); setCurrentOrderId(null); setLoadingPay(false); setOrderData(null); };
+  const handleReset = () => { 
+      setStep('form'); 
+      setCurrentOrderId(null); 
+      setLoadingPay(false); 
+      setOrderData(null); 
+      localStorage.removeItem('fretogo_current_order');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-10">
       {deferredPrompt && (
         <div className="bg-blue-600 p-3 flex items-center justify-between px-6 sticky top-0 z-[60] shadow-lg">
-          <span className="text-[10px] font-bold text-white uppercase">Baixar App</span>
-          <button onClick={handleInstallPWA} className="bg-white text-blue-600 text-[10px] font-black px-4 py-1 rounded-full uppercase">Instalar</button>
+          <span className="text-[10px] font-bold text-white uppercase">Baixar App FreteGO</span>
+          <button onClick={handleInstallPWA} className="bg-white text-blue-600 text-[10px] font-black px-4 py-1 rounded-full uppercase shadow-sm">Instalar</button>
         </div>
       )}
       
       <nav className="bg-slate-950 p-4 flex items-center justify-between shadow-xl sticky top-0 z-50">
         <div className="flex items-center gap-2 text-white">
-          {(step === 'busca') && <ArrowLeft onClick={handleReset} className="cursor-pointer w-6 h-6 mr-2" />}
+          {(step === 'busca') && <ArrowLeft onClick={handleReset} className="cursor-pointer w-6 h-6 mr-2 active:scale-90 transition-transform" />}
           <Zap className="text-yellow-400 w-6 h-6 fill-yellow-400" />
-          <span className="font-black text-xl italic uppercase">FRETOGO</span>
+          <span className="font-black text-xl italic uppercase tracking-tighter">FRETOGO</span>
         </div>
         <ShieldCheck className="text-green-500 w-5 h-5" />
       </nav>
 
       <div className="max-w-md mx-auto px-4 mt-4">
         {step === 'busca' ? (
-          <div className="bg-white rounded-[2.5rem] p-8 text-center shadow-2xl">
+          <div className="bg-white rounded-[2.5rem] p-8 text-center shadow-2xl border border-slate-100">
             {orderData?.status === 'erro_pagamento' ? (
               <div className="animate-in fade-in">
                 <XCircle className="text-red-500 w-16 h-16 mx-auto mb-4" />
-                <h2 className="text-xl font-black uppercase">Pagamento Recusado</h2>
-                <button onClick={handleReset} className="w-full bg-slate-900 text-white py-4 rounded-xl font-black mt-6 flex gap-2 justify-center">
+                <h2 className="text-xl font-black uppercase text-slate-900">Pagamento Recusado</h2>
+                <button onClick={handleReset} className="w-full bg-slate-900 text-white py-4 rounded-xl font-black mt-6 flex gap-2 justify-center shadow-lg active:scale-95 transition-transform">
                   <RefreshCw className="w-4 h-4" /> TENTAR NOVAMENTE
                 </button>
               </div>
             ) : ['aceito', 'coleta', 'em_transporte', 'entregue', 'aguardando_repasse', 'finalizado'].includes(orderData?.status) ? (
               <div className="animate-in zoom-in">
                 <Truck className="text-green-600 w-12 h-12 mx-auto mb-4" />
-                <h2 className="text-2xl font-black italic uppercase">Carga Segura!</h2>
+                <h2 className="text-2xl font-black italic uppercase text-slate-900">Carga Segura!</h2>
                 <div className="mt-4 space-y-1 text-sm font-bold text-slate-500">
                   {orderData.status === 'aceito' && <p>📦 Indo até o local de coleta.</p>}
                   {orderData.status === 'coleta' && <p>🚚 Carga coletada com sucesso.</p>}
                   {orderData.status === 'em_transporte' && <p>🛣️ Em rota de entrega.</p>}
                   {['entregue', 'aguardando_repasse', 'finalizado'].includes(orderData.status) && <p className="text-green-500">✅ Entrega Concluída!</p>}
                 </div>
-                <div className="mt-6 p-6 bg-slate-900 rounded-[2rem] text-white">
-                  <p className="text-[10px] font-bold text-blue-400 uppercase">Motorista</p>
+                <div className="mt-6 p-6 bg-slate-900 rounded-[2rem] text-white shadow-inner">
+                  <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Motorista</p>
                   <p className="text-2xl font-black mb-4">{orderData.motoristaNome}</p>
-                  <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap?.replace(/\D/g,'')}?text=Olá!`)} className="w-full bg-green-500 py-4 rounded-xl font-black">WHATSAPP</button>
+                  <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap?.replace(/\D/g,'')}?text=Olá, sou seu cliente do FRETOGO!`)} className="w-full bg-green-500 py-4 rounded-xl font-black uppercase italic shadow-lg active:scale-95 transition-transform">WHATSAPP</button>
                 </div>
               </div>
             ) : (
               <div className="py-8">
                 {orderData?.status === 'aguardando_motorista' ? <Package className="text-blue-600 w-12 h-12 mx-auto mb-6 animate-bounce" /> : <Loader2 className="text-blue-600 w-12 h-12 mx-auto mb-6 animate-spin" />}
-                <h2 className="text-xl font-black italic uppercase">{orderData?.status === 'aguardando_motorista' ? "Buscando Motoristas..." : "Processando..."}</h2>
+                <h2 className="text-xl font-black italic uppercase tracking-tighter text-slate-900">
+                    {orderData?.status === 'aguardando_motorista' ? "Buscando Motoristas..." : "Processando..."}
+                </h2>
               </div>
             )}
           </div>
         ) : (
           <div className="space-y-4">
-             <div className="grid gap-2">
-               <input className="w-full p-4 bg-white rounded-2xl font-bold border outline-none" placeholder="Bairro Coleta" onChange={e => setColeta({...coleta, bairro: e.target.value})} />
-               <input className="w-full p-4 bg-white rounded-2xl font-bold border outline-none" placeholder="CEP Coleta" onChange={e => setColeta({...coleta, cep: e.target.value})} />
-               <input className="w-full p-4 bg-white rounded-2xl font-bold border outline-none" placeholder="Bairro Entrega" onChange={e => setEntrega({...entrega, bairro: e.target.value})} />
-               <input className="w-full p-4 bg-white rounded-2xl font-bold border outline-none" placeholder="CEP Entrega" onChange={e => setEntrega({...entrega, cep: e.target.value})} />
-               <input className="p-4 bg-white rounded-2xl font-bold border outline-none" placeholder="Peso (kg)" onChange={e => setCarga({...carga, peso: e.target.value})} />
-               <input className="p-4 bg-white rounded-2xl font-bold border outline-none" placeholder="Material" onChange={e => setCarga({...carga, tipo: e.target.value})} />
-               <select className="w-full p-4 font-black bg-white border rounded-2xl" value={vehicle} onChange={e => setVehicle(e.target.value)}>
-                  {Object.keys(precos).map(v => <option key={v} value={v}>{v}</option>)}
-               </select>
+             <div className="bg-slate-900 p-5 rounded-3xl text-white border-l-8 border-yellow-400 shadow-lg animate-in fade-in">
+               <p className="text-[10px] font-black uppercase text-yellow-400 mb-1">Simulador de Frete</p>
+               <p className="text-base font-bold italic">Cálculo real por categoria e distância.</p>
             </div>
-            <button onClick={handleContratar} disabled={loadingPay || dist <= 0} className="w-full bg-slate-900 disabled:bg-slate-400 text-white font-black py-5 rounded-[2rem] text-lg uppercase italic shadow-xl">
-               {loadingPay ? 'PROCESSANDO...' : 'CONTRATAR AGORA'}
+             <div className="grid gap-2 animate-in slide-in-from-bottom-4">
+               <div className="relative">
+                  <MapPin className="absolute left-4 top-4 text-blue-500 w-5 h-5" />
+                  <input className="w-full p-4 pl-12 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-blue-500 transition-colors" placeholder="Bairro Coleta" onChange={e => setColeta({...coleta, bairro: e.target.value})} />
+               </div>
+               <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-blue-500 transition-colors" placeholder="CEP Coleta" onChange={e => setColeta({...coleta, cep: e.target.value})} />
+               <div className="relative mt-2">
+                  <Navigation className="absolute left-4 top-4 text-orange-500 w-5 h-5" />
+                  <input className="w-full p-4 pl-12 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-orange-500 transition-colors" placeholder="Bairro Entrega" onChange={e => setEntrega({...entrega, bairro: e.target.value})} />
+               </div>
+               <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none focus:border-orange-500 transition-colors" placeholder="CEP Entrega" onChange={e => setEntrega({...entrega, cep: e.target.value})} />
+               <div className="grid grid-cols-2 gap-2 mt-2">
+                   <input className="p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="Peso (kg)" onChange={e => setCarga({...carga, peso: e.target.value})} />
+                   <input className="p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="Material" onChange={e => setCarga({...carga, tipo: e.target.value})} />
+               </div>
+               <div className="bg-white p-4 rounded-2xl border border-slate-200 mt-2">
+                   <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Qual o seu veículo?</p>
+                   <select className="w-full font-black text-slate-800 text-base bg-transparent outline-none cursor-pointer" value={vehicle} onChange={e => setVehicle(e.target.value)}>
+                      {Object.keys(precos).map(v => <option key={v} value={v}>{v}</option>)}
+                   </select>
+               </div>
+            </div>
+            <button onClick={handleContratar} disabled={loadingPay || dist <= 0} className="w-full bg-blue-600 disabled:bg-slate-300 text-white font-black py-5 rounded-[2rem] text-lg uppercase italic shadow-xl active:scale-95 transition-all">
+               {loadingPay ? 'GERANDO PAGAMENTO...' : 'CONTRATAR AGORA'}
             </button>
           </div>
         )}
