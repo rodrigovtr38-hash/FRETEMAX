@@ -15,17 +15,27 @@ export default function Motorista() {
     const unsubAuth = auth.onAuthStateChanged((currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        onSnapshot(query(collection(db, 'motoristas_cadastros'), where('email', '==', currentUser.email)), (snap) => {
+        const unsubProfile = onSnapshot(query(collection(db, 'motoristas_cadastros'), where('email', '==', currentUser.email)), (snap) => {
           if (!snap.empty) setDriverData({ id: snap.docs[0].id, ...snap.docs[0].data() });
         });
         
-        const qActive = query(collection(db, 'fretes'), where('motoristaId', '==', currentUser.uid), where('status', 'in', ['aceito', 'coleta', 'em_transporte']));
-        onSnapshot(qActive, (snap) => {
-          if (!snap.empty) setActiveFrete({ id: snap.docs[0].id, ...snap.docs[0].data() });
+        // Proteção contra erro de index do Firestore: busca por motoristaId e filtra na memória
+        const qActive = query(collection(db, 'fretes'), where('motoristaId', '==', currentUser.uid));
+        const unsubActive = onSnapshot(qActive, (snap) => {
+          const fretesDoMotorista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const freteAtivo = fretesDoMotorista.find((f: any) => ['aceito', 'coleta', 'em_transporte'].includes(f.status));
+          
+          if (freteAtivo) setActiveFrete(freteAtivo);
           else setActiveFrete(null);
+          
           setLoading(false);
         });
-      } else { setUser(null); setLoading(false); }
+
+        return () => { unsubProfile(); unsubActive(); };
+      } else { 
+        setUser(null); 
+        setLoading(false); 
+      }
     });
     return () => unsubAuth();
   }, []);
@@ -34,12 +44,15 @@ export default function Motorista() {
     if (user && driverData?.status === 'aprovado' && "geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition((pos) => {
         setDoc(doc(db, 'motoristas_online', user.uid), {
-          nome: driverData.nome, categoria: driverData.categoria,
-          lat: pos.coords.latitude, lng: pos.coords.longitude,
+          nome: driverData.nome || '', 
+          categoria: driverData.categoria || '',
+          lat: pos.coords.latitude, 
+          lng: pos.coords.longitude,
           status: activeFrete ? 'ocupado' : 'disponivel',
           lastSeen: serverTimestamp()
         }, { merge: true });
       }, null, { enableHighAccuracy: true });
+      
       return () => {
          navigator.geolocation.clearWatch(watchId);
          if (user) setDoc(doc(db, 'motoristas_online', user.uid), { status: 'offline' }, { merge: true });
@@ -50,10 +63,12 @@ export default function Motorista() {
   useEffect(() => {
     if (driverData?.status === 'aprovado' && !activeFrete) {
       const q = query(collection(db, 'fretes'), where('status', '==', 'aguardando_motorista'));
-      return onSnapshot(q, (snap) => {
-        const categoria = driverData.categoria?.toLowerCase().trim();
-        setAvailableFretes(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => f.veiculo?.toLowerCase().trim() === categoria));
+      const unsubRadar = onSnapshot(q, (snap) => {
+        const categoria = String(driverData.categoria || '').toLowerCase().trim();
+        const fretesValidos = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((f: any) => String(f.veiculo || '').toLowerCase().trim() === categoria);
+        setAvailableFretes(fretesValidos);
       });
+      return () => unsubRadar();
     }
   }, [driverData, activeFrete]);
 
@@ -68,7 +83,9 @@ export default function Motorista() {
         
         t.update(freteRef, {
           status: 'aceito',
-          motoristaId: user.uid, motoristaNome: driverData.nome, motoristaZap: driverData.whatsapp,
+          motoristaId: user.uid, 
+          motoristaNome: driverData.nome || 'Motorista', 
+          motoristaZap: driverData.whatsapp || '',
           logs: [...(data?.logs || []), { tipo: "aceito", data: new Date().toISOString() }]
         });
       });
@@ -79,16 +96,18 @@ export default function Motorista() {
   const handleUpdateStatus = async (novoStatus: string) => {
     if (!activeFrete) return;
     const ref = doc(db, 'fretes', activeFrete.id);
-    await runTransaction(db, async (t) => {
-      const d = await t.get(ref);
-      t.update(ref, { 
-        status: novoStatus, 
-        logs: [...(d.data()?.logs || []), { tipo: novoStatus, data: new Date().toISOString() }] 
+    try {
+      await runTransaction(db, async (t) => {
+        const d = await t.get(ref);
+        t.update(ref, { 
+          status: novoStatus, 
+          logs: [...(d.data()?.logs || []), { tipo: novoStatus, data: new Date().toISOString() }] 
+        });
       });
-    });
-    if (novoStatus === 'entregue') {
-        await setDoc(doc(db, 'motoristas_online', user.uid), { status: 'disponivel' }, { merge: true });
-    }
+      if (novoStatus === 'entregue') {
+          await setDoc(doc(db, 'motoristas_online', user.uid), { status: 'disponivel' }, { merge: true });
+      }
+    } catch (e: any) { alert("Erro ao atualizar status."); }
   };
 
   if (loading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-blue-500 w-12" /></div>;
@@ -116,7 +135,7 @@ export default function Motorista() {
              {availableFretes.length === 0 ? <p className="text-center text-slate-500 py-20 italic">Buscando fretes pagos...</p> : 
                availableFretes.map(f => (
                  <div key={f.id} className="bg-white text-slate-900 p-6 rounded-[2rem] shadow-xl border-b-8 border-blue-600">
-                    <p className="text-4xl font-black text-green-600 italic mb-4">R$ {f.valorMotorista?.toFixed(2)}</p>
+                    <p className="text-4xl font-black text-green-600 italic mb-4">R$ {f.valorMotorista ? Number(f.valorMotorista).toFixed(2).replace('.', ',') : '0,00'}</p>
                     <button onClick={() => handleAccept(f)} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase italic">ACEITAR E COLETAR</button>
                  </div>
                ))
@@ -127,3 +146,4 @@ export default function Motorista() {
     </div>
   );
 }
+
