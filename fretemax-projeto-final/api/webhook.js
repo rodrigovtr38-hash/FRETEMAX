@@ -30,16 +30,17 @@ export default async function handler(req, res) {
 
       const firebaseUrl = `https://firestore.googleapis.com/v1/projects/${process.env.VITE_FIREBASE_PROJECT_ID}/databases/(default)/documents/fretes/${pedidoId}`;
 
-      // 🔥 EVITA sobrescrever errado
+      // 🔥 Busca os dados do frete antes de atualizar
       const getDoc = await fetch(firebaseUrl);
-      const docData = await getDoc.json();
+      const docSnap = await getDoc.json();
 
-      const statusAtual = docData?.fields?.status?.stringValue;
+      const statusAtual = docSnap?.fields?.status?.stringValue;
 
       if (statusAtual === novoStatus) {
         return res.status(200).send('Já atualizado');
       }
 
+      // 1. Atualiza o status no Firebase
       await fetch(`${firebaseUrl}?updateMask.fieldPaths=status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -50,7 +51,26 @@ export default async function handler(req, res) {
         })
       });
 
-      console.log(`Pedido ${pedidoId} atualizado para ${novoStatus}`);
+      // 2. 🔥 SE FOI APROVADO, CHAMA O MATCHING AUTOMÁTICO
+      if (novoStatus === 'aguardando_motorista') {
+        const lat = docSnap.fields.origemLat?.doubleValue || docSnap.fields.origemLat?.integerValue;
+        const lng = docSnap.fields.origemLng?.doubleValue || docSnap.fields.origemLng?.integerValue;
+        const veiculo = docSnap.fields.veiculo?.stringValue;
+
+        // Chama o robô que criamos no Passo 2
+        await fetch(`https://${req.headers.host}/api/matching`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            freteId: pedidoId,
+            lat: lat,
+            lng: lng,
+            veiculo: veiculo
+          })
+        });
+      }
+
+      console.log(`Pedido ${pedidoId} processado e enviado para matching.`);
     }
 
     res.status(200).send('OK');
