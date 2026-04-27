@@ -30,6 +30,16 @@ export default async function handler(req, res) {
 
       const firebaseUrl = `https://firestore.googleapis.com/v1/projects/${process.env.VITE_FIREBASE_PROJECT_ID}/databases/(default)/documents/fretes/${pedidoId}`;
 
+      // 🔥 EVITA sobrescrever errado
+      const getDoc = await fetch(firebaseUrl);
+      const docData = await getDoc.json();
+
+      const statusAtual = docData?.fields?.status?.stringValue;
+
+      if (statusAtual === novoStatus) {
+        return res.status(200).send('Já atualizado');
+      }
+
       await fetch(`${firebaseUrl}?updateMask.fieldPaths=status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
