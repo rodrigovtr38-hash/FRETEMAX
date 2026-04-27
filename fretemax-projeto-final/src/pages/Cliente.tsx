@@ -16,8 +16,19 @@ export default function Cliente() {
 
   const precos: any = { 'Carro Pequeno': 1.0, 'Utilitário / Fiorino': 1.6, 'Caminhão Toco': 2.9, 'Caminhão Truck': 3.8, 'Carreta 30 Ton': 5.5 };
   
+  // Lógica de Preço Dinâmico (CTO Strategy)
+  const getMultiplicadorDinamico = () => {
+    const hora = new Date().getHours();
+    if (hora >= 17 && hora <= 20) return 1.15; // Pico: +15%
+    if (hora >= 0 && hora <= 5) return 0.95;  // Madrugada: -5%
+    return 1.0;
+  };
+
   const dist = (coleta.cep.length >= 8 && entrega.cep.length >= 8) ? 25 : 0;
-  const valorTotalBruto = (32 + (dist * 3.80)) * precos[vehicle];
+  
+  // Cálculo final com multiplicador dinâmico aplicado
+  const valorBase = (32 + (dist * 3.80)) * precos[vehicle];
+  const valorTotalBruto = valorBase * getMultiplicadorDinamico();
   const valorRepasseMotorista = valorTotalBruto * 0.80;
   const margemFretogo = valorTotalBruto * 0.20;
 
@@ -53,18 +64,13 @@ export default function Cliente() {
     return () => unsub();
   }, [currentOrderId]);
 
-  // Função para transformar CEP em Coordenadas (Crucial para o Matching)
   const obterCoordenadas = async (cep: string) => {
     try {
       const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${cep}&key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}`);
       const data = await res.json();
-      if (data.status === 'OK') {
-        return data.results[0].geometry.location; // retorna { lat, lng }
-      }
+      if (data.status === 'OK') return data.results[0].geometry.location;
       return null;
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
   };
 
   const handleContratar = async () => {
@@ -73,7 +79,6 @@ export default function Cliente() {
     setStep('busca');
     
     try {
-      // Busca coordenadas da coleta antes de salvar
       const coords = await obterCoordenadas(coleta.cep);
 
       const docRef = await addDoc(collection(db, 'fretes'), {
@@ -87,8 +92,8 @@ export default function Cliente() {
         origemRua: `${coleta.rua}, ${coleta.num}`,
         cidadeDestino: entrega.bairro, 
         destinoRua: `${entrega.rua}, ${entrega.num}`,
-        origemLat: coords?.lat || 0, // Coordenada para o Radar
-        origemLng: coords?.lng || 0, // Coordenada para o Radar
+        origemLat: coords?.lat || 0,
+        origemLng: coords?.lng || 0,
         peso: carga.peso, material: carga.tipo,
         status: 'aguardando_pagamento',
         logs: [{ tipo: 'criado', data: new Date().toISOString() }],
@@ -103,24 +108,20 @@ export default function Cliente() {
         body: JSON.stringify({ titulo: `Frete FRETOGO - ${vehicle}`, preco: valorTotalBruto.toFixed(2), idPedido: docRef.id })
       });
       const data = await res.json();
-      
       if (data.url) window.location.href = data.url;
       else throw new Error("Sem URL do Mercado Pago");
       
     } catch (e) { 
       alert("Falha ao processar requisição de pagamento. Tente novamente."); 
-      setStep('form'); 
-      setLoadingPay(false); 
+      setStep('form'); setLoadingPay(false); 
       localStorage.removeItem('fretogo_current_order');
       setCurrentOrderId(null);
     }
   };
 
   const handleReset = () => { 
-      setStep('form'); 
-      setCurrentOrderId(null); 
-      setLoadingPay(false); 
-      setOrderData(null); 
+      setStep('form'); setCurrentOrderId(null); 
+      setLoadingPay(false); setOrderData(null); 
       localStorage.removeItem('fretogo_current_order');
   };
 
@@ -183,6 +184,7 @@ export default function Cliente() {
              <div className="bg-slate-900 p-5 rounded-3xl text-white border-l-8 border-yellow-400 shadow-lg animate-in fade-in">
                <p className="text-[10px] font-black uppercase text-yellow-400 mb-1">Simulador de Frete</p>
                <p className="text-base font-bold italic">Cálculo real por categoria e distância.</p>
+               {getMultiplicadorDinamico() > 1 && <p className="text-[9px] text-yellow-500 font-bold mt-1 uppercase italic animate-pulse">Tarifa Dinâmica Ativa (Alta Demanda)</p>}
             </div>
              <div className="grid gap-2 animate-in slide-in-from-bottom-4">
                <div className="relative">
