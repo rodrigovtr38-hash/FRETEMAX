@@ -16,14 +16,11 @@ export default function Cliente() {
 
   const precos: any = { 'Carro Pequeno': 1.0, 'Utilitário / Fiorino': 1.6, 'Caminhão Toco': 2.9, 'Caminhão Truck': 3.8, 'Carreta 30 Ton': 5.5 };
   
-  // Distância fake provisória para não quebrar (No próximo passo o Google Maps calculará isso)
   const dist = (coleta.cep.length >= 8 && entrega.cep.length >= 8) ? 25 : 0;
-  
   const valorTotalBruto = (32 + (dist * 3.80)) * precos[vehicle];
   const valorRepasseMotorista = valorTotalBruto * 0.80;
   const margemFretogo = valorTotalBruto * 0.20;
 
-  // PWA Install
   useEffect(() => {
     const handleBeforeInstall = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
@@ -32,7 +29,6 @@ export default function Cliente() {
 
   const handleInstallPWA = () => { if (deferredPrompt) { deferredPrompt.prompt(); setDeferredPrompt(null); } };
 
-  // Recupera o ID do Pedido caso o usuário dê F5 na página
   useEffect(() => {
     const savedOrderId = localStorage.getItem('fretogo_current_order');
     if (savedOrderId && !currentOrderId) {
@@ -41,16 +37,12 @@ export default function Cliente() {
     }
   }, [currentOrderId]);
 
-  // Escuta o Firestore (A Fonte da Verdade)
   useEffect(() => {
     if (!currentOrderId) return;
-    
     const unsub = onSnapshot(doc(db, 'fretes', currentOrderId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setOrderData(data);
-        
-        // Limpa o cache local se o pedido terminar
         if (['finalizado', 'cancelado', 'erro_pagamento'].includes(data.status)) {
             localStorage.removeItem('fretogo_current_order');
         }
@@ -58,9 +50,22 @@ export default function Cliente() {
     }, (error) => {
         console.error("Erro ao ler o frete:", error);
     });
-
     return () => unsub();
   }, [currentOrderId]);
+
+  // Função para transformar CEP em Coordenadas (Crucial para o Matching)
+  const obterCoordenadas = async (cep: string) => {
+    try {
+      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${cep}&key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}`);
+      const data = await res.json();
+      if (data.status === 'OK') {
+        return data.results[0].geometry.location; // retorna { lat, lng }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  };
 
   const handleContratar = async () => {
     if (loadingPay || dist <= 0) return;
@@ -68,14 +73,22 @@ export default function Cliente() {
     setStep('busca');
     
     try {
+      // Busca coordenadas da coleta antes de salvar
+      const coords = await obterCoordenadas(coleta.cep);
+
       const docRef = await addDoc(collection(db, 'fretes'), {
-        distancia: dist, veiculo: vehicle,
+        distancia: dist, 
+        veiculo: vehicle,
         valorTotal: Number(valorTotalBruto.toFixed(2)),
         valorMotorista: Number(valorRepasseMotorista.toFixed(2)),
         lucroPlataforma: Number(margemFretogo.toFixed(2)),
         valorFormatado: `R$ ${valorTotalBruto.toFixed(2).replace('.', ',')}`,
-        cidadeOrigem: coleta.bairro, origemRua: `${coleta.rua}, ${coleta.num}`,
-        cidadeDestino: entrega.bairro, destinoRua: `${entrega.rua}, ${entrega.num}`,
+        cidadeOrigem: coleta.bairro, 
+        origemRua: `${coleta.rua}, ${coleta.num}`,
+        cidadeDestino: entrega.bairro, 
+        destinoRua: `${entrega.rua}, ${entrega.num}`,
+        origemLat: coords?.lat || 0, // Coordenada para o Radar
+        origemLng: coords?.lng || 0, // Coordenada para o Radar
         peso: carga.peso, material: carga.tipo,
         status: 'aguardando_pagamento',
         logs: [{ tipo: 'criado', data: new Date().toISOString() }],
@@ -202,4 +215,3 @@ export default function Cliente() {
     </div>
   );
 }
-
