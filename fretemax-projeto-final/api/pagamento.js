@@ -35,11 +35,8 @@ export default async function handler(req, res) {
         payment_methods: {
           excluded_payment_types: [],
           excluded_payment_methods: [],
-          installments: 12
-        },
-
-        payer: {
-          email: "test_user_123456@testuser.com"
+          installments: 12,
+          default_installments: 1
         },
 
         back_urls: {
@@ -48,9 +45,7 @@ export default async function handler(req, res) {
           pending: `https://${req.headers.host}/pendente`
         },
 
-        auto_return: "approved",
-
-        binary_mode: true
+        auto_return: "approved"
       })
     });
 
