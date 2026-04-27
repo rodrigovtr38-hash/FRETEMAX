@@ -1,11 +1,19 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Zap } from 'lucide-react'; // IMPORTAÇÃO OBRIGATÓRIA PARA NÃO DAR ERRO
+import { Zap } from 'lucide-react';
 import Home from './pages/Home';
 import Cliente from './pages/Cliente';
 import Motorista from './pages/Motorista';
 import Admin from './pages/Admin';
-import LandingCliente from './pages/LandingCliente'; // NOVA LP
-import LandingMotorista from './pages/LandingMotorista'; // NOVA LP
+import LandingCliente from './pages/LandingCliente';
+import LandingMotorista from './pages/LandingMotorista';
+
+// Componente de Proteção de Rota para Clientes Logados
+const HomeGuard = ({ children }: { children: JSX.Element }) => {
+  const hasActiveOrder = localStorage.getItem('fretogo_current_order');
+  // Se tem pedido ativo, pula a Home e vai direto pro Radar do Cliente
+  if (hasActiveOrder) return <Navigate to="/cliente" />;
+  return children;
+};
 
 export default function App() {
   return (
@@ -14,14 +22,12 @@ export default function App() {
         
         <main className="flex-1 w-full relative">
           <Routes>
-            {/* Home Institucional */}
-            <Route path="/" element={<Home />} />
+            {/* Home com Proteção: Se ja estiver em uso, vai pro radar */}
+            <Route path="/" element={<HomeGuard><Home /></HomeGuard>} />
             
-            {/* Rotas de Tráfego Pago (Direcionadas para as Landing Pages) */}
             <Route path="/preciso-de-frete" element={<LandingCliente />} />
             <Route path="/sou-motorista" element={<LandingMotorista />} />
 
-            {/* Rotas de Operação (Telas Internas) */}
             <Route path="/cliente" element={<Cliente />} />
             <Route path="/motorista" element={<Motorista />} />
             <Route path="/admin" element={<Admin />} />
