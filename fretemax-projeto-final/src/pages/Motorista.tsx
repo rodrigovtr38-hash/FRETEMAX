@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { auth, provider, db } from '../firebase';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, doc, serverTimestamp, setDoc, runTransaction } from 'firebase/firestore';
-import { Loader2, Truck, CheckCircle, Download } from 'lucide-react';
+import { Loader2, Truck, CheckCircle, Download, MapPin, Navigation } from 'lucide-react';
 
 export default function Motorista() {
   const [user, setUser] = useState<any>(null);
@@ -12,7 +12,7 @@ export default function Motorista() {
   const [loading, setLoading] = useState(true);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-  // Efeito para Alerta Sonoro (Mantido 100%)
+  // Alerta Sonoro Mantido
   useEffect(() => {
     if (availableFretes.length > 0 && !activeFrete) {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
@@ -20,7 +20,7 @@ export default function Motorista() {
     }
   }, [availableFretes.length, activeFrete]);
 
-  // Captura convite de instalação PWA (Mantido 100%)
+  // PWA Mantido
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -60,7 +60,7 @@ export default function Motorista() {
     return () => unsubAuth();
   }, []);
 
-  // Geolocation Watch (Mantido 100%)
+  // Geolocation Mantido
   useEffect(() => {
     if (user && driverData?.status === 'aprovado' && "geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition((pos) => {
@@ -81,20 +81,17 @@ export default function Motorista() {
     }
   }, [driverData, user, activeFrete]);
 
-  // RADAR SINCRONIZADO (MELHORADO: Padronização de Categoria)
+  // RADAR SINCRONIZADO
   useEffect(() => {
     if (driverData?.status === 'aprovado' && !activeFrete) {
       const q = query(collection(db, 'fretes'), where('status', '==', 'aguardando_motorista'));
       const unsubRadar = onSnapshot(q, (snap) => {
-        // Padronizamos para comparar sempre em minúsculo e sem espaços extras
         const categoriaMotorista = String(driverData.categoria || '').toLowerCase().trim();
-        
         const fretesValidos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
           .filter((f: any) => {
              const veiculoFrete = String(f.veiculo || '').toLowerCase().trim();
              return veiculoFrete === categoriaMotorista;
           });
-          
         setAvailableFretes(fretesValidos);
       });
       return () => unsubRadar();
@@ -109,7 +106,6 @@ export default function Motorista() {
         const d = await t.get(freteRef);
         const data = d.data();
         if (!d.exists() || data?.status !== 'aguardando_motorista' || data?.motoristaId) throw new Error("Carga indisponível.");
-        
         t.update(freteRef, {
           status: 'aceito',
           motoristaId: user.uid, 
@@ -157,10 +153,16 @@ export default function Motorista() {
 
       <div className="p-4 max-w-md mx-auto">
         {!user ? (
-          <button onClick={() => signInWithPopup(auth, provider)} className="w-full bg-blue-600 p-5 rounded-2xl font-black uppercase italic shadow-xl shadow-blue-500/20 transition-all active:scale-95">ENTRAR NO RADAR</button>
+          /* AJUSTE 3: LOGIN UNIFICADO */
+          <div className="text-center py-10">
+            <Truck className="w-16 h-16 text-blue-500 mx-auto mb-6 animate-bounce" />
+            <h1 className="text-2xl font-black italic mb-6">OPERAÇÃO MOTORISTA</h1>
+            <button onClick={() => signInWithPopup(auth, provider)} className="w-full bg-blue-600 p-5 rounded-2xl font-black uppercase italic shadow-xl">ENTRAR NO RADAR</button>
+          </div>
         ) : activeFrete ? (
           <div className="bg-slate-900 p-6 rounded-[2rem] border border-blue-500/30 animate-in zoom-in shadow-2xl">
             <h2 className="text-xl font-black uppercase mb-4 flex items-center gap-2"><Truck className="w-5 h-5 text-blue-500"/> Carga Ativa</h2>
+            <p className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest">{activeFrete.cidadeOrigem} → {activeFrete.distancia}km</p>
             <div className="grid gap-3">
               {activeFrete.status === 'aceito' && <button onClick={() => handleUpdateStatus('coleta')} className="bg-blue-600 p-5 rounded-xl font-black uppercase text-sm shadow-lg">COLETEI A CARGA</button>}
               {activeFrete.status === 'coleta' && <button onClick={() => handleUpdateStatus('em_transporte')} className="bg-orange-500 p-5 rounded-xl font-black uppercase text-sm shadow-lg">INICIAR TRANSPORTE</button>}
@@ -169,6 +171,7 @@ export default function Motorista() {
           </div>
         ) : (
           <div className="space-y-4">
+             {/* AJUSTE 4 e 5: RADAR COM DADOS REAIS */}
              {availableFretes.length === 0 ? (
                <div className="text-center py-20">
                  <Loader2 className="animate-spin text-slate-700 w-10 h-10 mx-auto mb-4" />
@@ -178,9 +181,15 @@ export default function Motorista() {
                availableFretes.map(f => (
                  <div key={f.id} className="bg-white text-slate-900 p-6 rounded-[2.5rem] shadow-2xl border-b-[10px] border-blue-600 animate-in slide-in-from-bottom-5">
                     <div className="flex justify-between items-start mb-4">
-                      <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">{f.veiculo?.replace('_', ' ')}</span>
-                      <span className="text-slate-400 text-[10px] font-bold italic">{f.distancia}km</span>
+                      <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">{f.veiculo?.replace('_', ' ')}</span>
+                      <span className="text-slate-400 text-[10px] font-bold italic flex items-center gap-1"><Navigation className="w-3 h-3"/> {f.distancia}km</span>
                     </div>
+
+                    <div className="mb-4">
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Origem da Carga</p>
+                      <p className="text-lg font-black leading-tight uppercase text-slate-900">{f.cidadeOrigem || 'Ver no Aceite'}</p>
+                    </div>
+
                     <p className="text-4xl font-black text-slate-900 italic mb-4">R$ {f.valorMotorista ? Number(f.valorMotorista).toFixed(2).replace('.', ',') : '0,00'}</p>
                     <button onClick={() => handleAccept(f)} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase italic shadow-xl active:scale-95 transition-all">ACEITAR E COLETAR</button>
                  </div>
