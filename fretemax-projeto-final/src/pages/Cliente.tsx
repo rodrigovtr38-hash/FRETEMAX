@@ -62,7 +62,7 @@ export default function Cliente() {
       const coords = await obterCoordenadas(coleta.cep);
       const docRef = await addDoc(collection(db, 'fretes'), {
         distancia: dist, 
-        veiculo: vehicle, // Salva a chave limpa: 'utilitario'
+        veiculo: vehicle, 
         valorTotal: Number(valorTotalBruto.toFixed(2)),
         valorMotorista: Number((valorTotalBruto * 0.80).toFixed(2)),
         cidadeOrigem: coleta.bairro, 
@@ -95,16 +95,26 @@ export default function Cliente() {
       <div className="max-w-md mx-auto px-4 mt-4">
         {step === 'form' && (
           <div className="space-y-4">
-            <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="Bairro Coleta" onChange={e => setColeta({...coleta, bairro: e.target.value})} />
-            <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="CEP Coleta" onChange={e => setColeta({...coleta, cep: e.target.value})} />
-            <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="Bairro Entrega" onChange={e => setEntrega({...entrega, bairro: e.target.value})} />
-            <input className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 outline-none" placeholder="CEP Entrega" onChange={e => setEntrega({...entrega, cep: e.target.value})} />
-            <select className="w-full p-4 bg-white rounded-2xl font-black outline-none" value={vehicle} onChange={e => setVehicle(e.target.value)}>
-                {Object.keys(configuracao).map(key => (
-                  <option key={key} value={key}>{configuracao[key].nome}</option>
-                ))}
-            </select>
-            <button onClick={() => setStep('preview')} disabled={dist <= 0} className="w-full bg-blue-600 text-white font-black py-5 rounded-[2rem] text-lg uppercase italic shadow-xl">VER RADAR E PREÇO</button>
+            {/* BOTÃO VOLTAR PARA HOME - ADICIONADO */}
+            <button 
+              onClick={() => window.location.href = '/'}
+              className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-widest hover:text-slate-800 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" /> Início
+            </button>
+
+            <div className="grid gap-2">
+              <input className="w-full p-4 bg-slate-100 rounded-2xl font-bold border border-slate-200 outline-none text-slate-950 placeholder:text-slate-400" placeholder="Bairro Coleta" onChange={e => setColeta({...coleta, bairro: e.target.value})} />
+              <input className="w-full p-4 bg-slate-100 rounded-2xl font-bold border border-slate-200 outline-none text-slate-950 placeholder:text-slate-400" placeholder="CEP Coleta" onChange={e => setColeta({...coleta, cep: e.target.value})} />
+              <input className="w-full p-4 bg-slate-100 rounded-2xl font-bold border border-slate-200 outline-none text-slate-950 placeholder:text-slate-400" placeholder="Bairro Entrega" onChange={e => setEntrega({...entrega, bairro: e.target.value})} />
+              <input className="w-full p-4 bg-slate-100 rounded-2xl font-bold border border-slate-200 outline-none text-slate-950 placeholder:text-slate-400" placeholder="CEP Entrega" onChange={e => setEntrega({...entrega, cep: e.target.value})} />
+              <select className="w-full p-4 bg-slate-100 rounded-2xl font-black outline-none text-slate-950" value={vehicle} onChange={e => setVehicle(e.target.value)}>
+                  {Object.keys(configuracao).map(key => (
+                    <option key={key} value={key}>{configuracao[key].nome}</option>
+                  ))}
+              </select>
+            </div>
+            <button onClick={() => setStep('preview')} disabled={dist <= 0} className="w-full bg-blue-600 text-white font-black py-5 rounded-[2rem] text-lg uppercase italic shadow-xl active:scale-95 transition-transform">VER RADAR E PREÇO</button>
           </div>
         )}
 
@@ -112,6 +122,11 @@ export default function Cliente() {
           <div className="animate-in fade-in zoom-in">
             <MapaCliente />
             <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border border-slate-100 mt-4 text-center">
+                <div className="flex justify-center mb-2">
+                  <span className="bg-blue-100 text-blue-700 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                    Distância: {dist} KM
+                  </span>
+                </div>
                 <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Valor Estimado do Frete</p>
                 <p className="text-5xl font-black text-green-600 italic mb-6">R$ {valorTotalBruto.toFixed(2).replace('.', ',')}</p>
                 <button onClick={handleContratar} className="w-full bg-slate-950 text-white py-5 rounded-2xl font-black uppercase italic flex items-center justify-center gap-3">
@@ -128,7 +143,7 @@ export default function Cliente() {
                     <Truck className="text-green-600 w-12 h-12 mx-auto mb-4" />
                     <h2 className="text-2xl font-black italic uppercase text-slate-900">Carga Ativa!</h2>
                     <p className="font-bold text-slate-500 mt-2">{orderData.motoristaNome}</p>
-                    <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap?.replace(/\D/g,'')}?text=Olá!`)} className="w-full bg-green-500 py-4 rounded-xl font-black mt-6 text-white shadow-lg uppercase">WhatsApp</button>
+                    <button onClick={() => window.open(`https://wa.me/55${orderData.motoristaZap?.replace(/\D/g,'')}?text=Olá!`)} className="w-full bg-green-500 py-4 rounded-xl font-black mt-6 text-white shadow-lg uppercase tracking-widest">WhatsApp</button>
                  </div>
               ) : (
                  <div className="py-8">
