@@ -27,24 +27,25 @@ export default async function handler(req, res) {
             unit_price: valor
           }
         ],
-
         external_reference: idPedido,
-
         notification_url: `https://${req.headers.host}/api/webhook`,
 
+        // 🔥 FORÇANDO A LIBERAÇÃO DE MÉTODOS
         payment_methods: {
-          excluded_payment_types: [],
+          excluded_payment_types: [], // Deixa vazio para não excluir nada
           excluded_payment_methods: [],
           installments: 12,
           default_installments: 1
         },
 
-        back_urls: {
-          success: `https://${req.headers.host}/sucesso`,
-          failure: `https://${req.headers.host}/erro`,
-          pending: `https://${req.headers.host}/pendente`
-        },
+        // Informações para ajudar na aprovação do Pix/Cartão
+        statement_descriptor: "FRETOGO", 
 
+        back_urls: {
+          success: `https://${req.headers.host}/cliente`, // Volta pro radar
+          failure: `https://${req.headers.host}/cliente`,
+          pending: `https://${req.headers.host}/cliente`
+        },
         auto_return: "approved"
       })
     });
@@ -52,8 +53,8 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!data.init_point) {
-      console.error(data);
-      return res.status(500).json({ error: 'Erro ao criar pagamento' });
+      console.error("Erro MP:", data);
+      return res.status(500).json({ error: 'Erro ao criar preferência' });
     }
 
     return res.status(200).json({ url: data.init_point });
@@ -63,3 +64,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Erro ao gerar pagamento' });
   }
 }
+
