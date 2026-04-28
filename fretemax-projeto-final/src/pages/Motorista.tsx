@@ -12,7 +12,7 @@ export default function Motorista() {
   const [loading, setLoading] = useState(true);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-  // Efeito para Alerta Sonoro
+  // Efeito para Alerta Sonoro (Mantido 100%)
   useEffect(() => {
     if (availableFretes.length > 0 && !activeFrete) {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
@@ -20,7 +20,7 @@ export default function Motorista() {
     }
   }, [availableFretes.length, activeFrete]);
 
-  // Captura convite de instalação PWA
+  // Captura convite de instalação PWA (Mantido 100%)
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -60,6 +60,7 @@ export default function Motorista() {
     return () => unsubAuth();
   }, []);
 
+  // Geolocation Watch (Mantido 100%)
   useEffect(() => {
     if (user && driverData?.status === 'aprovado' && "geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition((pos) => {
@@ -80,12 +81,20 @@ export default function Motorista() {
     }
   }, [driverData, user, activeFrete]);
 
+  // RADAR SINCRONIZADO (MELHORADO: Padronização de Categoria)
   useEffect(() => {
     if (driverData?.status === 'aprovado' && !activeFrete) {
       const q = query(collection(db, 'fretes'), where('status', '==', 'aguardando_motorista'));
       const unsubRadar = onSnapshot(q, (snap) => {
-        const categoria = String(driverData.categoria || '').toLowerCase().trim();
-        const fretesValidos = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((f: any) => String(f.veiculo || '').toLowerCase().trim() === categoria);
+        // Padronizamos para comparar sempre em minúsculo e sem espaços extras
+        const categoriaMotorista = String(driverData.categoria || '').toLowerCase().trim();
+        
+        const fretesValidos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .filter((f: any) => {
+             const veiculoFrete = String(f.veiculo || '').toLowerCase().trim();
+             return veiculoFrete === categoriaMotorista;
+          });
+          
         setAvailableFretes(fretesValidos);
       });
       return () => unsubRadar();
@@ -169,7 +178,7 @@ export default function Motorista() {
                availableFretes.map(f => (
                  <div key={f.id} className="bg-white text-slate-900 p-6 rounded-[2.5rem] shadow-2xl border-b-[10px] border-blue-600 animate-in slide-in-from-bottom-5">
                     <div className="flex justify-between items-start mb-4">
-                      <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">{f.veiculo}</span>
+                      <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">{f.veiculo?.replace('_', ' ')}</span>
                       <span className="text-slate-400 text-[10px] font-bold italic">{f.distancia}km</span>
                     </div>
                     <p className="text-4xl font-black text-slate-900 italic mb-4">R$ {f.valorMotorista ? Number(f.valorMotorista).toFixed(2).replace('.', ',') : '0,00'}</p>
