@@ -68,7 +68,7 @@ export default function Cliente() {
         cidadeOrigem: coleta.bairro, 
         origemLat: coords?.lat || 0, 
         origemLng: coords?.lng || 0,
-        status: 'aguardando_pagamento',
+        status: 'aguardando_motorista', // Corrigido: Já nasce esperando motorista após o "Contratar"
         createdAt: serverTimestamp()
       });
       setCurrentOrderId(docRef.id);
@@ -86,6 +86,7 @@ export default function Cliente() {
     <div className="min-h-screen bg-slate-50 font-sans pb-10">
       <nav className="bg-slate-950 p-4 flex items-center justify-between shadow-xl sticky top-0 z-50">
         <div className="flex items-center gap-2 text-white">
+          {/* Seta do Nav agora sempre volta para o formulário se estiver no radar */}
           {step !== 'form' && <ArrowLeft onClick={() => setStep('form')} className="cursor-pointer" />}
           <Zap className="text-yellow-400 fill-yellow-400" />
           <span className="font-black text-xl italic uppercase text-white">FRETOGO</span>
@@ -95,7 +96,7 @@ export default function Cliente() {
       <div className="max-w-md mx-auto px-4 mt-4">
         {step === 'form' && (
           <div className="space-y-4">
-            {/* BOTÃO VOLTAR PARA HOME - ADICIONADO */}
+            {/* AJUSTE 1: BOTÃO VOLTAR PARA HOME REAL */}
             <button 
               onClick={() => window.location.href = '/'}
               className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-widest hover:text-slate-800 transition-colors"
@@ -103,6 +104,7 @@ export default function Cliente() {
               <ArrowLeft className="w-4 h-4" /> Início
             </button>
 
+            {/* AJUSTE 2: VISIBILIDADE DOS INPUTS NO MOBILE */}
             <div className="grid gap-2">
               <input className="w-full p-4 bg-slate-100 rounded-2xl font-bold border border-slate-200 outline-none text-slate-950 placeholder:text-slate-400" placeholder="Bairro Coleta" onChange={e => setColeta({...coleta, bairro: e.target.value})} />
               <input className="w-full p-4 bg-slate-100 rounded-2xl font-bold border border-slate-200 outline-none text-slate-950 placeholder:text-slate-400" placeholder="CEP Coleta" onChange={e => setColeta({...coleta, cep: e.target.value})} />
