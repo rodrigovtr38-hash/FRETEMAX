@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { auth, provider, db } from '../firebase';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, doc, serverTimestamp, setDoc, runTransaction } from 'firebase/firestore';
-import { Loader2, Truck, CheckCircle } from 'lucide-react';
+import { Loader2, Truck, CheckCircle, Download } from 'lucide-react';
 
 export default function Motorista() {
   const [user, setUser] = useState<any>(null);
@@ -10,6 +10,30 @@ export default function Motorista() {
   const [availableFretes, setAvailableFretes] = useState<any[]>([]);
   const [activeFrete, setActiveFrete] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  // Efeito para Alerta Sonoro
+  useEffect(() => {
+    if (availableFretes.length > 0 && !activeFrete) {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+      audio.play().catch(() => console.log("Áudio aguardando interação"));
+    }
+  }, [availableFretes.length, activeFrete]);
+
+  // Captura convite de instalação PWA
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
+
+  const handleInstall = () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      setDeferredPrompt(null);
+    }
+  };
 
   useEffect(() => {
     const unsubAuth = auth.onAuthStateChanged((currentUser) => {
@@ -19,15 +43,11 @@ export default function Motorista() {
           if (!snap.empty) setDriverData({ id: snap.docs[0].id, ...snap.docs[0].data() });
         });
         
-        // Proteção contra erro de index do Firestore: busca por motoristaId e filtra na memória
         const qActive = query(collection(db, 'fretes'), where('motoristaId', '==', currentUser.uid));
         const unsubActive = onSnapshot(qActive, (snap) => {
           const fretesDoMotorista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           const freteAtivo = fretesDoMotorista.find((f: any) => ['aceito', 'coleta', 'em_transporte'].includes(f.status));
-          
-          if (freteAtivo) setActiveFrete(freteAtivo);
-          else setActiveFrete(null);
-          
+          setActiveFrete(freteAtivo || null);
           setLoading(false);
         });
 
@@ -115,35 +135,51 @@ export default function Motorista() {
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans">
       <nav className="bg-slate-900 p-4 flex items-center justify-between border-b border-slate-800 font-black italic">
-        FRETOGO <button onClick={() => signOut(auth)} className="text-xs text-slate-500 font-bold bg-slate-800 px-3 py-1 rounded-full">SAIR</button>
+        FRETOGO 
+        <div className="flex gap-2 items-center">
+          {deferredPrompt && (
+            <button onClick={handleInstall} className="bg-blue-600 p-2 rounded-lg text-white animate-pulse">
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={() => signOut(auth)} className="text-xs text-slate-500 font-bold bg-slate-800 px-3 py-1 rounded-full">SAIR</button>
+        </div>
       </nav>
 
       <div className="p-4 max-w-md mx-auto">
         {!user ? (
-          <button onClick={() => signInWithPopup(auth, provider)} className="w-full bg-blue-600 p-5 rounded-2xl font-black uppercase italic shadow-xl">ENTRAR NO RADAR</button>
+          <button onClick={() => signInWithPopup(auth, provider)} className="w-full bg-blue-600 p-5 rounded-2xl font-black uppercase italic shadow-xl shadow-blue-500/20 transition-all active:scale-95">ENTRAR NO RADAR</button>
         ) : activeFrete ? (
-          <div className="bg-slate-900 p-6 rounded-[2rem] border border-blue-500/30 animate-in zoom-in">
+          <div className="bg-slate-900 p-6 rounded-[2rem] border border-blue-500/30 animate-in zoom-in shadow-2xl">
             <h2 className="text-xl font-black uppercase mb-4 flex items-center gap-2"><Truck className="w-5 h-5 text-blue-500"/> Carga Ativa</h2>
             <div className="grid gap-3">
-              {activeFrete.status === 'aceito' && <button onClick={() => handleUpdateStatus('coleta')} className="bg-blue-600 p-4 rounded-xl font-black uppercase text-sm">COLETEI A CARGA</button>}
-              {activeFrete.status === 'coleta' && <button onClick={() => handleUpdateStatus('em_transporte')} className="bg-orange-500 p-4 rounded-xl font-black uppercase text-sm">INICIAR TRANSPORTE</button>}
-              {activeFrete.status === 'em_transporte' && <button onClick={() => handleUpdateStatus('entregue')} className="bg-green-600 p-4 rounded-xl font-black uppercase text-sm flex gap-2 justify-center"><CheckCircle className="w-4 h-4"/> FINALIZAR ENTREGA</button>}
+              {activeFrete.status === 'aceito' && <button onClick={() => handleUpdateStatus('coleta')} className="bg-blue-600 p-5 rounded-xl font-black uppercase text-sm shadow-lg">COLETEI A CARGA</button>}
+              {activeFrete.status === 'coleta' && <button onClick={() => handleUpdateStatus('em_transporte')} className="bg-orange-500 p-5 rounded-xl font-black uppercase text-sm shadow-lg">INICIAR TRANSPORTE</button>}
+              {activeFrete.status === 'em_transporte' && <button onClick={() => handleUpdateStatus('entregue')} className="bg-green-600 p-5 rounded-xl font-black uppercase text-sm flex gap-2 justify-center shadow-lg"><CheckCircle className="w-4 h-4"/> FINALIZAR ENTREGA</button>}
             </div>
           </div>
         ) : (
           <div className="space-y-4">
-             {availableFretes.length === 0 ? <p className="text-center text-slate-500 py-20 italic">Buscando fretes pagos...</p> : 
+             {availableFretes.length === 0 ? (
+               <div className="text-center py-20">
+                 <Loader2 className="animate-spin text-slate-700 w-10 h-10 mx-auto mb-4" />
+                 <p className="text-slate-500 italic font-bold">Buscando fretes próximos...</p>
+               </div>
+             ) : (
                availableFretes.map(f => (
-                 <div key={f.id} className="bg-white text-slate-900 p-6 rounded-[2rem] shadow-xl border-b-8 border-blue-600">
-                    <p className="text-4xl font-black text-green-600 italic mb-4">R$ {f.valorMotorista ? Number(f.valorMotorista).toFixed(2).replace('.', ',') : '0,00'}</p>
-                    <button onClick={() => handleAccept(f)} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase italic">ACEITAR E COLETAR</button>
+                 <div key={f.id} className="bg-white text-slate-900 p-6 rounded-[2.5rem] shadow-2xl border-b-[10px] border-blue-600 animate-in slide-in-from-bottom-5">
+                    <div className="flex justify-between items-start mb-4">
+                      <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">{f.veiculo}</span>
+                      <span className="text-slate-400 text-[10px] font-bold italic">{f.distancia}km</span>
+                    </div>
+                    <p className="text-4xl font-black text-slate-900 italic mb-4">R$ {f.valorMotorista ? Number(f.valorMotorista).toFixed(2).replace('.', ',') : '0,00'}</p>
+                    <button onClick={() => handleAccept(f)} className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black uppercase italic shadow-xl active:scale-95 transition-all">ACEITAR E COLETAR</button>
                  </div>
                ))
-             }
+             )}
           </div>
         )}
       </div>
     </div>
   );
 }
-
