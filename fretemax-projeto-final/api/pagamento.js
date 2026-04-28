@@ -27,24 +27,26 @@ export default async function handler(req, res) {
             unit_price: valor
           }
         ],
+        // 🛡️ ADICIONANDO DADOS DO PAGADOR (Isso libera Pix/Cartão)
+        payer: {
+          email: "cliente@fretogo.com.br" // E-mail genérico para validar a API
+        },
         external_reference: idPedido,
-        notification_url: `https://${req.headers.host}/api/webhook`,
+        notification_url: `https://www.fretogo.com.br/api/webhook`, // Link fixo é mais seguro
 
-        // 🔥 FORÇANDO A LIBERAÇÃO DE MÉTODOS
         payment_methods: {
-          excluded_payment_types: [], // Deixa vazio para não excluir nada
+          excluded_payment_types: [], 
           excluded_payment_methods: [],
           installments: 12,
           default_installments: 1
         },
 
-        // Informações para ajudar na aprovação do Pix/Cartão
         statement_descriptor: "FRETOGO", 
 
         back_urls: {
-          success: `https://${req.headers.host}/cliente`, // Volta pro radar
-          failure: `https://${req.headers.host}/cliente`,
-          pending: `https://${req.headers.host}/cliente`
+          success: `https://www.fretogo.com.br/cliente`,
+          failure: `https://www.fretogo.com.br/cliente`,
+          pending: `https://www.fretogo.com.br/cliente`
         },
         auto_return: "approved"
       })
