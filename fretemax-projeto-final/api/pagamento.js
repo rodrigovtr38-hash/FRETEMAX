@@ -12,10 +12,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Valor inválido' });
     }
 
-    if (!process.env.MERCADO_PAGO_ACCESS_TOKEN) {
-      return res.status(500).json({ error: 'Token Mercado Pago não configurado' });
-    }
-
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
@@ -31,54 +27,49 @@ export default async function handler(req, res) {
             unit_price: valor
           }
         ],
-
-        // ✅ PAYER DINÂMICO (CORREÇÃO PRINCIPAL)
+        // ✅ AJUSTE DE OURO: Payer dinâmico baseado no ID do Pedido
+        // Isso remove o erro de "transação de teste" e libera Pix/Cartão
         payer: {
-          email: `${idPedido}@fretogo.com`
+          email: `${idPedido}@fretogo.com` 
         },
-
         external_reference: idPedido,
-
-        notification_url: `https://www.fretogo.com.br/api/webhook`,
+        notification_url: `https://www.fretogo.com.br/api/webhook`, 
 
         payment_methods: {
-          excluded_payment_types: [],
+          excluded_payment_types: [], 
           excluded_payment_methods: [],
           installments: 12,
           default_installments: 1
         },
 
-        statement_descriptor: "FRETOGO",
+        statement_descriptor: "FRETOGO", 
 
         back_urls: {
           success: `https://www.fretogo.com.br/cliente`,
           failure: `https://www.fretogo.com.br/cliente`,
           pending: `https://www.fretogo.com.br/cliente`
         },
-
         auto_return: "approved"
       })
     });
 
     const data = await response.json();
 
-    // 🔥 LOG COMPLETO PRA DEBUG
     if (!data.init_point) {
-      console.error("ERRO MERCADO PAGO:", data);
-      return res.status(500).json({
+      console.error("Erro MP:", data);
+      return res.status(500).json({ 
         error: 'Erro ao criar preferência',
-        detalhe: data
+        detalhe: data // Mantendo o detalhe para seu debug
       });
     }
 
     return res.status(200).json({ url: data.init_point });
 
   } catch (error) {
-    console.error("ERRO GERAL:", error);
-    return res.status(500).json({
+    console.error(error);
+    return res.status(500).json({ 
       error: 'Erro ao gerar pagamento',
-      detalhe: error.message
+      detalhe: error.message 
     });
   }
 }
-
