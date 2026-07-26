@@ -1,8 +1,12 @@
+// ============================================================================
+// ARQUIVO: useFTI.ts
+// PASTA: hooks/
 // FTI - Hook Principal de Integração
 // Única ponte autorizada entre as telas do app (React) e o Motor da IA
+// ============================================================================
 
 import { useState } from 'react';
-import { IAContext } from '../types/ia.types';
+import { IAContext } from '../types/ia.context'; // <- Arquitetura atualizada
 import { routeIntent } from '../engine/ia.router';
 
 export const useFTI = () => {
