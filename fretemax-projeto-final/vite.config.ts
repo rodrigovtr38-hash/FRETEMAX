@@ -1,15 +1,12 @@
 // =========================================================
 // NOME DO ARQUIVO: vite.config.ts
-// CTO-Log: Otimização de Compilação Final.
-// Correção: Plugin 'splitVendorChunkPlugin' removido para evitar conflito com 'manualChunks'. Console da Vercel limpo.
+// CTO-Log: Otimização de Compilação Final e Blindagem de PWA (WebAPK).
 // =========================================================
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
-
-// Importando o construtor do PWA
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
@@ -19,15 +16,16 @@ export default defineConfig({
     }),
     tailwindcss(),
     
-    // Ativando a compilação do PWA para o botão de instalar aparecer (Configuração App Nativo)
+    // PWA Blindado para Google Play Protect (Target Moderno)
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        maximumFileSizeToCacheInBytes: 4000000 // 4MB para suportar mapas pesados
+        maximumFileSizeToCacheInBytes: 4000000 
       },
       manifest: {
+        id: "fretogo-app-v2", // Força o Google a recriar o WebAPK
         name: "FRETOGO — Ecossistema Logístico Realtime",
         short_name: "FRETOGO",
         description: "Infraestrutura logística inteligente em tempo real. Da moto ao Bi-trem em segundos.",
@@ -36,6 +34,10 @@ export default defineConfig({
         display: "standalone",
         orientation: "portrait",
         start_url: "/motorista",
+        lang: "pt-BR",
+        dir: "ltr",
+        categories: ["business", "navigation", "logistics"],
+        prefer_related_applications: false, // Diz ao Android que o PWA é a versão oficial
         icons: [
           {
             src: "/icon-192.png",
@@ -79,19 +81,11 @@ export default defineConfig({
 
   optimizeDeps: {
     include: [
-      'react',
-      'react-dom',
-      'react-router-dom',
-      'firebase/app',
-      'firebase/auth',
-      'firebase/firestore',
-      'firebase/storage',
-      '@react-google-maps/api',
-      'geofire-common',
+      'react', 'react-dom', 'react-router-dom', 'firebase/app',
+      'firebase/auth', 'firebase/firestore', 'firebase/storage',
+      '@react-google-maps/api', 'geofire-common',
     ],
-    esbuildOptions: {
-      target: 'es2020',
-    },
+    esbuildOptions: { target: 'es2020' },
   },
 
   build: {
@@ -104,12 +98,9 @@ export default defineConfig({
     reportCompressedSize: true,
     chunkSizeWarningLimit: 1200,
     assetsInlineLimit: 4096,
-    modulePreload: {
-      polyfill: true,
-    },
+    modulePreload: { polyfill: true },
     rollupOptions: {
       output: {
-        // Empacotamento inteligente mantido. Evita carregar o mapa do Google se o motorista estiver só na tela de login.
         manualChunks: {
           react: ['react', 'react-dom', 'react-router-dom'],
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
