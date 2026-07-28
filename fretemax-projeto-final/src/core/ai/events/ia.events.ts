@@ -1,19 +1,54 @@
-// FTI - Central de Eventos Passivos
-// A IA escuta esses eventos para tomar ações proativas sem o usuário pedir
+// ============================================================================
+// ARQUIVO: ia.events.ts
+// PASTA: src/core/ai/events/
+// OBJETIVO: Barramento de Eventos e Gatilhos Autônomos (Radar FTI)
+// ============================================================================
 
-import { IAContext } from '../types/ia.types';
+export type FTIEventType = 
+  | 'TRIP_STARTED' 
+  | 'TRIP_COMPLETED' 
+  | 'LOCATION_UPDATE' 
+  | 'DRIVER_IDLE';
 
-export enum FTIEventType {
-  TRIP_CREATED = 'TRIP_CREATED',
-  PAYMENT_FAILED = 'PAYMENT_FAILED',
-  DRIVER_STUCK = 'DRIVER_STUCK',
-  MARKET_OPPORTUNITY = 'MARKET_OPPORTUNITY'
+export interface FTIEventPayload {
+  userId: string;
+  eventType: FTIEventType;
+  data: any;
+  timestamp: string;
 }
 
-export const notifyFTI = async (eventType: FTIEventType, payload: any, context: IAContext) => {
-  // A IA avalia o evento silenciosamente
-  console.log(`[FTI Sensor] Evento capturado: ${eventType}`, payload);
+/**
+ * Despachante Central de Eventos.
+ * Captura ações do app no background e notifica a IA silenciosamente.
+ */
+export class FTIEventDispatcher {
   
-  // Se for um evento crítico (ex: motorista travado), a IA pode decidir intervir
-  return { acknowledged: true, requiresAction: false };
-};
+  public dispatch(event: FTIEventPayload): void {
+    console.log(`[FTI Radar] Evento detectado: ${event.eventType} para o usuário ${event.userId}`);
+    
+    // Switch de roteamento de eventos logísticos
+    switch (event.eventType) {
+      case 'TRIP_STARTED':
+        this.handleTripStarted(event);
+        break;
+      case 'TRIP_COMPLETED':
+        this.handleTripCompleted(event);
+        break;
+      default:
+        console.warn(`[FTI Radar] Evento ignorado ou sem tratativa: ${event.eventType}`);
+    }
+  }
+
+  private handleTripStarted(event: FTIEventPayload): void {
+    // Aqui no futuro injetaremos a chamada para a IA alertar sobre regras da estrada, pedágios, etc.
+    console.log(`[FTI Auto-Action] Iniciando monitoramento de viagem:`, event.data);
+  }
+
+  private handleTripCompleted(event: FTIEventPayload): void {
+    // Gatilho para a IA sugerir o próximo frete na região de descarregamento
+    console.log(`[FTI Auto-Action] Viagem concluída. Preparando sugestão de retorno para:`, event.data);
+  }
+}
+
+// Singleton exportado para uso global
+export const ftiRadar = new FTIEventDispatcher();
