@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/App.tsx
 // CTO-Log: Sprint 1 - Limpeza de Topologia e Preparação de Rotas B2B/B2C.
 // Integração do Firebase e Contextos mantida INTACTA para evitar quebra de listeners.
+// Injeção Global da Inteligência Artificial (FTI) implementada.
 // =========================================================
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
@@ -16,6 +17,11 @@ import Motorista from './pages/Motorista';
 import Admin from './pages/Admin';
 
 import { ClientProvider } from './context/ClientContext';
+
+// =========================================================
+// INJEÇÃO DA INTELIGÊNCIA ARTIFICIAL (FTI)
+// =========================================================
+import FTIWidget from './core/ai/components/FTIWidget';
 
 /* =========================================================
    RUNTIME TYPES
@@ -142,6 +148,13 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
 
           </Routes>
+
+          {/* ======================================================
+              MOTOR NEURAL (FTI) - ASSISTENTE FLUTUANTE GLOBAL
+              Renderizado acima de todas as telas
+          ====================================================== */}
+          <FTIWidget />
+
         </AppShell>
       </ErrorBoundary>
     </BrowserRouter>
