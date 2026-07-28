@@ -1,19 +1,33 @@
 // ============================================================================
 // ARQUIVO: ia.company.ts
-// FASE 4: Tipos e Contratos (TypeScript)
-// OBJETIVO: Definir o contrato específico para usuários do tipo 'Empresa'
+// PASTA: src/core/ai/types/
+// OBJETIVO: Contrato de Dados (TypeScript) - Perfil Corporativo (Embarcador)
 // ============================================================================
 
 import { IABaseUser } from './ia.user';
 
 /**
- * Contrato específico para Empresas (Embarcadores).
- * Herda as propriedades básicas de IABaseUser (DRY - Don't Repeat Yourself).
+ * Contrato blindado para Empresas (Embarcadores/Transportadoras).
+ * Este payload é a base para a IA entender o poder de barganha e o 
+ * LTV (Lifetime Value) do cliente no ecossistema SaaS.
  */
 export interface IACompany extends IABaseUser {
-  role: 'empresa';             // Força o tipo estrito para empresa
-  cnpj: string;                // Documento obrigatório para validação e faturamento
-  activeFreightsCount: number; // Quantidade de fretes atualmente publicados ou em rota
-  reputationScore: number;     // Nota da empresa na plataforma (0.0 a 5.0)
-  totalSpent: number;          // Total financeiro movimentado na plataforma
+  role: 'empresa';
+  
+  // Identificação e Compliance
+  cnpj: string;
+  isVerified: boolean; // Selo de confiança antifraude para liberar motoristas premium
+  
+  // Métricas de Escala e Engajamento Logístico
+  activeFreightsCount: number;
+  historicalFreightsCompleted: number; // Volume de sucesso na plataforma
+  reputationScore: number; // 0.0 a 5.0 (Afeta diretamente o algoritmo de roteamento)
+  
+  // Lógica Financeira (Senioridade SaaS)
+  totalSpent: number; // Volume Geral de Vendas (GMV) transacionado pela empresa
+  billingTier: 'FREE' | 'PRO' | 'ENTERPRISE'; // Nível de assinatura. A IA prioriza suporte Enterprise.
+  
+  // Indicadores de Negociação
+  preferredRoutes?: string[]; // Eixos logísticos de maior atuação (Ouro para remarketing no Google Ads)
+  averagePaymentTermsDays?: number; // Prazos padrão (ex: 15, 30 dias). A IA usa para calcular propostas.
 }
