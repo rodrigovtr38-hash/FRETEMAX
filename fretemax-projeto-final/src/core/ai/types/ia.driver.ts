@@ -1,26 +1,31 @@
 // ============================================================================
 // ARQUIVO: ia.driver.ts
-// FASE 4: Tipos e Contratos (TypeScript)
-// OBJETIVO: Definir o contrato específico para usuários do tipo 'Motorista'
+// PASTA: src/core/ai/types/
+// OBJETIVO: Contrato de Dados - Perfil Operacional (Motorista)
 // ============================================================================
 
 import { IABaseUser } from './ia.user';
 
-/**
- * Categorias de veículos aceitas no ecossistema FretoGo.
- */
-export type VehicleCategory = 'vuc' | 'toco' | 'truck' | 'carreta' | 'carreta_ls' | 'bi_trem';
+export type VehicleCategory = 'vuc' | 'toco' | 'truck' | 'carreta' | 'carreta_ls' | 'bi_trem' | 'rodotrem';
 
 /**
- * Contrato específico para Motoristas.
- * Herda as propriedades básicas de IABaseUser para garantir a consistência do sistema.
+ * Contrato blindado para Motoristas. Foco em LTV e Risco.
  */
 export interface IADriver extends IABaseUser {
-  role: 'motorista';           // Força o tipo estrito
-  cpf: string;                 // Documento obrigatório para compliance e background check
-  cnh: string;                 // Registro da CNH
-  vehicleType: VehicleCategory; // Categoria do veículo atual do motorista
-  isAvailable: boolean;        // Motorista está com app ativo e livre para receber ofertas?
-  reputationScore: number;     // Nota do motorista (0.0 a 5.0) - afeta a prioridade no matching
-  totalTripsCompleted: number; // Histórico de sucesso na plataforma
+  role: 'motorista';
+  
+  // Compliance
+  cpf: string;
+  cnh: string;
+  
+  // Operacional
+  vehicleType: VehicleCategory;
+  isAvailable: boolean;
+  totalTripsCompleted: number;
+  
+  // Engenharia Financeira & Risco
+  reputationScore: number;       // 0.0 a 5.0
+  antiFraudScore: number;        // 0 a 100 (Score Serasa/Gerenciadora de Risco)
+  walletBalance: number;         // Saldo atual a receber. A IA usa isso para motivar o motorista.
+  preferredRegions?: string[];   // Onde ele gosta de rodar (Bom para matching preditivo)
 }
