@@ -1,42 +1,44 @@
 // ============================================================================
-// ARQUIVO: src/core/ai/types/ia.context.ts
-// FASE 4: Tipos e Contratos (TypeScript)
-// OBJETIVO: Definir a estrutura do contexto de navegação e operação do app
+// ARQUIVO: ia.context.ts
+// PASTA: src/core/ai/types/
+// OBJETIVO: Contrato de Contexto Global - Consciência Situacional da IA
 // ============================================================================
 
 /**
- * Representa a localização geográfica atual injetada pelo GPS do app.
+ * Localização tática. Crucial para roteamento inteligente e lances regionais de tráfego (Google Ads local).
  */
 export interface LocationContext {
   latitude: number;
   longitude: number;
   city?: string;
   state?: string;
+  accuracy?: number; // Precisão do GPS em metros (evita que a IA sugira rotas baseada em pings de antena falsos)
 }
 
 /**
- * Representa o estado da interface do aplicativo (onde o usuário está clicando).
+ * Mapeamento brutal da jornada do usuário. 
+ * A IA precisa saber exatamente o contexto visual para fechar vendas ou reter o usuário.
  */
 export interface AppScreenContext {
-  currentScreen: 'dashboard' | 'fretes_disponiveis' | 'detalhe_frete' | 'viagem_ativa' | 'carteira';
-  activeOperationId?: string; // ID do frete se houver uma operação em andamento
-  vehicleCategory?: string;   // Ex: 'truck', 'carreta_ls'
+  currentScreen: 'dashboard' | 'fretes_disponiveis' | 'detalhe_frete' | 'viagem_ativa' | 'carteira' | 'assinatura_planos' | 'suporte_emergencia';
+  activeOperationId?: string; // ID do frete/transação em andamento
+  vehicleCategory?: string;   // Fator multiplicador de preço financeiro (ex: rodotrem vs toco)
+  timeOnScreenMs?: number;    // Telemetria de retenção: se o usuário trava na tela de pagamento, a IA intervém.
 }
 
 /**
- * Representa o histórico de curto prazo da conversa para manter a coerência.
+ * Estado operacional do dispositivo do motorista (Realidade do campo).
  */
-export interface ConversationContext {
-  messageCount: number;
-  lastInteractionTimestamp: number;
-  isFirstInteraction: boolean;
+export interface DeviceContext {
+  networkQuality: 'excellent' | 'good' | 'poor' | 'offline'; // Dita se a IA manda JSONs pesados ou apenas texto bruto
+  batteryLevel: number;
 }
 
 /**
- * Contrato unificado que empacota todo o contexto para a IA processar.
+ * O pacote master que a memória RAM do app vai injetar no motor Gemini a cada requisição.
  */
 export interface FullAIContext {
   location: LocationContext | null;
   appState: AppScreenContext;
-  conversation: ConversationContext;
+  device: DeviceContext;
 }
