@@ -1,9 +1,6 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Motorista.tsx
-// CTO-Log: Auditoria de Feed e Match. Validação Lote 2.
-// Ajustes: 
-// 1. Rota do DriverActiveTrip ajustada para importação na mesma pasta ('./').
-// 2. INJEÇÃO FTI: Adição de Smart UI para quebra de objeção e CTA da Loja.
+// CTO-Log: Rollback de UI (Remoção do Banner da Loja). Foco 100% no Feed de Fretes.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,7 +16,7 @@ import DriverRadar from '../components/motorista/DriverRadar';
 import DriverActiveTrip from './DriverActiveTrip';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import type { OperationalFreight } from '../components/driver/dashboard/DriverDashboardLayout';
-import { Download, Search, MapPin, Flame, Clock, Sparkles, ThumbsUp, Star, Share2, Info, Truck, Power, WifiOff, Activity, Bot, ShoppingCart } from 'lucide-react'; 
+import { Download, Search, MapPin, Flame, Clock, Sparkles, ThumbsUp, Star, Share2, Info, Truck, Power, WifiOff, Activity } from 'lucide-react'; 
 import { NotificationService } from '../services/notificationService';
 
 interface DriverData { 
@@ -436,30 +433,6 @@ export default function Motorista() {
           <DriverRadar isOnline={isOnline} setIsOnline={handleToggleOnline} user={user} driver={driverData} />
           
           <div className="mx-auto max-w-4xl px-4 mt-8 animate-in fade-in slide-in-from-bottom-4 relative z-20">
-            
-            {/* 🔥 INJEÇÃO FTI: Smart UI + Loja (Cross-sell) */}
-            <div className="bg-slate-900/60 backdrop-blur-md border border-cyan-500/30 rounded-[2rem] p-5 shadow-[0_0_20px_rgba(6,182,212,0.1)] mb-6 flex flex-col md:flex-row items-center gap-4 relative overflow-hidden">
-              <div className="absolute -right-10 -top-10 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl"></div>
-              <div className="bg-cyan-950 border border-cyan-500/50 p-3 rounded-2xl shrink-0 relative">
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full animate-ping"></div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-cyan-500 rounded-full"></div>
-                <Bot className="w-6 h-6 text-cyan-400" />
-              </div>
-              <div className="flex-1 text-center md:text-left">
-                <h4 className="text-sm font-black uppercase tracking-widest text-cyan-400 mb-1 flex items-center justify-center md:justify-start gap-2">
-                  FTI Concierge <span className="bg-cyan-500/20 text-cyan-300 text-[9px] px-2 py-0.5 rounded-full border border-cyan-500/30">Segurança Ativa</span>
-                </h4>
-                <p className="text-xs text-slate-300 font-medium leading-relaxed">
-                  Sua conta está protegida. Nenhuma taxa de mensalidade é cobrada. Enquanto aguarda novas cargas na malha, conheça os benefícios exclusivos para parceiros.
-                </p>
-              </div>
-              <button
-                onClick={() => showToast('Clube FretoGo em fase de abastecimento. Avisaremos no lançamento!', 'info')}
-                className="w-full md:w-auto bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-cyan-900/50 transition-all active:scale-95 flex items-center justify-center gap-2 border border-cyan-400/50 shrink-0 mt-2 md:mt-0"
-              >
-                <ShoppingCart size={16} /> Acessar Loja
-              </button>
-            </div>
             
             {/* FILTROS DO FEED */}
             <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-[2rem] p-5 md:p-6 shadow-2xl mb-8">
