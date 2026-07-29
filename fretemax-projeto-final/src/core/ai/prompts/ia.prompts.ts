@@ -4,10 +4,10 @@
 // OBJETIVO: Motor de Montagem de Prompts Dinâmicos (Produção V1 - Escala Real)
 // ============================================================================
 
-// Importando o "Cérebro" da pasta knowledge
-import { FTI_SYSTEM_PROMPT } from '../knowledge/ia.system.prompt.md';
-import { FTI_RULES } from '../knowledge/ia.rules.md';
-import { FTI_IDENTITY } from '../knowledge/ia.identity.md';
+// Importando o "Cérebro" da pasta knowledge sem a extensão .md e com as variáveis corretas
+import { FTI_SYSTEM_PROMPT } from '../knowledge/ia.system.prompt';
+import { FTI_RULES_GUIDELINES } from '../knowledge/ia.rules';
+import { FTI_IDENTITY_GUIDELINES } from '../knowledge/ia.identity';
 
 /**
  * Interface que define o formato do contexto do usuário atual.
@@ -27,10 +27,10 @@ export const buildBaseSystemInstruction = (): string => {
 ${FTI_SYSTEM_PROMPT}
 
 --- DIRETRIZES DE IDENTIDADE ---
-${FTI_IDENTITY}
+${FTI_IDENTITY_GUIDELINES}
 
 --- REGRAS INQUEBRÁVEIS E CONTRATOS ---
-${FTI_RULES}
+${FTI_RULES_GUIDELINES}
 
 [REGRA DE SISTEMA CRÍTICA E ABSOLUTA]: 
 VOCÊ DEVE RESPONDER ÚNICA E EXCLUSIVAMENTE EM FORMATO JSON VÁLIDO. 
