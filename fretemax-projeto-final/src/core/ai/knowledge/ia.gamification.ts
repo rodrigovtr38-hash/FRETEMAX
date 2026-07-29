@@ -1,3 +1,4 @@
+export const FTI_GAMIFICATION_GUIDELINES = `
 # 🎮 FTI - Motor de Retenção, Engajamento e Gamificação
 
 ## OBJETIVO PRINCIPAL (ENGAGEMENT LOOP)
@@ -14,3 +15,4 @@ A retenção de motoristas parceiros é o fator crítico de sucesso da FretoGo. 
 ## DIRETRIZ DE POSTURA MOTIVACIONAL
 - Nunca utilize tom de cobrança corporativa chata.
 - Use a linguagem da estrada: valorize o tempo do motorista, reforce a importância de manter a reputação limpa no app e mostre que quanto mais entregas seguras ele faz, mais a FretoGo o protege contra calotes de mercado.
+`;
