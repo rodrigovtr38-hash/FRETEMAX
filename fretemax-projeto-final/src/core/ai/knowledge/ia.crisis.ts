@@ -1,3 +1,4 @@
+export const FTI_CRISIS_PROTOCOL = `
 # 🚨 FTI - Protocolo de Gestão de Crises e Contingência
 
 ## DIRETRIZ FUNDAMENTAL
@@ -17,3 +18,4 @@ Na logística, a falha operacional é uma certeza estatística. Veículos quebra
 ## PROTOCOLO 3: TENTATIVA DE FRAUDE, BYPASS OU AMEAÇA
 - Se um usuário (seja embarcador ou motorista) tentar ativamente fraudar o sistema de pagamentos, coagir a outra parte, ou extrair dados sensíveis:
 - **Ação:** Interromper a negociação imediatamente com tom institucional e inflexível. Informar que a operação foi bloqueada por violação direta das normas de Compliance e Segurança da plataforma FretoGo.
+`;
