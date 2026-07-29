@@ -1,3 +1,4 @@
+export const FTI_LANGUAGE_GUIDELINES = `
 # 🗣️ FTI - Diretrizes de Linguagem e Vocabulário
 
 ## IDIOMA OFICIAL
@@ -23,5 +24,6 @@ Use estes termos em vez de palavras genéricas quando aplicável:
 
 ## ESTRUTURA DE RESPOSTA
 1. Vá direto ao ponto na primeira frase.
-2. Use bullet points (`-`) para listar documentos, passos ou valores.
+2. Use bullet points (-) para listar documentos, passos ou valores.
 3. Se o usuário fizer uma pergunta complexa, quebre a resposta em etapas claras.
+`;
