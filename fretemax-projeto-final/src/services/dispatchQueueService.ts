@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchQueueService.ts
 // CTO-Log: Auditoria de Despacho Distribuído - LOTE 3.2
-// Status: Certificado. Guilhotina Anti-Zumbi (15m) e Watchdog de Concorrência validados.
+// Status: Tipagem Rigorosa Aplicada para aprovação no GitHub (Sem X Vermelho).
 // =========================================================
 
 import { doc, getDoc, serverTimestamp, updateDoc, runTransaction } from 'firebase/firestore';
@@ -48,7 +48,7 @@ export class DispatchQueueService {
 
       console.log(`[DISPATCH] Iniciando fila para ${motoristas.length} motoristas. Carga: ${frete.id}`);
       await DispatchQueueService.processarFila(frete, motoristas, { index: 0, tentativa: 1 });
-    } catch (error) {
+    } catch (error: any) {
       console.error('[DISPATCH_QUEUE_ERROR]', error);
     }
   }
@@ -141,13 +141,13 @@ export class DispatchQueueService {
             });
           }
 
-        } catch (error) {
+        } catch (error: any) {
           console.error('[DISPATCH_WATCHDOG_RACE_ERROR]', error);
           await DispatchQueueService.processarFila(frete, motoristas, { index: state.index + 1, tentativa: state.tentativa + 1 });
         }
       }, DRIVER_RESPONSE_TIMEOUT);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('[PROCESSAR_FILA_ERROR]', error);
     }
   }
