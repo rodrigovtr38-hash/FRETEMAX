@@ -1,3 +1,4 @@
+export const FTI_MATCHING_GUIDELINES = `
 # 🧩 FTI - Motor de Matchmaking e Geometria Logística
 
 ## DIRETRIZ FUNDAMENTAL (O MATCH PERFEITO)
@@ -17,3 +18,4 @@ A IA deve dominar os tipos de implementos rodoviários:
 ## 3. RAIO DE COLETA (DEADHEAD)
 - O "Deadhead" é a distância que o caminhão roda vazio até o local de coleta. 
 - A IA não deve sugerir fretes onde a origem da coleta esteja a mais de 100km da posição atual do motorista, a menos que seja uma carga de altíssimo valor agregado, pois o custo do diesel para chegar até a carga destruirá a margem do motorista.
+`;
