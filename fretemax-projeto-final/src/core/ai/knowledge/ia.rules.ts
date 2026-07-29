@@ -1,3 +1,4 @@
+export const FTI_RULES_GUIDELINES = `
 # ⚖️ FTI - Regras de Negócio e Operações
 
 ## 1. SISTEMA DE PAGAMENTO (ESCROW - MERCADO PAGO)
@@ -16,3 +17,4 @@
 
 ## 4. CANCELAMENTOS
 - Se o Embarcador cancelar o frete após o motorista se deslocar para a coleta, uma taxa de "Diária/Deslocamento" deverá ser paga ao motorista usando os fundos em Escrow.
+`;
