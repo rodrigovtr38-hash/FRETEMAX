@@ -1,13 +1,14 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Auditoria de Contrato de Dados.
+// CTO-Log: Auditoria de Contrato de Dados e Injeção de Shadow Bypass.
 // Status: Importação de links da Plataforma integrada (Fonte Única da Verdade).
 // Tipagem e Sincronização de Máquina de Estados validadas para emissão e resgate de PIN.
+// Bypass Habilitado para testes B2B (Rodrigo + CEP 07152-700).
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, auth } from '../firebase';
-import { collection, addDoc, serverTimestamp, onSnapshot, doc, Timestamp } from 'firebase/firestore'; 
+import { collection, addDoc, serverTimestamp, onSnapshot, doc, Timestamp, updateDoc } from 'firebase/firestore'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, Users, HeadphonesIcon, RefreshCw, Lock } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
@@ -18,7 +19,7 @@ import ClientCancelModal from '../components/client/ClientCancelModal';
 import { AppTripState as TripState } from '../state/tripStateMachine'; 
 import { mapsLoader } from '../services/mapsLoader'; 
 import { NotificationService } from '../services/notificationService'; 
-import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks'; // 🔥 Integração do CTO
+import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
 
 interface AddressData { cep: string; bairro: string; rua: string; num: string; lat?: number; lng?: number; }
 interface Coords { lat: number; lng: number; }
@@ -443,7 +444,19 @@ export default function Cliente() {
 
       localStorage.setItem('fretogo_current_order', docRef.id); setCurrentOrderId(docRef.id);
 
-      if (tipoFrete === 'imediato') {
+      // 🔥 INTERVENÇÃO CTO: SHADOW BYPASS (Desvio Fantasma)
+      const cepTesteLimpo = coleta.cep.replace(/\D/g, '');
+      const isModoTeste = nome.trim().toLowerCase() === 'rodrigo' && cepTesteLimpo === '07152700';
+
+      if (isModoTeste) {
+        // Ignora o Mercado Pago e libera o frete no feed instantaneamente
+        await updateDoc(doc(db, 'fretes', docRef.id), {
+          status: TripState.DISPONIVEL,
+          pagamentoStatus: 'aprovado'
+        });
+        setStep('busca');
+      } else if (tipoFrete === 'imediato') {
+        // Fluxo Real Financeiro (Empresas reais)
         try {
           const res = await fetch('/api/pagamento', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -495,7 +508,6 @@ export default function Cliente() {
     }
   };
 
-  // 🔥 INTEGRAÇÃO CTO: Fonte Única da Verdade para o WhatsApp
   const handleWhatsAppClick = () => {
     if (!orderData?.motoristaZap) return;
     openExternalLink(`https://wa.me/55${orderData?.motoristaZap.replace(/\D/g, '')}`);
