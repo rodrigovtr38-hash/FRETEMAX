@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/tripLifecycleService.ts
 // CTO-Log: Higienização de Sintaxe, Tipagem Rigorosa e BLINDAGEM DE TIMEOUT (LOTE 7)
-// Status: Lock Multi-Drop garantido. Morte Súbita bloqueada na raiz do Firestore.
+// Correção: Leitura correta da variável createdAt e bloqueio forçado contra Morte Súbita.
 // =========================================================
 
 import { doc, getDoc, serverTimestamp, updateDoc, Timestamp } from 'firebase/firestore';
@@ -62,17 +62,18 @@ export class TripLifecycleService {
         statusReal = AppTripState.EM_TRANSPORTE; // Mantém a roda girando
       }
 
-      // 🛡️ BLINDAGEM CTO: INTERCEPTADOR DE MORTE SÚBITA
-      // Se o sistema tentar matar o frete, verificamos se ele tem pelo menos 10 minutos de vida.
+      // 🛡️ BLINDAGEM CTO: INTERCEPTADOR DE MORTE SÚBITA REVISADO
       const statusCriticos = ['EXPIRADO', 'SEM_MOTORISTA', 'TIMEOUT', AppTripState.CANCELADO];
       if (statusCriticos.includes(statusReal as string)) {
-         const criadoEm = data.criadoEm instanceof Timestamp ? data.criadoEm.toDate() : new Date();
+         // Correção: Buscando a variável exata do banco (createdAt)
+         const dataCriacao = data.createdAt || data.criadoEm;
+         const criadoEm = dataCriacao instanceof Timestamp ? dataCriacao.toDate() : new Date();
          const tempoDecorridoMs = Date.now() - criadoEm.getTime();
          const dezMinutosMs = 10 * 60 * 1000;
 
-         // Se tem menos de 10 minutos, bloqueia a morte e força a voltar para DISPONIVEL no Radar
-         if (tempoDecorridoMs < dezMinutosMs) {
-            console.warn(`[CTO-Log] 🛡️ ALERTA: Tentativa de expirar frete precocemente. Tempo de vida atual: ${Math.round(tempoDecorridoMs/1000)}s. Interceptado e mantido no Feed.`);
+         // Se tem menos de 10 minutos ou houve falha no relógio, trava no Feed.
+         if (tempoDecorridoMs < dezMinutosMs || tempoDecorridoMs < 0) {
+            console.warn(`[CTO-Log] 🛡️ ALERTA: Tentativa de expirar frete detectada. Forçando permanência no Feed.`);
             statusReal = AppTripState.DISPONIVEL; 
          }
       }
@@ -85,8 +86,8 @@ export class TripLifecycleService {
         ...extras,
       });
 
-      // GATILHO AUTOMÁTICO: Se virou DISPONIVEL, inicia busca por motoristas
-      if (statusReal === AppTripState.DISPONIVEL) {
+      // GATILHO AUTOMÁTICO: Se virou DISPONIVEL, inicia busca por motoristas (Sem travar o cliente)
+      if (statusReal === AppTripState.DISPONIVEL && data.dispatchStatus !== 'aberto_no_feed') {
         try {
           const fretePayload = {
             id: freteId,
