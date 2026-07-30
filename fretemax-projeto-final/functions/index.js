@@ -2,7 +2,7 @@
 // NOME DO ARQUIVO: functions/index.js
 // CTO-Log: Auditoria Backend - Motor de Despacho (Ponte)
 // Melhorias Implementadas:
-// 1. Circuit Breaker no Watchdog: Limite de 5 tentativas de despacho para evitar fila de espera infinita para o cliente.
+// 1. Arquitetura "Mural/Feed": Cargas permanecem visíveis por 15 minutos reais.
 // 2. Haversine Formula: Cálculo de distância nativo preciso (não gasta cota da API do Google Maps).
 // 3. Centralização das Coleções Oficiais (motoristas_cadastros / motoristas_online).
 // =========================================================
@@ -277,7 +277,7 @@ exports.ativarModoRetorno = functions.runWith(runtimeOpts).https.onCall(async (d
 });
 
 // ========================================================
-// 6. GATILHO DE DESPACHO (O Início da Ponte)
+// 6. RADAR DO MURAL (Broadcasting - Avisa a frota, mas NÃO trava a carga)
 // ========================================================
 exports.iniciarDespachoAutomatico = functions.runWith(runtimeOpts).firestore
   .document('fretes/{freteId}')
@@ -286,8 +286,8 @@ exports.iniciarDespachoAutomatico = functions.runWith(runtimeOpts).firestore
     const depois = change.after.data();
     const freteId = context.params.freteId;
 
+    // Só dispara se acabou de entrar no Mural
     if (antes.status === 'disponivel' || depois.status !== 'disponivel') return null;
-    if (depois.dispatchStatus === 'em_andamento') return null;
 
     try {
       const origemLat = depois.origem?.lat || depois.origemLat;
@@ -296,82 +296,57 @@ exports.iniciarDespachoAutomatico = functions.runWith(runtimeOpts).firestore
 
       if (!origemLat || !origemLng) return null;
 
+      // Busca motoristas no setor
       const motoristasSnap = await db.collection('motoristas_online')
         .where('online', '==', true)
         .where('disponivel', '==', true)
         .where('categoria', 'array-contains', categoria)
         .get();
 
-      if (motoristasSnap.empty) {
-        await change.after.ref.update({
-          status: 'sem_motorista',
-          dispatchStatus: 'encerrado',
-          atualizadoEm: admin.firestore.FieldValue.serverTimestamp()
+      // CTO: Se não tiver ninguém, NÃO MATA A CARGA. Apenas deixa no Feed rodando os 15 min!
+      if (!motoristasSnap.empty) {
+        // Se houver motoristas, dispara push para quem estiver num raio de 50km
+        motoristasSnap.forEach(async (doc) => {
+          const m = doc.data();
+          if (!m.latitude || !m.longitude) return;
+
+          const dist = calcularDistanciaExata(origemLat, origemLng, m.latitude, m.longitude);
+          if (dist <= 50) {
+            const valorMotorista = depois.valorMotorista || depois.valorTotal || 0;
+            await sendPushInternal(
+              doc.id,
+              'motorista',
+              '🚚 Nova Carga no Mural!',
+              `R$ ${valorMotorista.toFixed(2)} - A ${dist.toFixed(1)}km de você. Abra o app para aceitar!`,
+              { freteId: freteId, tipo: 'novo_frete' }
+            );
+          }
         });
-        return null;
       }
 
-      let motoristaMaisProximo = null;
-      let menorDistancia = Infinity;
-
-      // Cálculo Exato de Haversine
-      motoristasSnap.forEach(doc => {
-        const m = doc.data();
-        if (!m.latitude || !m.longitude) return;
-        
-        const dist = calcularDistanciaExata(origemLat, origemLng, m.latitude, m.longitude);
-        
-        if (dist < menorDistancia && dist <= 50) { // 50km de raio
-          menorDistancia = dist;
-          motoristaMaisProximo = { id: doc.id, ...m, distancia: dist };
-        }
-      });
-
-      if (!motoristaMaisProximo) {
-        await change.after.ref.update({
-          status: 'sem_motorista',
-          dispatchStatus: 'encerrado',
-          atualizadoEm: admin.firestore.FieldValue.serverTimestamp()
-        });
-        return null;
-      }
-
+      // CTO: Mantém o status 'disponivel', mas marca o relógio real de morte para 15 minutos no futuro.
       await change.after.ref.update({
-        status: 'aguardando_aceite',
-        dispatchStatus: 'em_andamento',
-        motoristaAtualDestaque: motoristaMaisProximo.id,
-        motoristaAtualNome: motoristaMaisProximo.nome,
-        distanciaColetaKm: Math.round(menorDistancia * 10) / 10,
-        ofertaExpiraEm: admin.firestore.Timestamp.fromMillis(Date.now() + 30000), // 30 Segundos
-        tentativasDespacho: 1, // Inicia contador
-        filaTotal: motoristasSnap.size,
+        ofertaExpiraEm: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000), // 15 Minutos de vida no Feed
+        dispatchStatus: 'mural_aberto',
         atualizadoEm: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // ENVIA PUSH SEGURO
-      const valorMotorista = depois.valorMotorista || depois.valorTotal || 0;
-      await sendPushInternal(
-        motoristaMaisProximo.id,
-        'motorista',
-        '🚚 Novo Frete Disponível!',
-        `R$ ${valorMotorista.toFixed(2)} - Apenas ${menorDistancia.toFixed(1)}km até a coleta`,
-        { freteId: freteId, tipo: 'novo_frete' }
-      );
-
     } catch (error) {
-      console.error(`[DISPATCH ERRO]`, error);
+      console.error(`[MURAL ERRO]`, error);
     }
     return null;
   });
 
 // ========================================================
-// 7. WATCHDOG DE OFERTAS EXPIRADAS (O Disjuntor)
+// 7. WATCHDOG DO MURAL (O verdadeiro Ceifador de 15 Minutos)
 // ========================================================
 exports.watchdogOfertasExpiradas = functions.runWith(runtimeOpts).pubsub.schedule('every 1 minutes').onRun(async (context) => {
   const agora = admin.firestore.Timestamp.now();
   
+  // Caça apenas cargas cujo relógio de 15 minutos já estourou
   const fretesExpirados = await db.collection('fretes')
-    .where('status', '==', 'aguardando_aceite')
+    .where('status', '==', 'disponivel')
+    .where('dispatchStatus', '==', 'mural_aberto')
     .where('ofertaExpiraEm', '<', agora)
     .limit(100)
     .get();
@@ -381,85 +356,16 @@ exports.watchdogOfertasExpiradas = functions.runWith(runtimeOpts).pubsub.schedul
   const batch = db.batch();
 
   for (const docFrete of fretesExpirados.docs) {
-    const frete = docFrete.data();
-    
-    // 🛡 CIRCUIT BREAKER DO CTO: Limite de tentativas para não travar o cliente
-    const tentativasAtuais = frete.tentativasDespacho || 0;
-    if (tentativasAtuais >= 5) {
-      batch.update(docFrete.ref, {
-         status: 'sem_motorista',
+    // Fim da linha. 15 minutos se passaram e ninguém da rede pegou.
+    batch.update(docFrete.ref, {
+         status: 'sem_motorista', 
          dispatchStatus: 'encerrado',
-         motivoEncerramento: 'Limite de tentativas de despacho excedido',
+         motivoEncerramento: 'Tempo limite do Mural (15min) excedido',
          atualizadoEm: admin.firestore.FieldValue.serverTimestamp()
-      });
-      continue; // Pula para o próximo frete
-    }
-
-    try {
-      const origemLat = frete.origem?.lat || frete.origemLat;
-      const origemLng = frete.origem?.lng || frete.origemLng;
-      const categoria = frete.categoria;
-      const motoristaAnterior = frete.motoristaAtualDestaque;
-
-      if (!origemLat || !origemLng) continue;
-
-      const motoristasSnap = await db.collection('motoristas_online')
-        .where('online', '==', true)
-        .where('disponivel', '==', true)
-        .where('categoria', 'array-contains', categoria)
-        .get();
-
-      let proximoMotorista = null;
-      let menorDistancia = Infinity;
-
-      motoristasSnap.forEach(docMotorista => {
-        if (docMotorista.id === motoristaAnterior) return; // Ignora o que acabou de rejeitar/expirar
-        
-        const m = docMotorista.data();
-        if (!m.latitude || !m.longitude) return;
-        
-        const dist = calcularDistanciaExata(origemLat, origemLng, m.latitude, m.longitude);
-        
-        if (dist < menorDistancia && dist <= 50) {
-          menorDistancia = dist;
-          proximoMotorista = { id: docMotorista.id, ...m, distancia: dist };
-        }
-      });
-
-      if (proximoMotorista) {
-        batch.update(docFrete.ref, {
-          motoristaAtualDestaque: proximoMotorista.id,
-          motoristaAtualNome: proximoMotorista.nome,
-          distanciaColetaKm: Math.round(menorDistancia * 10) / 10,
-          ofertaExpiraEm: admin.firestore.Timestamp.fromMillis(Date.now() + 30000), // + 30 seg
-          tentativasDespacho: admin.firestore.FieldValue.increment(1),
-          atualizadoEm: admin.firestore.FieldValue.serverTimestamp()
-        });
-        
-        const valorMotorista = frete.valorMotorista || frete.valorTotal || 0;
-        await sendPushInternal(
-          proximoMotorista.id,
-          'motorista',
-          '🚚 Oportunidade Repassada!',
-          `Carga disponível na região! R$ ${valorMotorista.toFixed(2)}`,
-          { freteId: docFrete.id, tipo: 'novo_frete' }
-        );
-
-      } else {
-        batch.update(docFrete.ref, {
-          status: 'sem_motorista',
-          dispatchStatus: 'encerrado',
-          atualizadoEm: admin.firestore.FieldValue.serverTimestamp()
-        });
-      }
-    } catch (error) {
-      console.error(`[WATCHDOG ERRO] Frete:`, error);
-    }
+    });
   }
 
-  if (!fretesExpirados.empty) {
-    await batch.commit();
-  }
+  await batch.commit();
   return null;
 });
 
