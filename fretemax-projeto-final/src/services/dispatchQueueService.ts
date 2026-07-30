@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchQueueService.ts
-// CTO-Log: Auditoria de Despacho Distribuído - LOTE 3.2
-// Status: Tipagem Rigorosa Aplicada para aprovação no GitHub (Sem X Vermelho).
+// CTO-Log: Auditoria de Despacho Distribuído - LOTE 3.3
+// Correção: Se não houver motorista imediato, a carga NÃO é morta. Ela vai para o Feed (Mural Aberto).
 // =========================================================
 
 import { doc, getDoc, serverTimestamp, updateDoc, runTransaction } from 'firebase/firestore';
@@ -28,15 +28,17 @@ export class DispatchQueueService {
     try {
       const motoristas = await buscarMotoristasCompativeis(frete);
 
+      // 🔥 INTERVENÇÃO CTO: Se não achar motorista, NÃO MATAR A CARGA. 
+      // Joga para o Mural (Feed Aberto) para que motoristas vejam passivamente.
       if (!motoristas || motoristas.length === 0) {
-        console.warn(`[DISPATCH] Sem motoristas para a carga ${frete.id}`);
+        console.warn(`[DISPATCH] 🛡️ Sem motoristas imediatos. Mantendo carga ${frete.id} VIVA no Feed Público.`);
         await updateDoc(doc(db, 'fretes', frete.id), {
-          status: AppTripState.SEM_MOTORISTA,
-          dispatchStatus: 'encerrado',
-          motivoEncerramento: 'Nenhum motorista no raio operacional',
+          status: AppTripState.DISPONIVEL,
+          dispatchStatus: 'aberto_no_feed', // Fixado no mural
+          filaTotal: 0,
           updatedAt: serverTimestamp(),
         });
-        return;
+        return; // Encerra a fila de notificação direta, mas a carga continua VIVA no app.
       }
 
       await updateDoc(doc(db, 'fretes', frete.id), {
@@ -61,12 +63,10 @@ export class DispatchQueueService {
       
       const data = freteSnap.data();
 
-      // Blindagem: Se alguém já aceitou ou a carga foi cancelada, encerra o ciclo.
       if (data.status !== AppTripState.DISPONIVEL && data.status !== AppTripState.AGUARDANDO_ACEITE) {
         return;
       }
 
-      // Guilhotina Global de 15 Minutos (Previne Frete Zumbi)
       let tempoDecorrido = 0;
       if (data.createdAt && typeof data.createdAt.toMillis === 'function') {
         tempoDecorrido = Date.now() - data.createdAt.toMillis();
@@ -83,12 +83,12 @@ export class DispatchQueueService {
         return;
       }
 
-      // Limite de motoristas ou fila esgotada
+      // 🔥 INTERVENÇÃO CTO 2: Se esgotar a fila, volta para o Mural, não mata.
       if (state.index >= motoristas.length || state.tentativa > MAX_REDISPATCH_ATTEMPTS) {
+        console.warn(`[DISPATCH] Fila esgotada. Mantendo carga ${frete.id} no Feed Público.`);
         await updateDoc(doc(db, 'fretes', frete.id), {
-          status: AppTripState.SEM_MOTORISTA,
-          dispatchStatus: 'encerrado',
-          motivoEncerramento: 'Fila de motoristas esgotada',
+          status: AppTripState.DISPONIVEL, // Volta para disponível em vez de SEM_MOTORISTA
+          dispatchStatus: 'aberto_no_feed',
           updatedAt: serverTimestamp(),
         });
         return;
@@ -98,7 +98,6 @@ export class DispatchQueueService {
       const enviado = await enviarOfertaMotorista(motorista.id, frete);
 
       if (!enviado) {
-        // Se a notificação falhou (ex: motorista perdeu sinal 4G), repassa imediatamente
         await DispatchQueueService.processarFila(frete, motoristas, { index: state.index + 1, tentativa: state.tentativa + 1 });
         return;
       }
@@ -112,7 +111,6 @@ export class DispatchQueueService {
         updatedAt: serverTimestamp(),
       });
 
-      // Transação Atômica: Garante que o motorista não seja penalizado se aceitar no último segundo
       setTimeout(async () => {
         try {
           const freteRef = doc(db, 'fretes', frete.id);
@@ -124,7 +122,6 @@ export class DispatchQueueService {
             
             const freteDados = snapshot.data();
             
-            // Só tira a carga se AINDA estiver aguardando o exato mesmo motorista
             if (freteDados.status === AppTripState.AGUARDANDO_ACEITE && freteDados.motoristaAtualDestaque === motorista.id) {
               transaction.update(freteRef, {
                 status: AppTripState.DISPONIVEL,
