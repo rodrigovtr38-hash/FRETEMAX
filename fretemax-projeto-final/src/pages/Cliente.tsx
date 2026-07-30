@@ -4,6 +4,7 @@
 // Status: Importação de links da Plataforma integrada (Fonte Única da Verdade).
 // Tipagem e Sincronização de Máquina de Estados validadas para emissão e resgate de PIN.
 // Bypass Habilitado para testes B2B (Rodrigo + CEP 07152-700).
+// Correção de CTO: Removida a simulação falsa (mock) de motoristas. Agora mostra o dado real.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -194,14 +195,12 @@ export default function Cliente() {
     setTimeout(() => setToast(null), 4500);
   };
 
+  // 🔥 CTO FIX: Removida a simulação visual de motoristas falsos
   useEffect(() => {
     if (step === 'busca' && orderData?.status === TripState.DISPONIVEL) {
-      setSimCompat(Math.floor(Math.random() * 50) + 20);
-      const interval = setInterval(() => {
-        setSimViews(prev => prev + Math.floor(Math.random() * 3));
-        if (Math.random() > 0.7) setSimInterest(prev => prev + 1);
-      }, 5000);
-      return () => clearInterval(interval);
+      setSimCompat(0); // Mostra a realidade
+      setSimViews(1);  // O próprio cliente
+      setSimInterest(0);
     }
   }, [step, orderData?.status]);
 
