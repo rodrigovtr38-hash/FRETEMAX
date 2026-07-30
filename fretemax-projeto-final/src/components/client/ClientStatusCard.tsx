@@ -1,9 +1,10 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
-// CTO-Log: Blindagem de Status + Gatilho de Upsell (Aumentar Valor) em caso de Timeout.
+// CTO-Log: Injeção de Timer Visual (Mural/Feed) de 15 minutos.
 // =========================================================
 
-import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer } from 'lucide-react';
 
 interface ClientStatusCardProps {
   orderData: any;
@@ -20,10 +21,38 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
   const paradaAtualIndex = orderData?.paradaAtualIndex || 0;
   const multiplasEntregas = orderData?.multiplasEntregas || false;
 
+  // =========================================================
+  // GATILHO VISUAL DO FEED (15 MINUTOS)
+  // =========================================================
+  const TEMPO_FEED_SEGUNDOS = 15 * 60; // 15 minutos
+  const [timeLeft, setTimeLeft] = useState(TEMPO_FEED_SEGUNDOS);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (status === 'disponivel' && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (status !== 'disponivel') {
+      // Reseta ou pausa se mudar de status
+      setTimeLeft(TEMPO_FEED_SEGUNDOS);
+    }
+    return () => clearInterval(interval);
+  }, [status, timeLeft]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // =========================================================
+  // TRATAMENTO DE STATUS
+  // =========================================================
   let safeStatus = 'Sincronizando operação...';
   if (status === 'aguardando_pagamento') safeStatus = 'Aguardando Escrow';
-  if (status === 'disponivel') safeStatus = 'Radar Ativo';
-  if (status === 'sem_motorista' || status === 'expirado') safeStatus = 'Timeout Operacional';
+  if (status === 'disponivel') safeStatus = 'Radar Ativo no Feed';
+  if (status === 'sem_motorista' || status === 'expirado') safeStatus = 'Tempo Esgotado';
   if (status === 'cancelado') safeStatus = 'Operação Abortada';
   if (['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'finalizando', 'finalizado'].includes(status)) {
     safeStatus = status.replace('_', ' ');
@@ -38,26 +67,39 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
   return (
     <div className="rounded-[2.5rem] border border-white/10 bg-slate-900/80 p-6 md:p-8 shadow-2xl backdrop-blur-xl animate-in fade-in duration-300">
 
-      {/* HEADER DE STATUS */}
-      <div className="mb-8 flex items-center gap-4">
-        <div className={`p-3.5 rounded-[1.5rem] border ${showWarning ? 'bg-amber-500/10 border-amber-500/30' : 'bg-cyan-500/10 border-cyan-500/30'}`}>
-          {showWarning ? (
-            <AlertTriangle className="h-7 w-7 text-amber-400" />
-          ) : (
-            <Radar className={`h-7 w-7 text-cyan-400 ${['disponivel', 'aguardando_pagamento'].includes(status) ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
-          )}
+      {/* HEADER DE STATUS & RELÓGIO */}
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className={`p-3.5 rounded-[1.5rem] border ${showWarning ? 'bg-amber-500/10 border-amber-500/30' : 'bg-cyan-500/10 border-cyan-500/30'}`}>
+            {showWarning ? (
+              <AlertTriangle className="h-7 w-7 text-amber-400" />
+            ) : (
+              <Radar className={`h-7 w-7 text-cyan-400 ${['disponivel', 'aguardando_pagamento'].includes(status) ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+            )}
+          </div>
+          <div>
+            <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${showWarning ? 'text-amber-400' : 'text-cyan-400'}`}>
+              Torre de Monitoramento
+            </p>
+            <h2 className="text-xl md:text-2xl font-black text-white uppercase italic tracking-tight mt-0.5">
+              {safeStatus}
+            </h2>
+          </div>
         </div>
-        <div>
-          <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${showWarning ? 'text-amber-400' : 'text-cyan-400'}`}>
-            Torre de Monitoramento
-          </p>
-          <h2 className="text-xl md:text-2xl font-black text-white uppercase italic tracking-tight mt-0.5">
-            {safeStatus}
-          </h2>
-        </div>
+
+        {/* RELÓGIO VISUAL (Aparece apenas quando a carga está no Feed) */}
+        {status === 'disponivel' && (
+          <div className="flex items-center gap-3 bg-slate-950/80 border border-cyan-500/20 px-4 py-2.5 rounded-2xl">
+            <Timer className="text-cyan-400 animate-pulse" size={20} />
+            <div>
+              <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Tempo de Exposição</p>
+              <p className="text-lg font-mono font-black text-cyan-400 leading-none">{formatTime(timeLeft)}</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* UPSELL / RETENÇÃO: Explicar por que o motorista não pegou */}
+      {/* UPSELL / RETENÇÃO */}
       {showWarning && (
         <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5 flex items-start gap-4">
            <TrendingUp className="text-amber-400 shrink-0 mt-0.5" size={20} />
@@ -82,7 +124,7 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
             <div className="min-w-0">
               <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Profissional Designado</span>
               <p className={`text-sm font-bold truncate mt-0.5 ${showWarning ? 'text-amber-400/80' : 'text-white'}`}>
-                {motoristaNome || (showWarning ? 'Aguardando republicação' : 'Buscando parceiro ideal...')}
+                {motoristaNome || (showWarning ? 'Aguardando republicação' : 'Buscando parceiros no raio...')}
               </p>
             </div>
           </div>
