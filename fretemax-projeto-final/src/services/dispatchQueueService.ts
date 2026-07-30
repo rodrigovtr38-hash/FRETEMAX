@@ -1,7 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchQueueService.ts
-// CTO-Log: Auditoria de Despacho Distribuído - LOTE 3.3
-// Correção: Se não houver motorista imediato, a carga NÃO é morta. Ela vai para o Feed (Mural Aberto).
+// CTO-Log: Auditoria de Despacho Distribuído - LOTE 3.4
+// Correção Crítica: Remoção da Morte Súbita baseada no relógio local do usuário.
+// O Backend agora respeita 100% o modelo "Mural/Feed". A carga NUNCA expira sozinha na tela.
 // =========================================================
 
 import { doc, getDoc, serverTimestamp, updateDoc, runTransaction } from 'firebase/firestore';
@@ -16,7 +17,6 @@ import { AppTripState } from '../state/tripStateMachine';
 
 const DRIVER_RESPONSE_TIMEOUT = 30000; 
 const MAX_REDISPATCH_ATTEMPTS = 10;
-const GLOBAL_TIMEOUT_MS = 15 * 60 * 1000; // Tolerância máxima: 15 minutos (Zumbi Killer)
 
 interface QueueState {
   index: number;
@@ -34,11 +34,11 @@ export class DispatchQueueService {
         console.warn(`[DISPATCH] 🛡️ Sem motoristas imediatos. Mantendo carga ${frete.id} VIVA no Feed Público.`);
         await updateDoc(doc(db, 'fretes', frete.id), {
           status: AppTripState.DISPONIVEL,
-          dispatchStatus: 'aberto_no_feed', // Fixado no mural
+          dispatchStatus: 'aberto_no_feed', // Fixado no mural permanentemente
           filaTotal: 0,
           updatedAt: serverTimestamp(),
         });
-        return; // Encerra a fila de notificação direta, mas a carga continua VIVA no app.
+        return;
       }
 
       await updateDoc(doc(db, 'fretes', frete.id), {
@@ -63,31 +63,18 @@ export class DispatchQueueService {
       
       const data = freteSnap.data();
 
+      // Se a carga já foi aceita ou cancelada, interrompe a fila.
       if (data.status !== AppTripState.DISPONIVEL && data.status !== AppTripState.AGUARDANDO_ACEITE) {
         return;
       }
 
-      let tempoDecorrido = 0;
-      if (data.createdAt && typeof data.createdAt.toMillis === 'function') {
-        tempoDecorrido = Date.now() - data.createdAt.toMillis();
-      }
-      
-      if (tempoDecorrido > GLOBAL_TIMEOUT_MS) {
-        await updateDoc(doc(db, 'fretes', frete.id), {
-          status: AppTripState.SEM_MOTORISTA,
-          dispatchStatus: 'timeout_global',
-          alertaInsucesso: true, 
-          updatedAt: serverTimestamp(),
-        });
-        console.warn(`[DISPATCH] Carga ${frete.id} abortada. Timeout Global de 15 min excedido.`);
-        return;
-      }
+      // 🔥 INTERVENÇÃO CTO: O Cronômetro de Timeout Global baseado no celular foi ERRADICADO daqui.
+      // Se a IA cansar de procurar ou os motoristas rejeitarem, a carga apenas desce para o Mural.
 
-      // 🔥 INTERVENÇÃO CTO 2: Se esgotar a fila, volta para o Mural, não mata.
       if (state.index >= motoristas.length || state.tentativa > MAX_REDISPATCH_ATTEMPTS) {
-        console.warn(`[DISPATCH] Fila esgotada. Mantendo carga ${frete.id} no Feed Público.`);
+        console.warn(`[DISPATCH] Fila esgotada. Mantendo carga ${frete.id} no Feed Público (Mural).`);
         await updateDoc(doc(db, 'fretes', frete.id), {
-          status: AppTripState.DISPONIVEL, // Volta para disponível em vez de SEM_MOTORISTA
+          status: AppTripState.DISPONIVEL, 
           dispatchStatus: 'aberto_no_feed',
           updatedAt: serverTimestamp(),
         });
@@ -98,6 +85,7 @@ export class DispatchQueueService {
       const enviado = await enviarOfertaMotorista(motorista.id, frete);
 
       if (!enviado) {
+        // Falhou ao enviar (ex: offline). Pula rápido pro próximo, mas não mata a carga ao final.
         await DispatchQueueService.processarFila(frete, motoristas, { index: state.index + 1, tentativa: state.tentativa + 1 });
         return;
       }
@@ -111,6 +99,7 @@ export class DispatchQueueService {
         updatedAt: serverTimestamp(),
       });
 
+      // Aguarda 30 segundos pela resposta do motorista antes de iterar
       setTimeout(async () => {
         try {
           const freteRef = doc(db, 'fretes', frete.id);
@@ -122,6 +111,7 @@ export class DispatchQueueService {
             
             const freteDados = snapshot.data();
             
+            // Se o motorista ainda não respondeu, destitui ele e volta pra fila
             if (freteDados.status === AppTripState.AGUARDANDO_ACEITE && freteDados.motoristaAtualDestaque === motorista.id) {
               transaction.update(freteRef, {
                 status: AppTripState.DISPONIVEL,
