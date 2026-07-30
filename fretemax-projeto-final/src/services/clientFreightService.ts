@@ -1,14 +1,13 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/clientFreightService.ts
-// CTO-Log: Estrutura mantida 100%. Padronização de chamada usando a interface TripState e otimização para a esteira CI/CD.
-// Sem erros de Linter. Responsável pela emissão do Frete.
+// CTO-Log: Arquitetura Open Feed (Mural) implementada.
+// Remoção do motor de despacho local. O Client apenas posta a carga (DISPONÍVEL).
 // =========================================================
 
 import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { paymentService } from './paymentService';
 import { AppTripState as TripState } from '../state/tripStateMachine';
-import { DispatchQueueService } from './dispatchQueueService';
 
 const inflightRegistry = new Set<string>();
 
@@ -99,12 +98,13 @@ class ClientFreightService {
 
       const cidadeDestinoFormatada = payload.destino.cidade || this.extrairCidadeDoEndereco(payload.destino.endereco);
 
+      // 1. Cria a carga com status DISPONÍVEL e pagamento pendente
       const freteRef = await addDoc(collection(db, 'fretes'), {
         ...normalizedPayload,
         cidadeDestinoFormatada, 
         status: TripState.DISPONIVEL, 
         pagamentoStatus: 'pendente',
-        dispatchStatus: 'aguardando_dispatch',
+        dispatchStatus: 'mural_aberto', // Já prepara a tag do Mural
         criadoEm: serverTimestamp(),
         atualizadoEm: serverTimestamp(),
         pinColeta,
@@ -115,6 +115,7 @@ class ClientFreightService {
         valorLiquidoMotorista, 
       });
 
+      // 2. Processa o Pagamento (Mercado Pago / Escrow)
       const pagamento = await paymentService.processarPagamento({
         valor: valorBruto, 
         descricao: `Frete ${normalizedPayload.categoria} - ID ${freteRef.id}`,
@@ -122,6 +123,7 @@ class ClientFreightService {
         freteId: freteRef.id,
       });
 
+      // 3. Se falhar, cancela.
       if (!pagamento.success) {
         await updateDoc(doc(db, 'fretes', freteRef.id), { 
           status: TripState.CANCELADO, 
@@ -131,32 +133,16 @@ class ClientFreightService {
         return { success: false, error: 'PAGAMENTO_NEGADO' };
       }
 
+      // 4. SUCESSO: Mantém DISPONIVEL (para aparecer no feed) e aprova pagamento.
+      // 🛡️ CTO FIX: Nunca mude para "BUSCANDO_MOTORISTA", senão a carga some do Feed!
       await updateDoc(doc(db, 'fretes', freteRef.id), {
         pagamentoStatus: 'aprovado',
-        status: TripState.BUSCANDO_MOTORISTA, 
+        status: TripState.DISPONIVEL, // Mantém no ar
         atualizadoEm: serverTimestamp(),
       });
 
-      await DispatchQueueService.iniciarFila({
-        id: freteRef.id,
-        clienteId: normalizedPayload.clienteId,
-        categoria: normalizedPayload.categoria as any,
-        origem: {
-          lat: normalizedPayload.origem.lat,
-          lng: normalizedPayload.origem.lng,
-          endereco: normalizedPayload.origem.endereco || ''
-        },
-        destino: {
-          lat: normalizedPayload.destino.lat,
-          lng: normalizedPayload.destino.lng,
-          endereco: normalizedPayload.destino.endereco || ''
-        },
-        cidadeDestino: cidadeDestinoFormatada, 
-        distanciaKm: normalizedPayload.distanciaTotalKm || 0,
-        valor: valorLiquidoMotorista, 
-        peso: normalizedPayload.pesoKg || 0,
-        descricao: normalizedPayload.tipoCarga || ''
-      });
+      // NOTA CTO: O celular do cliente NÃO chama mais o DispatchQueueService aqui.
+      // O Firebase Cloud Functions assume daqui pra frente e conta os 15 minutos.
 
       return { success: true, freteId: freteRef.id };
     } catch (error) {
