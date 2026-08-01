@@ -1,10 +1,9 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Auditoria de Contrato de Dados e Injeção de Shadow Bypass.
-// Status: Importação de links da Plataforma integrada (Fonte Única da Verdade).
+// CTO-Log: Auditoria de Contrato de Dados.
+// Status: PRODUÇÃO - Pagamento Obrigatório via Mercado Pago Ativado.
 // Tipagem e Sincronização de Máquina de Estados validadas para emissão e resgate de PIN.
-// Bypass Habilitado para testes B2B (Rodrigo + CEP 07152-700).
-// Correção de CTO: Removida a simulação falsa (mock) de motoristas. Agora mostra o dado real.
+// Bypass Removido: Todas as transações exigem custódia real.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -195,11 +194,10 @@ export default function Cliente() {
     setTimeout(() => setToast(null), 4500);
   };
 
-  // 🔥 CTO FIX: Removida a simulação visual de motoristas falsos
   useEffect(() => {
     if (step === 'busca' && orderData?.status === TripState.DISPONIVEL) {
-      setSimCompat(0); // Mostra a realidade
-      setSimViews(1);  // O próprio cliente
+      setSimCompat(0); 
+      setSimViews(1);  
       setSimInterest(0);
     }
   }, [step, orderData?.status]);
@@ -443,19 +441,8 @@ export default function Cliente() {
 
       localStorage.setItem('fretogo_current_order', docRef.id); setCurrentOrderId(docRef.id);
 
-      // 🔥 INTERVENÇÃO CTO: SHADOW BYPASS (Desvio Fantasma)
-      const cepTesteLimpo = coleta.cep.replace(/\D/g, '');
-      const isModoTeste = nome.trim().toLowerCase() === 'rodrigo' && cepTesteLimpo === '07152700';
-
-      if (isModoTeste) {
-        // Ignora o Mercado Pago e libera o frete no feed instantaneamente
-        await updateDoc(doc(db, 'fretes', docRef.id), {
-          status: TripState.DISPONIVEL,
-          pagamentoStatus: 'aprovado'
-        });
-        setStep('busca');
-      } else if (tipoFrete === 'imediato') {
-        // Fluxo Real Financeiro (Empresas reais)
+      // Fluxo Real Financeiro (Dinheiro Real - Mercado Pago Obrigatório)
+      if (tipoFrete === 'imediato') {
         try {
           const res = await fetch('/api/pagamento', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -516,8 +503,7 @@ export default function Cliente() {
     if (!currentOrderId) return;
     showToast("Reativando postagem no Feed...", "success");
     try {
-      // Retirado updateDoc direto do 'disponivel', caso a nuvem precise processar algo. 
-      // Em tese local state, atualiza via Firestore.
+      // Logica de retentativa se necessario
     } catch { showToast('Erro ao reiniciar busca.', 'error'); }
   };
 
