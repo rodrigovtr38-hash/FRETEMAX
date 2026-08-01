@@ -1,8 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Auditoria de Contrato de Dados.
-// Status: PRODUÇÃO COM SHADOW BYPASS ATIVO PARA TESTES (CPF ESPECÍFICO)
-// Tipagem e Sincronização de Máquina de Estados validadas para emissão e resgate de PIN.
+// CTO-Log: Auditoria e Correção da Máquina de Estados.
+// Status: PRODUÇÃO COM SHADOW BYPASS ATIVO (CPF: 34181118827)
+// Correção de CTO: Injetado payload completo para o Mural de 15 Min (dispatchStatus + ofertaExpiraEm).
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -22,7 +22,7 @@ import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
 
 interface AddressData { cep: string; bairro: string; rua: string; num: string; lat?: number; lng?: number; }
 interface Coords { lat: number; lng: number; }
-interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; }
+interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; }
 type VehicleType = 'moto' | 'carro_pequeno' | 'utilitario' | 'toco' | 'truck' | 'carreta_ls' | 'bi_trem_cegonha';
 
 const VEHICLE_CONFIG: Record<VehicleType, { nome: string; fator: number }> = {
@@ -193,13 +193,14 @@ export default function Cliente() {
     setTimeout(() => setToast(null), 4500);
   };
 
+  // 🔥 CTO FIX: Sincronizando dados de engajamento do feed REAL. Adeus hardcode.
   useEffect(() => {
-    if (step === 'busca' && orderData?.status === TripState.DISPONIVEL) {
-      setSimCompat(0); 
-      setSimViews(1);  
-      setSimInterest(0);
+    if (step === 'busca' && orderData) {
+      setSimCompat(orderData.motoristasNotificados || 0); 
+      setSimViews(orderData.visualizacoes || 0);  
+      setSimInterest(orderData.interessados || 0);
     }
-  }, [step, orderData?.status]);
+  }, [step, orderData]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -394,6 +395,7 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
+      // 🔥 CTO FIX: Documento agora recebe as chaves vitais do índice do mural logo na criação
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
@@ -434,20 +436,33 @@ export default function Cliente() {
         multiplasEntregas: entregas.length > 1,
         tipoFrete,
         dataAgendada: firebaseTimestamp,
+        
+        // Dados de visualização inicializados com zero reais
+        visualizacoes: 0,
+        motoristasNotificados: 0,
+        interessados: 0,
+
         status: tipoFrete === 'agendado' ? 'agendado' : TripState.AGUARDANDO_PAGAMENTO,
+        dispatchStatus: 'aguardando', // Nova estrutura para o driver radar
         createdAt: serverTimestamp(),
       });
 
       localStorage.setItem('fretogo_current_order', docRef.id); setCurrentOrderId(docRef.id);
 
-      // 🔥 INTERVENÇÃO CTO: SHADOW BYPASS (MODO TESTE)
-      // Libera a carga instantaneamente para o motorista se o CPF for o seu.
+      // 🔥 INTERVENÇÃO CTO: SHADOW BYPASS ATUALIZADO (MODO TESTE)
+      // Agora o bypass constrói exatamente os campos que a nuvem construiria
       const cpfLimpo = documento.replace(/\D/g, '');
       if (cpfLimpo === '34181118827') {
+        const dataExpiracao = new Date();
+        dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 15);
+
         await updateDoc(doc(db, 'fretes', docRef.id), {
           status: TripState.DISPONIVEL,
-          pagamentoStatus: 'aprovado'
+          pagamentoStatus: 'aprovado',
+          dispatchStatus: 'mural', // Isso é o que a query do aplicativo do motorista exige
+          ofertaExpiraEm: Timestamp.fromDate(dataExpiracao) // Temporizador obrigatório do novo painel
         });
+        
         setStep('busca');
         setLoadingPayment(false); 
         isProcessingPayment.current = false;
