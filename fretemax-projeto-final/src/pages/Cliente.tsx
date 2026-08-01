@@ -1,9 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
 // CTO-Log: Auditoria de Contrato de Dados.
-// Status: PRODUÇÃO - Pagamento Obrigatório via Mercado Pago Ativado.
+// Status: PRODUÇÃO COM SHADOW BYPASS ATIVO PARA TESTES (CPF ESPECÍFICO)
 // Tipagem e Sincronização de Máquina de Estados validadas para emissão e resgate de PIN.
-// Bypass Removido: Todas as transações exigem custódia real.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -440,6 +439,20 @@ export default function Cliente() {
       });
 
       localStorage.setItem('fretogo_current_order', docRef.id); setCurrentOrderId(docRef.id);
+
+      // 🔥 INTERVENÇÃO CTO: SHADOW BYPASS (MODO TESTE)
+      // Libera a carga instantaneamente para o motorista se o CPF for o seu.
+      const cpfLimpo = documento.replace(/\D/g, '');
+      if (cpfLimpo === '34181118827') {
+        await updateDoc(doc(db, 'fretes', docRef.id), {
+          status: TripState.DISPONIVEL,
+          pagamentoStatus: 'aprovado'
+        });
+        setStep('busca');
+        setLoadingPayment(false); 
+        isProcessingPayment.current = false;
+        return; 
+      }
 
       // Fluxo Real Financeiro (Dinheiro Real - Mercado Pago Obrigatório)
       if (tipoFrete === 'imediato') {
