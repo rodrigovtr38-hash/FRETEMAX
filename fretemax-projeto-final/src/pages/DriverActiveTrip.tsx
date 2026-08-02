@@ -1,14 +1,14 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Auditoria de Rotas Concluída.
-// Ajuste: Rotas remapeadas (../) para o arquivo funcionar nativamente dentro da pasta 'pages'.
+// CTO-Log: Refatoração do Roteamento GPS e Fluxo de Conclusão.
+// Status: Mapa renderizando rotas dinâmicas baseadas no status da viagem.
 // =========================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '../firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
-import { LockKeyhole, ShieldCheck, DollarSign } from 'lucide-react';
+import { LockKeyhole, ShieldCheck, DollarSign, CheckCircle2, ArrowRight } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 
@@ -40,19 +40,57 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   if (loading) return <div className="flex h-64 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5"><div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div></div>;
   if (!frete) return null;
 
+  // Lógica de Pagamento
+  const valorA_Receber = Number(frete.valorLiquidoMotorista || frete.valorMotorista || 0).toFixed(2).replace('.', ',');
+
+  // Tela de Conclusão (O Acerto de Contas)
+  if (frete.status === 'entregue' || frete.status === 'finalizado') {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2rem] border border-emerald-500/30 bg-slate-900 shadow-[0_0_50px_rgba(16,185,129,0.1)] p-8 md:p-12 text-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.15),transparent_70%)]"></div>
+        <div className="relative z-10 flex flex-col items-center justify-center">
+          <div className="w-24 h-24 rounded-full bg-emerald-500/20 flex items-center justify-center mb-6 border-2 border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.4)]">
+            <CheckCircle2 size={48} className="text-emerald-400" />
+          </div>
+          <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter mb-2">Corrida Finalizada!</h2>
+          <p className="text-slate-400 font-medium mb-8">O cliente liberou o pagamento.</p>
+
+          <div className="bg-slate-950 border border-white/10 rounded-3xl p-6 mb-8 w-full max-w-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Valor Garantido</p>
+            <h3 className="text-5xl font-black text-emerald-400 tracking-tighter">R$ {valorA_Receber}</h3>
+            <p className="text-[10px] font-bold text-emerald-500/70 mt-3 uppercase tracking-widest bg-emerald-500/10 py-2 rounded-xl">O repasse via PIX ocorrerá em até 24h.</p>
+          </div>
+
+          <button onClick={() => window.location.reload()} className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-900/50 transition-all active:scale-95 flex items-center justify-center gap-2">
+            Voltar para o Radar <ArrowRight size={18} />
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
   const paradas = frete.paradas || [];
   const paradaAtualIndex = frete.paradaAtualIndex || 0;
   const destinoAtual = paradas.length > 0 ? paradas[paradaAtualIndex] : (frete.destino || {});
   
-  // Lógica do Mapa
-  const mapOriginGPS = frete.origemLat && frete.origemLng ? { lat: frete.origemLat, lng: frete.origemLng } : (frete.origem?.lat ? frete.origem : null);
-  const mapDestinoGPS = frete.destinoLat && frete.destinoLng ? { lat: frete.destinoLat, lng: frete.destinoLng } : (frete.destino?.lat ? frete.destino : null);
-  
-  const currentMapOrigin = (frete.status === 'em_transporte' && paradaAtualIndex > 0 && paradas[paradaAtualIndex - 1]?.lat)
-    ? { lat: paradas[paradaAtualIndex - 1].lat, lng: paradas[paradaAtualIndex - 1].lng }
-    : mapOriginGPS;
-  
-  const currentMapDestino = destinoAtual?.lat && destinoAtual?.lng ? { lat: destinoAtual.lat, lng: destinoAtual.lng } : mapDestinoGPS;
+  // 🔥 CTO FIX: Tratamento robusto das Coordenadas GPS para evitar mapa vazio (Fallback seguro)
+  const origemGPS = frete.origemLat && frete.origemLng ? { lat: Number(frete.origemLat), lng: Number(frete.origemLng) } : null;
+  const destinoGPS = frete.destinoLat && frete.destinoLng ? { lat: Number(frete.destinoLat), lng: Number(frete.destinoLng) } : null;
+  const motoristaGPS = frete.motoristaLat && frete.motoristaLng ? { lat: Number(frete.motoristaLat), lng: Number(frete.motoristaLng) } : origemGPS; // Fallback: Se não tem a posição do motorista, usa a origem
+
+  // 🗺️ Inteligência de Roteamento (Traça a linha de acordo com o Status)
+  let currentMapOrigin = null;
+  let currentMapDestino = null;
+
+  if (['aceito', 'indo_coleta', 'chegou_coleta'].includes(frete.status)) {
+    // Etapa 1: Motorista -> Origem da Carga
+    currentMapOrigin = motoristaGPS;
+    currentMapDestino = origemGPS;
+  } else {
+    // Etapa 2: Origem da Carga -> Destino Final
+    currentMapOrigin = origemGPS;
+    currentMapDestino = destinoGPS;
+  }
 
   const handleStatusUpdate = async (novoStatus: string) => {
     setActionLoading(true);
@@ -65,25 +103,20 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     setActionLoading(true);
     setPinError('');
     try {
-      // Validação do PIN de Coleta
       if (frete.status === 'coletando') {
         if (pinValue !== frete.pinColeta) { setPinError('PIN de Coleta incorreto.'); setActionLoading(false); return; }
-        
         await dispatchRealtimeService.atualizarStatusTrip(frete.id, 'em_transporte' as any);
       } 
-      // Validação do PIN de Entrega (Multi-drop ou Simples)
       else { 
         const pinEntregas = frete.pinEntregas || [];
         const expectedPin = pinEntregas.length > 0 ? pinEntregas[paradaAtualIndex] : frete.pinEntregas?.[0];
 
         if (pinValue !== expectedPin) { setPinError('PIN de entrega incorreto.'); setActionLoading(false); return; }
         
-        // Verifica se há mais paradas no trajeto
-        if (pinEntregas.length > 0 && paradaAtualIndex + 1 < pinEntregas.length) {
-           // Incrementa a parada e continua a viagem
+        const isMultiDrop = pinEntregas.length > 1;
+        if (isMultiDrop && paradaAtualIndex + 1 < pinEntregas.length) {
            await updateDoc(doc(db, 'fretes', frete.id), { paradaAtualIndex: paradaAtualIndex + 1 });
         } else {
-           // Era a última parada. Finaliza a viagem para o motorista receber.
            await dispatchRealtimeService.atualizarStatusTrip(frete.id, 'entregue' as any);
         }
       }
@@ -92,7 +125,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   };
 
   const isMultiDrop = frete.pinEntregas && frete.pinEntregas.length > 1;
-  const valorA_Receber = Number(frete.valorLiquidoMotorista || frete.valorMotorista || 0).toFixed(2).replace('.', ',');
 
   return (
     <>
@@ -112,7 +144,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         {/* Título Dinâmico informando a etapa */}
         <div className="mb-6 pt-4">
           <h2 className="text-xl font-black text-cyan-400 uppercase tracking-widest">
-            {frete.status === 'aceito' || frete.status === 'indo_coleta' || frete.status === 'chegou_coleta' || frete.status === 'coletando' 
+            {['aceito', 'indo_coleta', 'chegou_coleta', 'coletando'].includes(frete.status)
               ? 'Etapa 1: Retirada' 
               : isMultiDrop 
                 ? `Entrega ${paradaAtualIndex + 1} de ${frete.pinEntregas.length}`
@@ -121,14 +153,21 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           <p className="text-xs font-bold text-slate-500 mt-1 uppercase">Acompanhamento Operacional</p>
         </div>
 
-        <div className="h-[250px] w-full mb-6 rounded-2xl overflow-hidden bg-slate-950 border border-white/5">
-          <MapaCliente 
-            origem={currentMapOrigin} 
-            destino={currentMapDestino} 
-            motoristaPos={currentMapOrigin} // Simulação estática de onde o motorista deveria estar, melhorada por realtime real se integrado
-            vehicleType={frete.veiculo || frete.categoria}
-            operationalMessage="Navegando..." 
-          />
+        <div className="h-[250px] w-full mb-6 rounded-2xl overflow-hidden bg-slate-950 border border-white/5 relative">
+          {currentMapOrigin && currentMapDestino ? (
+            <MapaCliente 
+              origem={currentMapOrigin} 
+              destino={currentMapDestino} 
+              motoristaPos={frete.status === 'indo_coleta' ? currentMapOrigin : null} // O ícone só anda na etapa 1
+              motoristaId={frete.motoristaId}
+              vehicleType={frete.veiculo || frete.categoria}
+              operationalMessage={['aceito', 'indo_coleta', 'chegou_coleta'].includes(frete.status) ? "Navegando para Coleta" : "Navegando para Entrega"} 
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+               <p className="text-xs font-black uppercase tracking-widest text-slate-500 animate-pulse">Sincronizando Coordenadas...</p>
+            </div>
+          )}
         </div>
         
         <div className="space-y-4">
