@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Motorista.tsx
-// CTO-Log: Delegação de Processamento (Client-Side Filtering) Ativada
-// Status: Leitura Dupla de Chave (veiculo || categoria) para compatibilidade com legados.
+// CTO-Log: Delegação de Processamento e Tags Visuais (Imediato vs Agendado)
+// Status: Leitura Dupla de Chave (veiculo || categoria) blindada com toLowerCase().
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -17,7 +17,7 @@ import DriverRadar from '../components/motorista/DriverRadar';
 import DriverActiveTrip from './DriverActiveTrip';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import type { OperationalFreight } from '../components/driver/dashboard/DriverDashboardLayout';
-import { Download, Search, MapPin, Flame, Clock, Sparkles, ThumbsUp, Star, Share2, Info, Truck, Power, WifiOff, Activity } from 'lucide-react'; 
+import { Download, Search, MapPin, Flame, Clock, Sparkles, ThumbsUp, Star, Share2, Info, Truck, Power, WifiOff, Activity, CalendarDays } from 'lucide-react'; 
 import { NotificationService } from '../services/notificationService';
 
 interface DriverData { 
@@ -130,9 +130,12 @@ export default function Motorista() {
     return `${Math.floor(seconds / 3600)}h atrás`;
   };
 
-  // 🔥 CTO FIX: Normalize lê 'veiculo' E 'categoria' para não falhar
   const normalizeFreight = useCallback((id: string, data: any): OperationalFreight => {
-    const feePercent = CATEGORY_FEES[data.veiculo || data.categoria] ?? 0.2;
+    // 🔥 CTO FIX: Tratamento Universal LowerCase para garantir Match Inquebrável
+    const categoriaBruta = data.veiculo || data.categoria || 'carro';
+    const categoriaFormatada = categoriaBruta.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    const feePercent = CATEGORY_FEES[categoriaFormatada] ?? 0.2;
     const valorCliente = Number(data.valorCliente || data.valorTotal || data.valor || 0); 
     const valorMotorista = data.valorMotorista ?? valorCliente * (1 - feePercent);
     const distanciaColetaKm = Number(data.distanciaColetaKm || 0);
@@ -147,8 +150,8 @@ export default function Motorista() {
       id,
       status: data.status || 'disponivel',
       prioridade: prioridadeMural,
-      agendado: Boolean(data.agendado),
-      categoria: data.veiculo || data.categoria || 'carro', // 🔥 CORREÇÃO DE CHAVE DUPLA
+      agendado: data.tipoFrete === 'agendado' || Boolean(data.agendado), // 🏷️ FIX: Identifica o agendamento
+      categoria: categoriaFormatada,
       enderecoColetaTexto: data.enderecoColetaTexto || data.origem?.endereco || 'Coleta não informada',
       enderecoEntregaTexto: data.enderecoEntregaTexto || data.destino?.endereco || 'Entrega não informada',
       distanciaColetaKm,
@@ -164,7 +167,8 @@ export default function Motorista() {
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       multiplasEntregas: Boolean(data.multiplasEntregas),
-    };
+      dataAgendada: data.dataAgendada, // Preserva a data para uso futuro
+    } as any;
   }, []);
 
   useEffect(() => {
@@ -237,14 +241,12 @@ export default function Motorista() {
     }
   }, [isOnline, availableFreights.length]);
 
-  // 🔥 CTO FIX: Bypass Firebase Index e Delegação Client-Side
   useEffect(() => {
     if (!runtimeReady || !user?.uid || !driverData) {
       setAvailableFreights([]); return;
     }
     setRadarLoading(true);
     
-    // Agora o Firebase NÃO exige Índice Composto porque só pedimos 1 coisa: O status.
     const freightsQuery = query(
       collection(db, 'fretes'), 
       where('status', 'in', ['disponivel', 'buscando_motorista']),
@@ -256,8 +258,8 @@ export default function Motorista() {
 
       let next = snapshot.docs.map(document => normalizeFreight(document.id, document.data()));
       
-      // 🔥 FILTRAGEM LOCAL DE CATEGORIA E MOTORISTA: O app do celular que filtra o que é dele.
-      next = next.filter(freight => freight.categoria.toLowerCase() === operationalCategory);
+      // Filtragem rígida local de categoria e pertencimento
+      next = next.filter(freight => freight.categoria === operationalCategory);
       next = next.filter(freight => !freight.motoristaId || freight.motoristaId === user.uid || snapshot.docs.find(d => d.id === freight.id)?.data().motoristaAtualDestaque === user.uid); 
 
       setAvailableFreights(next); 
@@ -273,7 +275,6 @@ export default function Motorista() {
 
   useEffect(() => {
     if (!runtimeReady || !user?.uid) { setActiveFreight(null); return; }
-    // Remove orderBy temporariamente para não falhar sem índice
     const activeQuery = query(collection(db, 'fretes'), where('motoristaId', '==', user.uid), where('status', 'in', ACTIVE_STATUSES), limit(1));
     const unsubscribe = onSnapshot(activeQuery, snapshot => {
       if (!mountedRef.current) return;
@@ -342,7 +343,6 @@ export default function Motorista() {
     if (action === 'share') showToast('Link da oportunidade copiado!', 'info');
   };
 
-  // 🔥 CTO FIX: ORDENAÇÃO LOCAL (A Mágica para pular o Índice de Data do Firebase)
   const fretesFiltradosOrdenados = useMemo(() => {
     let filtrados = availableFreights.filter(freight => {
       const origemMatch = filtroOrigem === '' || freight.enderecoColetaTexto.toLowerCase().includes(filtroOrigem.toLowerCase());
@@ -498,17 +498,18 @@ export default function Motorista() {
                       transition={{ duration: 0.3 }}
                       className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden transition-all hover:border-slate-700 mb-6"
                     >
+                      {/* 🔥 CTO FIX: Tags Dinâmicas (Urgente vs Agendado vs Imediato) */}
                       {freight.prioridade ? (
                          <div className="absolute top-0 right-0 bg-gradient-to-r from-red-600 to-orange-500 px-4 py-1.5 rounded-bl-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-1.5 shadow-lg">
                             <Flame size={12} className="animate-pulse"/> Urgente
                          </div>
                       ) : freight.agendado ? (
-                         <div className="absolute top-0 right-0 bg-purple-600 px-4 py-1.5 rounded-bl-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-1.5">
-                            <Clock size={12}/> Agendado
+                         <div className="absolute top-0 right-0 bg-purple-600 px-4 py-1.5 rounded-bl-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-1.5 shadow-lg shadow-purple-900/50">
+                            <CalendarDays size={12}/> Agendado
                          </div>
                       ) : (
-                         <div className="absolute top-0 right-0 bg-cyan-600 px-4 py-1.5 rounded-bl-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-1.5">
-                            <Sparkles size={12}/> Nova
+                         <div className="absolute top-0 right-0 bg-cyan-600 px-4 py-1.5 rounded-bl-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-1.5 shadow-lg shadow-cyan-900/50">
+                            <Clock size={12}/> Imediato
                          </div>
                       )}
 
