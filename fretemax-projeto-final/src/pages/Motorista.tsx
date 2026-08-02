@@ -1,12 +1,12 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Motorista.tsx
-// CTO-Log: Rollback de UI e Correção Crítica de Query Firestore.
-// Status: Query alinhada com as Regras de Segurança (Firestore Rules).
+// CTO-Log: Delegação de Processamento (Client-Side Filtering) Ativada
+// Status: Leitura Dupla de Chave (veiculo || categoria) para compatibilidade com legados.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { auth, db } from '../firebase';
-import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, runTransaction, updateDoc, where } from 'firebase/firestore'; 
+import { collection, doc, limit, onSnapshot, query, serverTimestamp, runTransaction, updateDoc, where } from 'firebase/firestore'; 
 import { motion, AnimatePresence } from 'framer-motion';
 import DriverApp from '../components/DriverApp';
 import ChatFrete from '../components/ChatFrete';
@@ -34,7 +34,6 @@ interface DriverData {
 const CATEGORY_FEES: Record<string, number> = { moto: 0.2, carro: 0.2, utilitario: 0.2, toco: 0.15, truck: 0.15, carreta: 0.15, bitrem: 0.15 };
 const ACTIVE_STATUSES = ['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'em_entrega', 'returning'];
 
-// 💀 COMPONENTE DE SKELETON (UX de Busca)
 const FeedSkeleton = () => (
   <div className="bg-slate-900/40 border border-slate-800 rounded-[2rem] p-6 shadow-2xl animate-pulse mb-6">
     <div className="flex justify-between items-start mb-6">
@@ -92,7 +91,6 @@ export default function Motorista() {
     return driverData.categoria.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   }, [driverData]);
 
-  // Detector de Conexão Realtime
   useEffect(() => {
     const handleOnline = () => setHasInternet(true);
     const handleOffline = () => setHasInternet(false);
@@ -132,8 +130,9 @@ export default function Motorista() {
     return `${Math.floor(seconds / 3600)}h atrás`;
   };
 
+  // 🔥 CTO FIX: Normalize lê 'veiculo' E 'categoria' para não falhar
   const normalizeFreight = useCallback((id: string, data: any): OperationalFreight => {
-    const feePercent = CATEGORY_FEES[data.categoria] ?? 0.2;
+    const feePercent = CATEGORY_FEES[data.veiculo || data.categoria] ?? 0.2;
     const valorCliente = Number(data.valorCliente || data.valorTotal || data.valor || 0); 
     const valorMotorista = data.valorMotorista ?? valorCliente * (1 - feePercent);
     const distanciaColetaKm = Number(data.distanciaColetaKm || 0);
@@ -149,7 +148,7 @@ export default function Motorista() {
       status: data.status || 'disponivel',
       prioridade: prioridadeMural,
       agendado: Boolean(data.agendado),
-      categoria: data.categoria || 'carro',
+      categoria: data.veiculo || data.categoria || 'carro', // 🔥 CORREÇÃO DE CHAVE DUPLA
       enderecoColetaTexto: data.enderecoColetaTexto || data.origem?.endereco || 'Coleta não informada',
       enderecoEntregaTexto: data.enderecoEntregaTexto || data.destino?.endereco || 'Entrega não informada',
       distanciaColetaKm,
@@ -181,7 +180,7 @@ export default function Motorista() {
         if (activeFreight?.id) {
           await dispatchRealtimeService.atualizarTripRealtime(activeFreight.id, { heartbeat: Date.now() }); 
         } else {
-          await updateDoc(doc(db, 'motoristas_online', user.uid), { heartbeat: Date.now() }); 
+          await dispatchRealtimeService.setDriverOnline(user.uid); 
         }
       } catch (error) { console.error('HEARTBEAT ERROR:', error); }
     };
@@ -229,7 +228,6 @@ export default function Motorista() {
     };
   }, []);
 
-  // Sistema Vivo: Temporizador para as mensagens vazias
   useEffect(() => {
     if (isOnline && availableFreights.length === 0) {
       const interval = setInterval(() => {
@@ -239,32 +237,34 @@ export default function Motorista() {
     }
   }, [isOnline, availableFreights.length]);
 
-  // FEED LISTENER ALWAYS-ON
+  // 🔥 CTO FIX: Bypass Firebase Index e Delegação Client-Side
   useEffect(() => {
     if (!runtimeReady || !user?.uid || !driverData) {
       setAvailableFreights([]); return;
     }
     setRadarLoading(true);
     
-    // CTO FIX: Removido 'aguardando_aceite' para cruzar EXATAMENTE com as regras do Firestore (Permission Denied bypass).
+    // Agora o Firebase NÃO exige Índice Composto porque só pedimos 1 coisa: O status.
     const freightsQuery = query(
       collection(db, 'fretes'), 
-      where('categoria', '==', operationalCategory), 
-      where('status', 'in', ['disponivel', 'buscando_motorista']), 
-      orderBy('createdAt', 'desc'), 
-      limit(50) 
+      where('status', 'in', ['disponivel', 'buscando_motorista']),
+      limit(100)
     );
     
     const unsubscribe = onSnapshot(freightsQuery, snapshot => {
       if (!mountedRef.current) return;
-      const next = snapshot.docs.map(document => normalizeFreight(document.id, document.data()))
-        .filter(freight => !freight.motoristaId || freight.motoristaId === user.uid || snapshot.docs.find(d => d.id === freight.id)?.data().motoristaAtualDestaque === user.uid); 
+
+      let next = snapshot.docs.map(document => normalizeFreight(document.id, document.data()));
+      
+      // 🔥 FILTRAGEM LOCAL DE CATEGORIA E MOTORISTA: O app do celular que filtra o que é dele.
+      next = next.filter(freight => freight.categoria.toLowerCase() === operationalCategory);
+      next = next.filter(freight => !freight.motoristaId || freight.motoristaId === user.uid || snapshot.docs.find(d => d.id === freight.id)?.data().motoristaAtualDestaque === user.uid); 
 
       setAvailableFreights(next); 
-      // Simula o tempo de "Scanner" da IA para o Skeleton aparecer por um segundo
       setTimeout(() => { if (mountedRef.current) setRadarLoading(false); }, 1500);
     }, error => {
-      console.error('FREIGHTS REALTIME ERROR [VERIFIQUE ÍNDICES DO FIRESTORE SE ESTE ERRO PERSISTIR]:', error); setRadarLoading(false);
+      console.error('FREIGHTS REALTIME ERROR:', error); 
+      setRadarLoading(false);
     });
     
     listenerRegistryRef.current.freights = unsubscribe;
@@ -273,7 +273,8 @@ export default function Motorista() {
 
   useEffect(() => {
     if (!runtimeReady || !user?.uid) { setActiveFreight(null); return; }
-    const activeQuery = query(collection(db, 'fretes'), where('motoristaId', '==', user.uid), where('status', 'in', ACTIVE_STATUSES), orderBy('atualizadoEm', 'desc'), limit(1));
+    // Remove orderBy temporariamente para não falhar sem índice
+    const activeQuery = query(collection(db, 'fretes'), where('motoristaId', '==', user.uid), where('status', 'in', ACTIVE_STATUSES), limit(1));
     const unsubscribe = onSnapshot(activeQuery, snapshot => {
       if (!mountedRef.current) return;
       if (snapshot.empty) { setActiveFreight(null); return; }
@@ -341,7 +342,7 @@ export default function Motorista() {
     if (action === 'share') showToast('Link da oportunidade copiado!', 'info');
   };
 
-  // 🔥 CTO FIX: ENGINE DE ORDENAÇÃO + INTELIGÊNCIA DE RETORNO CRUZADA
+  // 🔥 CTO FIX: ORDENAÇÃO LOCAL (A Mágica para pular o Índice de Data do Firebase)
   const fretesFiltradosOrdenados = useMemo(() => {
     let filtrados = availableFreights.filter(freight => {
       const origemMatch = filtroOrigem === '' || freight.enderecoColetaTexto.toLowerCase().includes(filtroOrigem.toLowerCase());
@@ -349,7 +350,6 @@ export default function Motorista() {
       return origemMatch && destinoMatch;
     });
 
-    // Cruzamento Inteligente: Se o Modo Retorno estiver ativo, o Feed mostra SÓ as cargas para aquela cidade
     if (driverData?.modoRetorno && driverData?.destinoRetorno) {
       const destinoAlvo = driverData.destinoRetorno.toLowerCase();
       filtrados = filtrados.filter(freight => 
@@ -399,7 +399,6 @@ export default function Motorista() {
       
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#020617] to-[#020617] -z-10" />
 
-      {/* 🔴 ALERTA DE CONEXÃO OFFLINE */}
       <AnimatePresence>
         {!hasInternet && (
           <motion.div initial={{ y: -50 }} animate={{ y: 0 }} exit={{ y: -50 }} className="sticky top-0 z-[200] w-full bg-red-600 px-4 py-2 flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(220,38,38,0.5)]">
@@ -436,7 +435,6 @@ export default function Motorista() {
           
           <div className="mx-auto max-w-4xl px-4 mt-8 animate-in fade-in slide-in-from-bottom-4 relative z-20">
             
-            {/* FILTROS DO FEED */}
             <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-[2rem] p-5 md:p-6 shadow-2xl mb-8">
               <div className="flex items-center justify-between mb-5">
                  <div className="flex items-center gap-2">
@@ -448,7 +446,6 @@ export default function Motorista() {
                  </div>
               </div>
               
-              {/* Oculta os inputs manuais se o Modo Retorno estiver ativado (A IA já faz o filtro) */}
               {!driverData?.modoRetorno && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="relative">
@@ -463,18 +460,13 @@ export default function Motorista() {
               )}
             </div>
 
-            {/* LISTAGEM GAMIFICADA DO FEED */}
             <div className="space-y-6">
-              
-              {/* SKELETON LOADER ENQUANTO BUSCA */}
               {isOnline && radarLoading && fretesFiltradosOrdenados.length === 0 ? (
                 <>
                    <FeedSkeleton />
                    <FeedSkeleton />
                 </>
               ) : fretesFiltradosOrdenados.length === 0 ? (
-                
-                // 🔥 FASE 2: SISTEMA VIVO NO FEED VAZIO
                 isOnline ? (
                   <div className="text-center py-24 bg-slate-900/40 rounded-[2rem] border border-cyan-500/20 shadow-[0_0_30px_rgba(6,182,212,0.05)] relative overflow-hidden">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.1),transparent_50%)] animate-pulse" style={{ animationDuration: '4s' }}></div>
@@ -494,7 +486,6 @@ export default function Motorista() {
                     <p className="text-sm text-slate-600 mt-2">Fique online para receber ofertas no mural.</p>
                   </div>
                 )
-
               ) : (
                 <AnimatePresence>
                   {fretesFiltradosOrdenados.map((freight) => (
@@ -503,7 +494,7 @@ export default function Motorista() {
                       layout
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9, height: 0, overflow: 'hidden' }} // Animação Suave se outro Motorista aceitar
+                      exit={{ opacity: 0, scale: 0.9, height: 0, overflow: 'hidden' }}
                       transition={{ duration: 0.3 }}
                       className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden transition-all hover:border-slate-700 mb-6"
                     >
@@ -603,7 +594,6 @@ export default function Motorista() {
             </div>
           </div>
 
-          {/* 🔥 GHOST UI FIX: Renderiza o componente antigo estritamente invisível APENAS para segurar a lógica de rotas do Modal */}
           <div className={selectedFreight ? "block" : "hidden"}>
             <DriverApp 
               freights={[]} 
