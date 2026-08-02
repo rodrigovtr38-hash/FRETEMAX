@@ -1,6 +1,6 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
-// CTO-Log: Injeção de Timer Visual (Mural/Feed) de 15 minutos.
+// CTO-Log: Refatoração do Semáforo de Status. Mensagens vivas baseadas na jornada do motorista.
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -47,16 +47,22 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
   };
 
   // =========================================================
-  // TRATAMENTO DE STATUS
+  // TRATAMENTO DE STATUS (SEMÁFORO DE TELEMETRIA)
   // =========================================================
   let safeStatus = 'Sincronizando operação...';
-  if (status === 'aguardando_pagamento') safeStatus = 'Aguardando Escrow';
-  if (status === 'disponivel') safeStatus = 'Radar Ativo no Feed';
-  if (status === 'sem_motorista' || status === 'expirado') safeStatus = 'Tempo Esgotado';
-  if (status === 'cancelado') safeStatus = 'Operação Abortada';
-  if (['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'finalizando', 'finalizado'].includes(status)) {
-    safeStatus = status.replace('_', ' ');
-  }
+  let statusColor = 'text-cyan-400';
+  let bgColor = 'bg-cyan-500/10 border-cyan-500/30';
+
+  if (status === 'aguardando_pagamento') { safeStatus = 'Aguardando Escrow'; }
+  else if (status === 'disponivel' || status === 'buscando_motorista') { safeStatus = 'Radar Ativo no Feed'; }
+  else if (status === 'sem_motorista' || status === 'expirado') { safeStatus = 'Tempo Esgotado'; statusColor = 'text-amber-400'; bgColor = 'bg-amber-500/10 border-amber-500/30'; }
+  else if (status === 'cancelado') { safeStatus = 'Operação Abortada'; statusColor = 'text-red-400'; bgColor = 'bg-red-500/10 border-red-500/30'; }
+  else if (status === 'aceito') { safeStatus = 'Motorista a Caminho'; statusColor = 'text-blue-400'; bgColor = 'bg-blue-500/10 border-blue-500/30'; }
+  else if (status === 'indo_coleta') { safeStatus = 'Indo para Coleta'; statusColor = 'text-blue-400'; bgColor = 'bg-blue-500/10 border-blue-500/30'; }
+  else if (status === 'chegou_coleta') { safeStatus = 'Aguardando no Local'; statusColor = 'text-indigo-400'; bgColor = 'bg-indigo-500/10 border-indigo-500/30'; }
+  else if (status === 'coletando') { safeStatus = 'Carregando Veículo'; statusColor = 'text-amber-400'; bgColor = 'bg-amber-500/10 border-amber-500/30'; }
+  else if (status === 'em_transporte') { safeStatus = 'Carga em Trânsito'; statusColor = 'text-emerald-400'; bgColor = 'bg-emerald-500/10 border-emerald-500/30'; }
+  else if (status === 'finalizando' || status === 'entregue' || status === 'finalizado') { safeStatus = 'Entrega Concluída'; statusColor = 'text-emerald-400'; bgColor = 'bg-emerald-500/10 border-emerald-500/30'; }
 
   const isDataReady = typeof distancia === 'number' && distancia > 0 && typeof valorTotal === 'number' && valorTotal > 0;
   const displayDistance = isDataReady ? `${distancia.toFixed(1)} km` : 'Calculando...';
@@ -70,18 +76,18 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
       {/* HEADER DE STATUS & RELÓGIO */}
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className={`p-3.5 rounded-[1.5rem] border ${showWarning ? 'bg-amber-500/10 border-amber-500/30' : 'bg-cyan-500/10 border-cyan-500/30'}`}>
+          <div className={`p-3.5 rounded-[1.5rem] border ${bgColor}`}>
             {showWarning ? (
               <AlertTriangle className="h-7 w-7 text-amber-400" />
             ) : (
-              <Radar className={`h-7 w-7 text-cyan-400 ${['disponivel', 'aguardando_pagamento'].includes(status) ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+              <Radar className={`h-7 w-7 ${statusColor} ${['disponivel', 'aguardando_pagamento'].includes(status) ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
             )}
           </div>
           <div>
-            <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${showWarning ? 'text-amber-400' : 'text-cyan-400'}`}>
+            <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${statusColor}`}>
               Torre de Monitoramento
             </p>
-            <h2 className="text-xl md:text-2xl font-black text-white uppercase italic tracking-tight mt-0.5">
+            <h2 className={`text-xl md:text-2xl font-black uppercase italic tracking-tight mt-0.5 ${statusColor}`}>
               {safeStatus}
             </h2>
           </div>
