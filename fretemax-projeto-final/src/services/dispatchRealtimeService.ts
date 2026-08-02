@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
-// CTO-Log: Telemetria Live e Transação Atômica. LOTE 3.2
-// Status: Certificado. Escrita em Batch para evitar anomalias de conexão.
+// CTO-Log: Telemetria Live e Transação Atômica de Encerramento.
+// Status: Certificado. Escrita em Batch para evitar anomalias de conexão e garantir liberação do Motorista.
 // =========================================================
 
 import { writeBatch, doc } from 'firebase/firestore';
@@ -57,7 +57,7 @@ class DispatchRealtimeService {
     }
   }
 
-  // CTO FIX: Transação 100% Atômica usando writeBatch.
+  // Aceite 100% Atômico
   async aceitarCorrida(driverId: string, freteId: string) {
     try {
       const batch = writeBatch(db);
@@ -66,7 +66,6 @@ class DispatchRealtimeService {
       const driverRef = doc(db, 'motoristas', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
-      // 1. Prepara a atualização do Motorista
       batch.update(driverRef, {
         state: DriverState.ACEITOU,
         freteAtualId: freteId,
@@ -74,21 +73,52 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
-      // 2. Prepara a atualização do Frete com o Enum correto
       batch.update(freteRef, {
         status: AppTripState.ACEITO,
         motoristaId: driverId,
         atualizadoEm: timestamp,
       });
 
-      // 3. Executa ambas as operações simultaneamente (Tudo ou Nada)
       await batch.commit();
 
-      // 4. Liga o GPS Compartilhado apenas após ter a carga GARANTIDA no banco
       locationRealtimeService.start(driverId, freteId);
     } catch (error) {
       console.error('ERRO ACEITE ATÔMICO (BATCH):', error);
-      throw error; // Propaga o erro para a UI avisar o motorista que a rede falhou
+      throw error;
+    }
+  }
+
+  // 🔥 CTO FIX: Transação Atômica de Encerramento (Libera o Motorista + Finaliza o Frete)
+  async concluirViagemELiberarMotorista(driverId: string, freteId: string) {
+    try {
+      const batch = writeBatch(db);
+      const timestamp = Date.now();
+
+      const driverRef = doc(db, 'motoristas', driverId);
+      const freteRef = doc(db, 'fretes', freteId);
+
+      // 1. Libera o Motorista para o Feed
+      batch.update(driverRef, {
+        state: DriverState.ONLINE, 
+        freteAtualId: null,
+        disponivel: true,
+        atualizadoEm: timestamp,
+      });
+
+      // 2. Finaliza a Viagem (Pronto para o Admin pagar via PIX)
+      batch.update(freteRef, {
+        status: AppTripState.ENTREGUE,
+        entregueEm: timestamp,
+        atualizadoEm: timestamp,
+      });
+
+      await batch.commit();
+
+      // 3. Desliga a telemetria pesada de GPS
+      locationRealtimeService.stop();
+    } catch (error) {
+      console.error('ERRO AO CONCLUIR VIAGEM (BATCH):', error);
+      throw error;
     }
   }
 
@@ -133,7 +163,6 @@ class DispatchRealtimeService {
         freteAtualId: null,
         atualizadoEm: Date.now(),
       });
-      // O GPS compartilhado será desligado no ciclo de vida da viagem
     } catch (error) {
       console.error('ERRO FINALIZAÇÃO:', error);
     }
@@ -150,7 +179,6 @@ class DispatchRealtimeService {
     }
   }
 
-  // CTO FIX: Tipagem de entrada rigorosa para impedir strings aleatórias
   async atualizarStatusTrip(tripId: string, status: AppTripState) {
     try {
       await firebaseRealtimeService.updateTripRealtime(tripId, {
