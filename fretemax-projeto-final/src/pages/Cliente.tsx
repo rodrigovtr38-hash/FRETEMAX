@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Auditoria e Correção da Máquina de Estados.
+// CTO-Log: Duplo Salvamento de Chaves (veiculo + categoria) para garantir compatibilidade.
 // Status: PRODUÇÃO COM SHADOW BYPASS ATIVO (CPF: 34181118827)
-// Correção de CTO: Injetado payload completo para o Mural de 15 Min (dispatchStatus + ofertaExpiraEm).
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -78,7 +77,7 @@ export default function Cliente() {
   const [peso, setPeso] = useState('');
   const [qtdVolumes, setQtdVolumes] = useState('');
   const [tipoMaterial, setTipoMaterial] = useState('');
-  const [vehicle, setVehicle] = useState<VehicleType>('carreta_ls');
+  const [vehicle, setVehicle] = useState<VehicleType>('moto'); // Forçado padrão leve
   const [tipoFrete, setTipoFrete] = useState<'imediato' | 'agendado'>('imediato');
   const [dataAgendada, setDataAgendada] = useState('');
   
@@ -193,7 +192,6 @@ export default function Cliente() {
     setTimeout(() => setToast(null), 4500);
   };
 
-  // 🔥 CTO FIX: Sincronizando dados de engajamento do feed REAL. Adeus hardcode.
   useEffect(() => {
     if (step === 'busca' && orderData) {
       setSimCompat(orderData.motoristasNotificados || 0); 
@@ -226,13 +224,12 @@ export default function Cliente() {
         setNome(data.nome || ''); setColeta(data.coleta || coleta); 
         setEntregas(data.entregas || (data.entrega ? [data.entrega] : [{ cep: '', bairro: '', rua: '', num: '' }]));
         setPeso(data.peso || ''); setQtdVolumes(data.qtdVolumes || ''); setTipoMaterial(data.tipoMaterial || '');
-        setVehicle(data.vehicle || 'carreta_ls'); setTipoFrete(data.tipoFrete || 'imediato');
+        setVehicle(data.vehicle || 'moto'); setTipoFrete(data.tipoFrete || 'imediato');
         setDataAgendada(data.dataAgendada || ''); setWhatsapp(data.whatsapp || ''); setDocumento(data.documento || '');
         setValorOferta(data.valorOferta || '');
       } catch { localStorage.removeItem('fretogo_form_backup'); }
     }
     if (savedOrder && savedOrder !== 'null') { setCurrentOrderId(savedOrder); setStep('busca'); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -395,7 +392,7 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
-      // 🔥 CTO FIX: Documento agora recebe as chaves vitais do índice do mural logo na criação
+      // 🔥 CTO FIX: DUPLO SALVAMENTO (veiculo E categoria)
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
@@ -407,7 +404,8 @@ export default function Cliente() {
         clienteDocumento: documentoLimpo,
         
         distancia: validDistancia, 
-        veiculo: vehicle, 
+        veiculo: vehicle, // Salva na chave original
+        categoria: vehicle, // 🔥 Salva na chave nova para compatibilidade com a query do motorista
         peso: peso || 'Não informado', 
         qtdVolumes: qtdVolumes || 'Não informado', 
         tipoMaterial: tipoMaterial || 'Carga geral',
@@ -437,20 +435,17 @@ export default function Cliente() {
         tipoFrete,
         dataAgendada: firebaseTimestamp,
         
-        // Dados de visualização inicializados com zero reais
         visualizacoes: 0,
         motoristasNotificados: 0,
         interessados: 0,
 
         status: tipoFrete === 'agendado' ? 'agendado' : TripState.AGUARDANDO_PAGAMENTO,
-        dispatchStatus: 'aguardando', // Nova estrutura para o driver radar
+        dispatchStatus: 'aguardando',
         createdAt: serverTimestamp(),
       });
 
       localStorage.setItem('fretogo_current_order', docRef.id); setCurrentOrderId(docRef.id);
 
-      // 🔥 INTERVENÇÃO CTO: SHADOW BYPASS ATUALIZADO (MODO TESTE)
-      // Agora o bypass constrói exatamente os campos que a nuvem construiria
       const cpfLimpo = documento.replace(/\D/g, '');
       if (cpfLimpo === '34181118827') {
         const dataExpiracao = new Date();
@@ -459,8 +454,8 @@ export default function Cliente() {
         await updateDoc(doc(db, 'fretes', docRef.id), {
           status: TripState.DISPONIVEL,
           pagamentoStatus: 'aprovado',
-          dispatchStatus: 'mural', // Isso é o que a query do aplicativo do motorista exige
-          ofertaExpiraEm: Timestamp.fromDate(dataExpiracao) // Temporizador obrigatório do novo painel
+          dispatchStatus: 'mural',
+          ofertaExpiraEm: Timestamp.fromDate(dataExpiracao) 
         });
         
         setStep('busca');
@@ -469,7 +464,6 @@ export default function Cliente() {
         return; 
       }
 
-      // Fluxo Real Financeiro (Dinheiro Real - Mercado Pago Obrigatório)
       if (tipoFrete === 'imediato') {
         try {
           const res = await fetch('/api/pagamento', {
