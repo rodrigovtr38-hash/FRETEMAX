@@ -1,9 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Admin.tsx
-// CTO-Log: Auditoria Concluída - FASE 5 (Lote 2 Validado)
-// Status: Sincronizado com nova arquitetura B2B e Categorias Oficiais.
-// Recursos Críticos: Trava de senha e UID ativada. Lógica de repasse manual PIX preservada.
-// Injeção Nova: Módulo "Concierge IA" (Máquina de Vendas Manual para o CEO).
+// CTO-Log: Auditoria Concluída - FASE 3
+// Status: Painel de Malha Live enriquecido com dados logísticos completos (KM, Categoria, Peso).
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -15,12 +13,11 @@ import {
   Loader2, CheckCircle, XCircle, Search, ShieldAlert, Truck, Users, 
   Calendar, DollarSign, Activity, Clock, AlertTriangle, Eye, 
   Map as MapIcon, Wallet, Zap, MessageCircle, ShieldCheck, RefreshCcw, Lock, Target, Key, Radio,
-  Bot, Copy, Send // 🔥 INJEÇÃO CTO: Ícones do Concierge
+  Bot, Copy, Send 
 } from 'lucide-react';
 
 const ADMIN_UIDS = ['uV1yeZoGfhZTRWDVL1CnMW6b6NY2']; 
 
-// 🔥 INJEÇÃO CTO 1: Configuração das 7 Categorias Oficiais
 const CATEGORIAS_FROTA = [
   { id: 'moto', label: 'Moto / Courier', icon: '🏍️' },
   { id: 'carro_pequeno', label: 'Carro / Hatch', icon: '🚗' },
@@ -33,12 +30,9 @@ const CATEGORIAS_FROTA = [
 
 export default function Admin() {
   const [authUser, setAuthUser] = useState<any>(null);
-  
-  // 🔥 INJEÇÃO CTO 2: Estados da Fechadura Digital
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
 
-  // 🔥 INJEÇÃO CTO: Aba do Concierge adicionada
   const [tab, setTab] = useState<'dashboard' | 'motoristas' | 'corridas' | 'concierge'>('dashboard');
   const [fretes, setFretes] = useState<any[]>([]);
   const [motoristasPendentes, setMotoristasPendentes] = useState<any[]>([]);
@@ -54,7 +48,6 @@ export default function Admin() {
   const [showHistorico, setShowHistorico] = useState(false);
   const [reembolsosPendentes, setReembolsosPendentes] = useState<any[]>([]);
 
-  // 🔥 ESTADOS DO CONCIERGE IA
   const [conciergeMsg, setConciergeMsg] = useState('');
   const [conciergeTarget, setConciergeTarget] = useState<'empresa' | 'motorista'>('empresa');
   const [conciergePrompt, setConciergePrompt] = useState('');
@@ -297,7 +290,6 @@ export default function Admin() {
     window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // 🔥 MÁQUINA DE VENDAS: GERADOR DE PROMPTS
   const handleGerarPromptConcierge = () => {
     if (!conciergeMsg.trim()) {
       alert("Cole a mensagem do WhatsApp primeiro.");
@@ -424,7 +416,7 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
               { id: 'dashboard', label: 'Visão Operacional', icon: Activity },
               { id: 'motoristas', label: 'Homologação de Frota', icon: Users, badge: motoristasPendentes.length },
               { id: 'corridas', label: 'Malha Logística Live', icon: MapIcon },
-              { id: 'concierge', label: 'Concierge IA', icon: Bot } // 🔥 NOVA ABA
+              { id: 'concierge', label: 'Concierge IA', icon: Bot }
             ].map(item => (
               <button
                 key={item.id}
@@ -442,9 +434,6 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
 
       <main className="max-w-7xl mx-auto p-4 md:p-8">
         
-        {/* ========================================================
-            🔥 MÓDULO CONCIERGE IA (NOVO)
-        ======================================================== */}
         {tab === 'concierge' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
              <div className="mb-8">
@@ -456,8 +445,6 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
              </div>
 
              <div className="bg-slate-900/80 border border-white/10 rounded-[2rem] p-6 md:p-8 shadow-2xl backdrop-blur-md">
-                
-                {/* Seleção de Contexto */}
                 <div className="flex gap-4 mb-6">
                   <button 
                     onClick={() => setConciergeTarget('empresa')}
@@ -473,7 +460,6 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
                   </button>
                 </div>
 
-                {/* Input do WhatsApp */}
                 <div className="mb-6">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mensagem recebida no WhatsApp:</label>
                   <textarea 
@@ -491,7 +477,6 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
                   <Send size={18}/> Estruturar Resposta da IA
                 </button>
 
-                {/* Output do Prompt */}
                 {conciergePrompt && (
                   <div className="animate-in fade-in bg-slate-950 rounded-2xl border border-cyan-500/30 p-1 relative">
                     <div className="absolute top-4 right-4">
@@ -513,7 +498,6 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
              </div>
           </div>
         )}
-        {/* ======================================================== */}
 
         {tab === 'dashboard' && (
           <div className="flex justify-end mb-6 animate-in fade-in">
@@ -821,6 +805,22 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
                                 </div>
                              </div>
                           </div>
+
+                          {/* 🔥 INJEÇÃO CTO 3: Resumo Logístico p/ o CEO */}
+                          <div className="grid grid-cols-3 gap-2 mt-6 bg-slate-950 p-4 rounded-2xl border border-white/5">
+                             <div className="text-center border-r border-white/5">
+                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Distância</p>
+                               <p className="text-xs font-bold text-cyan-400">{f.distanciaTotalKm?.toFixed(1) || f.distancia?.toFixed(1) || '--'} km</p>
+                             </div>
+                             <div className="text-center border-r border-white/5">
+                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Peso / Qtd</p>
+                               <p className="text-xs font-bold text-slate-300">{f.pesoKg ? `${f.pesoKg} kg` : (f.volumes || f.peso || '--')}</p>
+                             </div>
+                             <div className="text-center">
+                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Categoria</p>
+                               <p className="text-xs font-bold text-amber-400 capitalize">{(f.veiculo || f.categoria)?.replace('_', ' ') || '--'}</p>
+                             </div>
+                          </div>
                         </div>
 
                         <div className="flex flex-col gap-3 min-w-[200px] border-l border-white/5 pl-4 justify-center">
@@ -828,14 +828,13 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
                            {/* AÇÕES DE REPASSE DE DINHEIRO E REEMBOLSO */}
                            {f.status === AppTripState.ENTREGUE && (
                              <div className="flex flex-col gap-2">
-                               {/* 🔥 INJEÇÃO CTO 4: Botão de cobrar a chave PIX no ZAP */}
                                <button onClick={() => handlePedirChavePix(f)} className="bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all flex items-center justify-center gap-2">
                                  <MessageCircle size={14} /> Cobrar Chave PIX
                                </button>
 
                                <button onClick={() => forceStatus(f.id, 'finalizado')} className="bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all flex flex-col items-center justify-center gap-1 group">
                                  <span className="flex items-center gap-1"><Wallet size={14} /> Liquidar Repasse</span>
-                                 <span className="text-[8px] opacity-70 group-hover:opacity-100 font-bold">R$ {Number(f.valorLiquidoMotorista || f.valorMotorista).toFixed(2)}</span>
+                                 <span className="text-[10px] font-bold text-purple-200">R$ {Number(f.valorLiquidoMotorista || f.valorMotorista).toFixed(2).replace('.',',')}</span>
                                </button>
                              </div>
                            )}
