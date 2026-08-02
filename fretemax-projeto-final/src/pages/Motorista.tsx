@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Motorista.tsx
-// CTO-Log: Rollback de UI (Remoção do Banner da Loja). Foco 100% no Feed de Fretes.
+// CTO-Log: Rollback de UI e Correção Crítica de Query Firestore.
+// Status: Query alinhada com as Regras de Segurança (Firestore Rules).
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -245,10 +246,11 @@ export default function Motorista() {
     }
     setRadarLoading(true);
     
+    // CTO FIX: Removido 'aguardando_aceite' para cruzar EXATAMENTE com as regras do Firestore (Permission Denied bypass).
     const freightsQuery = query(
       collection(db, 'fretes'), 
       where('categoria', '==', operationalCategory), 
-      where('status', 'in', ['disponivel', 'buscando_motorista', 'aguardando_aceite']), 
+      where('status', 'in', ['disponivel', 'buscando_motorista']), 
       orderBy('createdAt', 'desc'), 
       limit(50) 
     );
@@ -262,7 +264,7 @@ export default function Motorista() {
       // Simula o tempo de "Scanner" da IA para o Skeleton aparecer por um segundo
       setTimeout(() => { if (mountedRef.current) setRadarLoading(false); }, 1500);
     }, error => {
-      console.error('FREIGHTS REALTIME ERROR:', error); setRadarLoading(false);
+      console.error('FREIGHTS REALTIME ERROR [VERIFIQUE ÍNDICES DO FIRESTORE SE ESTE ERRO PERSISTIR]:', error); setRadarLoading(false);
     });
     
     listenerRegistryRef.current.freights = unsubscribe;
@@ -304,7 +306,7 @@ export default function Motorista() {
         if (!freteSnap.exists()) throw new Error('FRETE_NAO_ENCONTRADO');
         
         const data = freteSnap.data();
-        if (data.motoristaId || !['disponivel', 'buscando_motorista', 'aguardando_aceite'].includes(data.status)) {
+        if (data.motoristaId || !['disponivel', 'buscando_motorista'].includes(data.status)) {
           throw new Error('FRETE_JA_ATRIBUIDO');
         }
 
