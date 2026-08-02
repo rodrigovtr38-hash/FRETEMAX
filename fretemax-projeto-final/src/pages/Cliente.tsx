@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Duplo Salvamento de Chaves (veiculo + categoria) para garantir compatibilidade.
-// Status: PRODUÇÃO COM SHADOW BYPASS ATIVO (CPF: 34181118827)
+// CTO-Log: Integração Real-Time Tracking no Painel do Cliente.
+// Status: Rastreador de Motorista Ativado (motoristaPos injection).
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -21,7 +21,7 @@ import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
 
 interface AddressData { cep: string; bairro: string; rua: string; num: string; lat?: number; lng?: number; }
 interface Coords { lat: number; lng: number; }
-interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; }
+interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; }
 type VehicleType = 'moto' | 'carro_pequeno' | 'utilitario' | 'toco' | 'truck' | 'carreta_ls' | 'bi_trem_cegonha';
 
 const VEHICLE_CONFIG: Record<VehicleType, { nome: string; fator: number }> = {
@@ -77,7 +77,7 @@ export default function Cliente() {
   const [peso, setPeso] = useState('');
   const [qtdVolumes, setQtdVolumes] = useState('');
   const [tipoMaterial, setTipoMaterial] = useState('');
-  const [vehicle, setVehicle] = useState<VehicleType>('moto'); // Forçado padrão leve
+  const [vehicle, setVehicle] = useState<VehicleType>('moto'); 
   const [tipoFrete, setTipoFrete] = useState<'imediato' | 'agendado'>('imediato');
   const [dataAgendada, setDataAgendada] = useState('');
   
@@ -392,7 +392,6 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
-      // 🔥 CTO FIX: DUPLO SALVAMENTO (veiculo E categoria)
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
@@ -404,8 +403,8 @@ export default function Cliente() {
         clienteDocumento: documentoLimpo,
         
         distancia: validDistancia, 
-        veiculo: vehicle, // Salva na chave original
-        categoria: vehicle, // 🔥 Salva na chave nova para compatibilidade com a query do motorista
+        veiculo: vehicle, 
+        categoria: vehicle, 
         peso: peso || 'Não informado', 
         qtdVolumes: qtdVolumes || 'Não informado', 
         tipoMaterial: tipoMaterial || 'Carga geral',
@@ -525,7 +524,7 @@ export default function Cliente() {
     if (!currentOrderId) return;
     showToast("Reativando postagem no Feed...", "success");
     try {
-      // Logica de retentativa se necessario
+      // Lógica de retentativa
     } catch { showToast('Erro ao reiniciar busca.', 'error'); }
   };
 
@@ -569,6 +568,14 @@ export default function Cliente() {
 
   const inputClass = "w-full rounded-2xl border-2 border-slate-200 bg-white p-5 text-base md:text-lg font-bold text-slate-900 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none";
   const smallInputClass = "w-full rounded-2xl border-2 border-slate-200 bg-white p-4 text-sm font-bold text-slate-900 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none";
+
+  // 🔥 CTO FIX: Coleta em tempo real do GPS do motorista para o painel do Cliente
+  const motoristaGPS = useMemo(() => {
+    if (orderData?.motoristaLat && orderData?.motoristaLng) {
+      return { lat: Number(orderData.motoristaLat), lng: Number(orderData.motoristaLng) };
+    }
+    return undefined;
+  }, [orderData?.motoristaLat, orderData?.motoristaLng]);
 
   return (
     <div className="relative min-h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-800 font-sans selection:bg-blue-500/20">
@@ -872,10 +879,20 @@ export default function Cliente() {
 
                 <div className="h-[400px] w-full rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-xl relative">
                   {mapsReady ? (
-                    <MapaCliente origem={origemGPS} destino={destinoGPS} motoristaId={orderData?.motoristaId} paradasExtras={paradasGPS} />
+                    <MapaCliente 
+                      origem={origemGPS} 
+                      destino={destinoGPS} 
+                      motoristaId={orderData?.motoristaId} 
+                      motoristaPos={motoristaGPS} // GPS Vivo do Motorista sendo passado aqui
+                      paradasExtras={paradasGPS} 
+                      vehicleType={orderData?.veiculo || vehicle}
+                      operationalMessage={orderData?.status ? orderData.status.replace('_', ' ') : undefined}
+                    />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center bg-slate-100"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
                   )}
+                  
+                  {/* Remove o bloqueio de "Transmitindo..." se alguém aceitar a corrida */}
                   {['aguardando_pagamento', 'disponivel', 'buscando_motorista'].includes(orderData?.status || '') && (
                     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm">
                       <div className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full bg-cyan-500 shadow-[0_0_40px_rgba(6,182,212,0.5)] mb-6">
