@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Motorista.tsx
 // CTO-Log: Delegação de Processamento e Tags Visuais (Imediato vs Agendado)
-// Status: Leitura Dupla de Chave (veiculo || categoria) blindada com toLowerCase().
+// Status: Leitura Dupla de Chave + Matemática Financeira Transparente.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -136,8 +136,8 @@ export default function Motorista() {
     const categoriaFormatada = categoriaBruta.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
     const feePercent = CATEGORY_FEES[categoriaFormatada] ?? 0.2;
-    const valorCliente = Number(data.valorCliente || data.valorTotal || data.valor || 0); 
-    const valorMotorista = data.valorMotorista ?? valorCliente * (1 - feePercent);
+    const valorCliente = Number(data.valorCliente || data.valorTotal || data.valorFreteBruto || data.valor || 0); 
+    const valorMotorista = data.valorMotorista || data.valorLiquidoMotorista || valorCliente * (1 - feePercent);
     const distanciaColetaKm = Number(data.distanciaColetaKm || 0);
     const distanciaEntregaKm = Number(data.distanciaEntregaKm || data.distancia || 0);
 
@@ -150,7 +150,7 @@ export default function Motorista() {
       id,
       status: data.status || 'disponivel',
       prioridade: prioridadeMural,
-      agendado: data.tipoFrete === 'agendado' || Boolean(data.agendado), // 🏷️ FIX: Identifica o agendamento
+      agendado: data.tipoFrete === 'agendado' || Boolean(data.agendado),
       categoria: categoriaFormatada,
       enderecoColetaTexto: data.enderecoColetaTexto || data.origem?.endereco || 'Coleta não informada',
       enderecoEntregaTexto: data.enderecoEntregaTexto || data.destino?.endereco || 'Entrega não informada',
@@ -167,7 +167,7 @@ export default function Motorista() {
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       multiplasEntregas: Boolean(data.multiplasEntregas),
-      dataAgendada: data.dataAgendada, // Preserva a data para uso futuro
+      dataAgendada: data.dataAgendada,
     } as any;
   }, []);
 
@@ -258,7 +258,6 @@ export default function Motorista() {
 
       let next = snapshot.docs.map(document => normalizeFreight(document.id, document.data()));
       
-      // Filtragem rígida local de categoria e pertencimento
       next = next.filter(freight => freight.categoria === operationalCategory);
       next = next.filter(freight => !freight.motoristaId || freight.motoristaId === user.uid || snapshot.docs.find(d => d.id === freight.id)?.data().motoristaAtualDestaque === user.uid); 
 
@@ -513,10 +512,16 @@ export default function Motorista() {
                          </div>
                       )}
 
+                      {/* 🔥 CTO FIX: Adicionado Visualização Financeira Transparente */}
                       <div className="flex justify-between items-start mb-6 pt-2">
-                         <div>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5"><Star size={10} className="text-amber-500"/> Ganho Líquido</p>
-                            <h3 className="text-4xl font-black text-emerald-400 tracking-tighter">R$ {freight.valorMotorista?.toFixed(2).replace('.', ',')}</h3>
+                         <div className="flex flex-col gap-1.5">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                               <Star size={10} className="text-slate-500"/> Cliente pagou: R$ {freight.valorCliente?.toFixed(2).replace('.', ',')}
+                            </p>
+                            <div className="flex items-end gap-2">
+                               <h3 className="text-4xl font-black text-emerald-400 tracking-tighter">R$ {freight.valorMotorista?.toFixed(2).replace('.', ',')}</h3>
+                               <span className="text-[10px] text-emerald-600 font-black uppercase tracking-widest mb-1.5">Líquido</span>
+                            </div>
                          </div>
                          <div className="text-right">
                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Publicado</p>
@@ -536,16 +541,17 @@ export default function Motorista() {
                          <div className="flex items-start gap-4 relative z-10">
                             <div className="w-6 h-6 rounded-full bg-emerald-900/50 border-2 border-emerald-50 flex items-center justify-center shrink-0 mt-1"><div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div></div>
                             <div>
-                               <p className="text-[10px] uppercase tracking-widest font-black text-emerald-500 mb-1">Destino {freight.multiplasEntregas && "(Múltiplas)"}</p>
+                               <p className="text-[10px] uppercase tracking-widest font-black text-emerald-500 mb-1">Destino</p>
                                <p className="text-sm font-bold text-white leading-snug">{freight.enderecoEntregaTexto}</p>
                             </div>
                          </div>
                       </div>
 
+                      {/* 🔥 CTO FIX: Removida a categoria repetida, adicionado o número de Entregas */}
                       <div className="grid grid-cols-3 gap-2 mb-6">
                         <div className="bg-slate-900 rounded-xl p-3 text-center border border-slate-800">
-                          <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Categoria</p>
-                          <p className="text-xs font-bold text-slate-300 capitalize">{freight.categoria?.replace('_', ' ')}</p>
+                          <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Entregas</p>
+                          <p className="text-xs font-bold text-slate-300">{freight.multiplasEntregas ? `${freight.volumes || 'Vários'} Locais` : '1 Local'}</p>
                         </div>
                         <div className="bg-slate-900 rounded-xl p-3 text-center border border-slate-800">
                           <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Distância</p>
