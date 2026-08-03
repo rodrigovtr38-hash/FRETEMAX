@@ -1,14 +1,14 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Refatoração do Roteamento GPS e Fluxo de Conclusão.
-// Status: Mapa renderizando rotas dinâmicas baseadas no status da viagem.
+// CTO-Log: Injeção de Válvula de Escape (Abortar Missão).
+// Status: Motorista pode cancelar a corrida e o sistema devolve o frete ao Feed.
 // =========================================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
-import { LockKeyhole, ShieldCheck, DollarSign, CheckCircle2, ArrowRight } from 'lucide-react';
+import { LockKeyhole, ShieldCheck, DollarSign, CheckCircle2, ArrowRight, AlertTriangle } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 
@@ -19,7 +19,11 @@ interface DriverActiveTripProps {
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [frete, setFrete] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Modais
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+
   const [pinValue, setPinValue] = useState('');
   const [pinError, setPinError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -40,10 +44,8 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   if (loading) return <div className="flex h-64 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5"><div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div></div>;
   if (!frete) return null;
 
-  // Lógica de Pagamento
   const valorA_Receber = Number(frete.valorLiquidoMotorista || frete.valorMotorista || 0).toFixed(2).replace('.', ',');
 
-  // Tela de Conclusão (O Acerto de Contas)
   if (frete.status === 'entregue' || frete.status === 'finalizado') {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2rem] border border-emerald-500/30 bg-slate-900 shadow-[0_0_50px_rgba(16,185,129,0.1)] p-8 md:p-12 text-center relative overflow-hidden">
@@ -73,21 +75,17 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const paradaAtualIndex = frete.paradaAtualIndex || 0;
   const destinoAtual = paradas.length > 0 ? paradas[paradaAtualIndex] : (frete.destino || {});
   
-  // 🔥 CTO FIX: Tratamento robusto das Coordenadas GPS para evitar mapa vazio (Fallback seguro)
   const origemGPS = frete.origemLat && frete.origemLng ? { lat: Number(frete.origemLat), lng: Number(frete.origemLng) } : null;
   const destinoGPS = frete.destinoLat && frete.destinoLng ? { lat: Number(frete.destinoLat), lng: Number(frete.destinoLng) } : null;
-  const motoristaGPS = frete.motoristaLat && frete.motoristaLng ? { lat: Number(frete.motoristaLat), lng: Number(frete.motoristaLng) } : origemGPS; // Fallback: Se não tem a posição do motorista, usa a origem
+  const motoristaGPS = frete.motoristaLat && frete.motoristaLng ? { lat: Number(frete.motoristaLat), lng: Number(frete.motoristaLng) } : origemGPS;
 
-  // 🗺️ Inteligência de Roteamento (Traça a linha de acordo com o Status)
   let currentMapOrigin = null;
   let currentMapDestino = null;
 
   if (['aceito', 'indo_coleta', 'chegou_coleta'].includes(frete.status)) {
-    // Etapa 1: Motorista -> Origem da Carga
     currentMapOrigin = motoristaGPS;
     currentMapDestino = origemGPS;
   } else {
-    // Etapa 2: Origem da Carga -> Destino Final
     currentMapOrigin = origemGPS;
     currentMapDestino = destinoGPS;
   }
@@ -117,11 +115,30 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         if (isMultiDrop && paradaAtualIndex + 1 < pinEntregas.length) {
            await updateDoc(doc(db, 'fretes', frete.id), { paradaAtualIndex: paradaAtualIndex + 1 });
         } else {
-           await dispatchRealtimeService.atualizarStatusTrip(frete.id, 'entregue' as any);
+           const currentUser = auth.currentUser;
+           if(currentUser) {
+             await dispatchRealtimeService.concluirViagemELiberarMotorista(currentUser.uid, frete.id);
+           }
         }
       }
       setIsPinModalOpen(false); setPinValue('');
     } catch (e) { setPinError('Erro ao validar.'); } finally { setActionLoading(false); }
+  };
+
+  // 🔥 CTO FIX: Tratativa de Abortar Missão
+  const handleCancelTrip = async (motivo: string) => {
+    setActionLoading(true);
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+      await dispatchRealtimeService.cancelarViagemMotorista(currentUser.uid, frete.id, motivo);
+      setIsCancelModalOpen(false);
+      // Ao cancelar, o motorista volta para o radar limpo instantaneamente via onSnapshot
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const isMultiDrop = frete.pinEntregas && frete.pinEntregas.length > 1;
@@ -130,7 +147,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-[2rem] border border-cyan-500/20 bg-slate-900 shadow-2xl p-6 relative overflow-hidden">
         
-        {/* Painel Financeiro - Escrow */}
         <div className="absolute top-0 right-0 bg-emerald-500/10 border-b border-l border-emerald-500/20 rounded-bl-3xl px-6 py-4 flex flex-col items-end">
           <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1 mb-1">
              <ShieldCheck size={10} /> Pagamento Garantido
@@ -141,7 +157,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           </div>
         </div>
 
-        {/* Título Dinâmico informando a etapa */}
         <div className="mb-6 pt-4">
           <h2 className="text-xl font-black text-cyan-400 uppercase tracking-widest">
             {['aceito', 'indo_coleta', 'chegou_coleta', 'coletando'].includes(frete.status)
@@ -158,7 +173,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             <MapaCliente 
               origem={currentMapOrigin} 
               destino={currentMapDestino} 
-              motoristaPos={frete.status === 'indo_coleta' ? currentMapOrigin : null} // O ícone só anda na etapa 1
+              motoristaPos={frete.status === 'indo_coleta' ? currentMapOrigin : null} 
               motoristaId={frete.motoristaId}
               vehicleType={frete.veiculo || frete.categoria}
               operationalMessage={['aceito', 'indo_coleta', 'chegou_coleta'].includes(frete.status) ? "Navegando para Coleta" : "Navegando para Entrega"} 
@@ -194,23 +209,24 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
               Validar PIN - {frete.status === 'coletando' ? 'Sair com Carga' : (isMultiDrop && paradaAtualIndex + 1 < frete.pinEntregas.length ? 'Próximo Destino' : 'Finalizar Entrega')}
             </button>
           )}
+
+          {/* VÁLVULA DE ESCAPE: ABORTAR MISSÃO */}
+          <button 
+            onClick={() => setIsCancelModalOpen(true)} 
+            disabled={actionLoading} 
+            className="w-full bg-transparent border border-red-500/20 py-3 font-black uppercase text-[10px] tracking-widest rounded-xl text-red-400 hover:bg-red-500/10 hover:border-red-500/40 transition-colors mt-4"
+          >
+            Relatar Problema / Abortar Missão
+          </button>
+
         </div>
       </motion.div>
 
+      {/* MODAL DO PIN DE SEGURANÇA */}
       <AnimatePresence>
         {isPinModalOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }} 
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, y: 50 }} 
-              animate={{ scale: 1, y: 0 }} 
-              exit={{ scale: 0.9, y: 50 }} 
-              className="bg-slate-900 p-8 rounded-3xl w-full max-w-sm border border-emerald-500/50 shadow-[0_0_50px_rgba(16,185,129,0.15)] relative overflow-hidden"
-            >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="bg-slate-900 p-8 rounded-3xl w-full max-w-sm border border-emerald-500/50 shadow-[0_0_50px_rgba(16,185,129,0.15)] relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
               
               <div className="flex justify-center mb-4 mt-2">
@@ -239,13 +255,55 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
               {pinError && <p className="text-red-400 font-bold text-xs text-center mb-4 uppercase animate-pulse">{pinError}</p>}
               
               <div className="flex gap-2">
-                <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5 transition-colors">
-                  Voltar
-                </button>
+                <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5 transition-colors">Voltar</button>
                 <button onClick={handlePinSubmit} disabled={actionLoading || pinValue.length < 4} className="w-2/3 bg-emerald-600 py-4 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-900/50">
                   {actionLoading ? 'Validando...' : 'Confirmar'}
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL DE ABORTAR MISSÃO (VÁLVULA DE ESCAPE) */}
+      <AnimatePresence>
+        {isCancelModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="bg-slate-900 p-8 rounded-3xl w-full max-w-sm border border-red-500/50 shadow-[0_0_50px_rgba(239,68,68,0.15)] relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-amber-500"></div>
+              
+              <div className="flex justify-center mb-4 mt-2">
+                <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                   <AlertTriangle size={32} className="text-red-400" />
+                </div>
+              </div>
+              <h3 className="text-white text-center font-black mb-2 uppercase text-lg tracking-tighter">
+                Abortar Operação
+              </h3>
+              <p className="text-slate-400 text-[11px] text-center mb-6 font-medium leading-relaxed">
+                Ao confirmar, esta carga voltará para a base de motoristas. Qual o motivo do cancelamento?
+              </p>
+              
+              <div className="flex flex-col gap-3 mb-6">
+                <button 
+                  onClick={() => handleCancelTrip('Problema Mecânico')}
+                  disabled={actionLoading}
+                  className="w-full bg-slate-950 border border-amber-500/30 py-4 font-black uppercase text-xs rounded-xl text-amber-400 hover:bg-amber-500/10 transition-colors"
+                >
+                  Problema Mecânico
+                </button>
+                <button 
+                  onClick={() => handleCancelTrip('Imprevisto Pessoal')}
+                  disabled={actionLoading}
+                  className="w-full bg-slate-950 border border-blue-500/30 py-4 font-black uppercase text-xs rounded-xl text-blue-400 hover:bg-blue-500/10 transition-colors"
+                >
+                  Imprevisto Pessoal
+                </button>
+              </div>
+              
+              <button onClick={() => setIsCancelModalOpen(false)} disabled={actionLoading} className="w-full bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5 transition-colors">
+                Voltar (Manter Corrida)
+              </button>
             </motion.div>
           </motion.div>
         )}
