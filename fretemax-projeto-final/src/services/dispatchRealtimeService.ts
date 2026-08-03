@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
-// CTO-Log: Telemetria Live e Transação Atômica de Encerramento.
-// Status: Certificado. Escrita em Batch para evitar anomalias de conexão e garantir liberação do Motorista.
+// CTO-Log: Telemetria Live e Tratamento de Exceções (Cancelamento do Motorista).
+// Status: Certificado. Escrita em Batch para evitar anomalias de conexão.
 // =========================================================
 
 import { writeBatch, doc } from 'firebase/firestore';
@@ -20,7 +20,6 @@ class DispatchRealtimeService {
         state: DriverState.ONLINE,
         atualizadoEm: Date.now(),
       });
-      // O GPS de alta precisão não deve drenar bateria de motorista ocioso.
     } catch (error) {
       console.error('ERRO DRIVER ONLINE:', error);
     }
@@ -57,7 +56,6 @@ class DispatchRealtimeService {
     }
   }
 
-  // Aceite 100% Atômico
   async aceitarCorrida(driverId: string, freteId: string) {
     try {
       const batch = writeBatch(db);
@@ -88,7 +86,6 @@ class DispatchRealtimeService {
     }
   }
 
-  // 🔥 CTO FIX: Transação Atômica de Encerramento (Libera o Motorista + Finaliza o Frete)
   async concluirViagemELiberarMotorista(driverId: string, freteId: string) {
     try {
       const batch = writeBatch(db);
@@ -97,7 +94,6 @@ class DispatchRealtimeService {
       const driverRef = doc(db, 'motoristas', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
-      // 1. Libera o Motorista para o Feed
       batch.update(driverRef, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
@@ -105,7 +101,6 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
-      // 2. Finaliza a Viagem (Pronto para o Admin pagar via PIX)
       batch.update(freteRef, {
         status: AppTripState.ENTREGUE,
         entregueEm: timestamp,
@@ -113,11 +108,46 @@ class DispatchRealtimeService {
       });
 
       await batch.commit();
-
-      // 3. Desliga a telemetria pesada de GPS
       locationRealtimeService.stop();
     } catch (error) {
       console.error('ERRO AO CONCLUIR VIAGEM (BATCH):', error);
+      throw error;
+    }
+  }
+
+  // 🔥 CTO FIX: Válvula de Escape (Motorista Aborta a Missão)
+  async cancelarViagemMotorista(driverId: string, freteId: string, motivo: string) {
+    try {
+      const batch = writeBatch(db);
+      const timestamp = Date.now();
+
+      const driverRef = doc(db, 'motoristas', driverId);
+      const freteRef = doc(db, 'fretes', freteId);
+
+      // 1. Libera o motorista totalmente
+      batch.update(driverRef, {
+        state: DriverState.ONLINE, 
+        freteAtualId: null,
+        disponivel: true,
+        atualizadoEm: timestamp,
+      });
+
+      // 2. Devolve a carga para o Feed e limpa os dados do motorista atual
+      batch.update(freteRef, {
+        status: AppTripState.DISPONIVEL, // Volta a aparecer no radar de todos
+        motoristaId: null,
+        motoristaNome: null,
+        motoristaZap: null,
+        alertaInsucesso: true, // Acende o alerta na tela do Admin
+        motivoCancelamento: motivo,
+        canceladoPorMotoristaEm: timestamp,
+        atualizadoEm: timestamp,
+      });
+
+      await batch.commit();
+      locationRealtimeService.stop();
+    } catch (error) {
+      console.error('ERRO AO ABORTAR VIAGEM (BATCH):', error);
       throw error;
     }
   }
