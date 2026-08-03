@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
 // CTO-Log: Integração Real-Time Tracking no Painel do Cliente.
-// Status: Rastreador de Motorista Ativado (motoristaPos injection).
+// Status: Overlay do Radar não bloqueante e PIN 100% visível.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -569,7 +569,6 @@ export default function Cliente() {
   const inputClass = "w-full rounded-2xl border-2 border-slate-200 bg-white p-5 text-base md:text-lg font-bold text-slate-900 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none";
   const smallInputClass = "w-full rounded-2xl border-2 border-slate-200 bg-white p-4 text-sm font-bold text-slate-900 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none";
 
-  // 🔥 CTO FIX: Coleta em tempo real do GPS do motorista para o painel do Cliente
   const motoristaGPS = useMemo(() => {
     if (orderData?.motoristaLat && orderData?.motoristaLng) {
       return { lat: Number(orderData.motoristaLat), lng: Number(orderData.motoristaLng) };
@@ -883,7 +882,7 @@ export default function Cliente() {
                       origem={origemGPS} 
                       destino={destinoGPS} 
                       motoristaId={orderData?.motoristaId} 
-                      motoristaPos={motoristaGPS} // GPS Vivo do Motorista sendo passado aqui
+                      motoristaPos={motoristaGPS}
                       paradasExtras={paradasGPS} 
                       vehicleType={orderData?.veiculo || vehicle}
                       operationalMessage={orderData?.status ? orderData.status.replace('_', ' ') : undefined}
@@ -892,13 +891,14 @@ export default function Cliente() {
                     <div className="absolute inset-0 flex items-center justify-center bg-slate-100"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
                   )}
                   
-                  {/* Remove o bloqueio de "Transmitindo..." se alguém aceitar a corrida */}
+                  {/* 🔥 CTO FIX: Overlay não bloqueante para o mapa continuar visível */}
                   {['aguardando_pagamento', 'disponivel', 'buscando_motorista'].includes(orderData?.status || '') && (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-                      <div className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full bg-cyan-500 shadow-[0_0_40px_rgba(6,182,212,0.5)] mb-6">
-                        <Activity className="h-10 w-10 text-white animate-pulse" />
-                      </div>
-                      <h3 className="text-2xl font-black text-white tracking-tighter text-center">Transmitindo no Feed...</h3>
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-slate-900/95 backdrop-blur-md px-6 py-4 rounded-full shadow-2xl border border-cyan-500/50">
+                      <span className="relative flex h-4 w-4">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-cyan-500"></span>
+                      </span>
+                      <span className="text-xs font-black text-cyan-400 uppercase tracking-[0.2em]">Sinal Ativo no Radar</span>
                     </div>
                   )}
                 </div>
@@ -936,22 +936,27 @@ export default function Cliente() {
                   </div>
                 )}
 
-                {/* Bloco de PIN de Segurança */}
-                {['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'finalizando'].includes(orderData?.status || '') && (
-                  <div className="bg-slate-900 rounded-[2rem] p-6 shadow-xl text-center text-white border border-slate-800">
-                    <p className="text-xs font-black uppercase tracking-widest text-cyan-400 mb-3 flex items-center justify-center gap-2"><Lock size={14}/> Seu PIN de Segurança</p>
-                    <p className="text-5xl font-mono font-black tracking-[0.2em]">
-                      {['em_transporte', 'finalizando'].includes(orderData?.status) 
-                        ? (orderData?.multiplasEntregas && orderData?.pinEntregas ? orderData?.pinEntregas[orderData?.paradaAtualIndex || 0] : (orderData?.pinEntregas ? orderData?.pinEntregas[0] : '---')) 
-                        : orderData?.pinColeta}
-                    </p>
-                    <p className="text-[10px] font-medium text-slate-400 mt-4 leading-relaxed">
-                      {['em_transporte', 'finalizando'].includes(orderData?.status) 
-                        ? 'Informe na ENTREGA para liberar o pagamento.' 
-                        : 'Informe na COLETA para iniciar o trajeto coberto.'}
-                    </p>
+                {/* 🔥 CTO FIX: PIN sempre visível, sem condicional de status para não esconder */}
+                <div className="bg-slate-900 rounded-[2rem] p-6 shadow-xl text-center text-white border border-slate-800">
+                  <p className="text-xs font-black uppercase tracking-widest text-cyan-400 mb-3 flex items-center justify-center gap-2"><Lock size={14}/> Seu PIN de Segurança</p>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                        <p className="text-[9px] uppercase tracking-widest text-slate-400 mb-1 font-bold">Liberação Coleta</p>
+                        <p className="text-2xl font-mono font-black text-white">{orderData?.pinColeta || '----'}</p>
+                     </div>
+                     <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                        <p className="text-[9px] uppercase tracking-widest text-emerald-400 mb-1 font-bold">Liberação Escrow</p>
+                        <p className="text-2xl font-mono font-black text-emerald-400">
+                           {orderData?.pinEntregas ? orderData.pinEntregas[0] : '----'}
+                        </p>
+                     </div>
                   </div>
-                )}
+
+                  <p className="text-[10px] font-medium text-slate-400 mt-4 leading-relaxed">
+                     Compartilhe o respectivo PIN com o motorista apenas no local exato.
+                  </p>
+                </div>
 
                 <div className="bg-white rounded-[2rem] p-4 shadow-xl border border-slate-100 flex flex-col gap-3">
                   {podeCancelar ? (
