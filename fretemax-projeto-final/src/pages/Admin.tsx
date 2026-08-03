@@ -16,7 +16,7 @@ import {
   Bot, Copy, Send 
 } from 'lucide-react';
 
-const ADMIN_UIDS = ['tiH1Y6sVgOg8bGjaIqEPC2LsZyE3']; 
+const ADMIN_UIDS = ['lYeD6r8WETalbNqpyF3r9KSFGeg2']; 
 
 const CATEGORIAS_FROTA = [
   { id: 'moto', label: 'Moto / Courier', icon: '🏍️' },
