@@ -1,12 +1,13 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/DriverApp.tsx
-// CTO-Log: Resolução Definitiva de Rota.
-// Status: Importação relativa a partir da raiz de componentes mantida intacta.
+// CTO-Log: Resolução Definitiva de Rota e Loop de Telas.
+// Status: Bypass de renderização para forçar a montagem da tela de Viagem Ativa.
 // =========================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-// IMPORTAÇÃO CORRIGIDA: Caminho exato. (Certifique-se de que a pasta 'dashboard' é toda minúscula no VS Code)
 import DriverDashboardLayout, { OperationalFreight } from './driver/dashboard/DriverDashboardLayout';
+// 🔥 INJEÇÃO CTO: Importando o componente de viagem ativa para forçar a tela a abrir
+import DriverActiveTrip from '../pages/DriverActiveTrip';
 
 interface DriverAppProps {
   freights?: OperationalFreight[];
@@ -52,6 +53,15 @@ export default function DriverApp({
   const safeToggleOnline = useCallback((next: boolean) => { onToggleOnline?.(next); }, [onToggleOnline]);
 
   if (!runtimeReady) return null;
+
+  // 🔥 CTO FIX: Bloqueia o Feed e Força a Tela de Viagem se o Motorista já tem uma corrida ativa
+  if (activeFreight && activeFreight.id) {
+    return (
+      <div className="w-full h-full p-4 relative z-50 animate-in zoom-in duration-500">
+         <DriverActiveTrip freteId={activeFreight.id} />
+      </div>
+    );
+  }
 
   return (
     <>
