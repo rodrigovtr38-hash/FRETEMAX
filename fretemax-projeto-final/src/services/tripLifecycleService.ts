@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/tripLifecycleService.ts
-// CTO-Log: Higienização de Sintaxe, Tipagem Rigorosa e BLINDAGEM DE TIMEOUT (LOTE 7)
-// Correção: Leitura correta da variável createdAt e bloqueio forçado contra Morte Súbita.
+// CTO-Log: Higienização, Destravamento de Transição e Injeção de IA Operacional.
+// Status: Trava matemática destrancada para cancelamentos e Gatilho da IA conectado.
 // =========================================================
 
 import { doc, getDoc, serverTimestamp, updateDoc, Timestamp } from 'firebase/firestore';
@@ -11,6 +11,8 @@ import { DriverState } from '../state/driverStateMachine';
 import { StateSynchronizationService } from './stateSynchronizationService';
 import type { FretePayload } from './matchingEngine';
 import { dispatchQueueService } from './dispatchQueueService';
+// 🔥 INJEÇÃO CTO: Conectando a IA direto na espinha dorsal
+import { ftiRadar } from '../core/ai/events/ia.events';
 
 export class TripLifecycleService {
   private static inflight = new Set<string>();
@@ -38,9 +40,13 @@ export class TripLifecycleService {
 
       const data = snapshot.data();
 
-      // Verifica se a transição é válida matematicamente
+      // 🔥 CTO FIX: Válvula de Exceção para Cancelamentos e Repasses.
+      // A máquina de estados original bloqueava passar de "ACEITO" ou "EM_COLETA" direto para "DISPONIVEL". 
+      // Esta linha permite que a devolução para o Feed do radar force a transição.
+      const isForcedReset = novoStatus === AppTripState.DISPONIVEL && ['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte'].includes(data.status);
+      
       const permitido = canTransition(data.status as AppTripState, novoStatus);
-      if (!permitido) {
+      if (!permitido && !isForcedReset) {
         console.warn(`[CTO-Log] Transição Bloqueada: De ${data.status} para ${novoStatus}`);
         return false;
       }
@@ -64,16 +70,15 @@ export class TripLifecycleService {
 
       // 🛡️ BLINDAGEM CTO: INTERCEPTADOR DE MORTE SÚBITA REVISADO
       const statusCriticos = ['EXPIRADO', 'SEM_MOTORISTA', 'TIMEOUT', AppTripState.CANCELADO];
-      if (statusCriticos.includes(statusReal as string)) {
-         // Correção: Buscando a variável exata do banco (createdAt)
+      if (statusCriticos.includes(statusReal as string) && !isForcedReset) {
          const dataCriacao = data.createdAt || data.criadoEm;
          const criadoEm = dataCriacao instanceof Timestamp ? dataCriacao.toDate() : new Date();
          const tempoDecorridoMs = Date.now() - criadoEm.getTime();
-         const dezMinutosMs = 10 * 60 * 1000;
+         // Aumentando a resiliência: 30 minutos (1800000 ms) antes de expirar a carga
+         const tempoLimiteMs = 30 * 60 * 1000; 
 
-         // Se tem menos de 10 minutos ou houve falha no relógio, trava no Feed.
-         if (tempoDecorridoMs < dezMinutosMs || tempoDecorridoMs < 0) {
-            console.warn(`[CTO-Log] 🛡️ ALERTA: Tentativa de expirar frete detectada. Forçando permanência no Feed.`);
+         if (tempoDecorridoMs < tempoLimiteMs || tempoDecorridoMs < 0) {
+            console.warn(`[CTO-Log] 🛡️ ALERTA: Tentativa prematura de expirar frete. Forçando permanência no Feed.`);
             statusReal = AppTripState.DISPONIVEL; 
          }
       }
@@ -86,6 +91,19 @@ export class TripLifecycleService {
         ...extras,
       });
 
+      // 🔥 INJEÇÃO CTO: Acordando a IA Operacional
+      const freightPayload = { id: freteId, ...data, status: statusReal };
+      
+      if (statusReal === AppTripState.DISPONIVEL && isForcedReset) {
+         ftiRadar.dispatch({ userId: 'system', eventType: 'DRIVER_CANCELED', data: freightPayload, timestamp: new Date().toISOString() });
+      }
+      if (statusReal === AppTripState.EM_TRANSPORTE) {
+         ftiRadar.dispatch({ userId: data.motoristaId || 'unknown', eventType: 'TRIP_STARTED', data: freightPayload, timestamp: new Date().toISOString() });
+      }
+      if (statusReal === AppTripState.ENTREGUE || statusReal === 'finalizado') {
+         ftiRadar.dispatch({ userId: data.motoristaId || 'unknown', eventType: 'TRIP_COMPLETED', data: freightPayload, timestamp: new Date().toISOString() });
+      }
+
       // GATILHO AUTOMÁTICO: Se virou DISPONIVEL, inicia busca por motoristas (Sem travar o cliente)
       if (statusReal === AppTripState.DISPONIVEL && data.dispatchStatus !== 'aberto_no_feed') {
         try {
@@ -95,7 +113,7 @@ export class TripLifecycleService {
             status: statusReal,
           } as FretePayload;
                 
-          // Dispara matching em background (não bloqueia retorno)
+          // Dispara matching em background
           dispatchQueueService.iniciarFila(fretePayload).catch((err: unknown) => 
             console.error('[CTO-Log] AUTO_DISPATCH_ERROR', err)
           );
