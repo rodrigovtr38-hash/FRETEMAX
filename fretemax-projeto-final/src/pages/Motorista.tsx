@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Motorista.tsx
-// CTO-Log: Delegação de Processamento e Tags Visuais (Imediato vs Agendado)
-// Status: Leitura Dupla de Chave + Matemática Financeira Transparente.
+// CTO-Log: Delegação de Processamento e Expurgo de Fantasmas.
+// Status: Bypass Seguro de Estado. Filtro TTL de 45m implementado.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -131,7 +131,6 @@ export default function Motorista() {
   };
 
   const normalizeFreight = useCallback((id: string, data: any): OperationalFreight => {
-    // 🔥 CTO FIX: Tratamento Universal LowerCase para garantir Match Inquebrável
     const categoriaBruta = data.veiculo || data.categoria || 'carro';
     const categoriaFormatada = categoriaBruta.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -256,8 +255,18 @@ export default function Motorista() {
     const unsubscribe = onSnapshot(freightsQuery, snapshot => {
       if (!mountedRef.current) return;
 
+      const now = Date.now();
+      const MAX_TTL_MS = 45 * 60 * 1000; // 45 minutos (Exigência do QA/CTO)
+
       let next = snapshot.docs.map(document => normalizeFreight(document.id, document.data()));
       
+      // 🔥 CTO FIX: Expurgo de Fantasmas. Elimina as cargas não-agendadas antigas.
+      next = next.filter(freight => {
+        if (freight.agendado) return true; // Cargas agendadas não expiram pelo tempo de postagem
+        const createdTime = freight.createdAt?.toMillis ? freight.createdAt.toMillis() : now;
+        return (now - createdTime) <= MAX_TTL_MS;
+      });
+
       next = next.filter(freight => freight.categoria === operationalCategory);
       next = next.filter(freight => !freight.motoristaId || freight.motoristaId === user.uid || snapshot.docs.find(d => d.id === freight.id)?.data().motoristaAtualDestaque === user.uid); 
 
@@ -274,6 +283,9 @@ export default function Motorista() {
 
   useEffect(() => {
     if (!runtimeReady || !user?.uid) { setActiveFreight(null); return; }
+    
+    // O Sistema injeta automaticamente a missão baseada no status. 
+    // Quando o status vira 'entregue', a query "mata" a missão da tela. (BYPASS DE CONTEXTO)
     const activeQuery = query(collection(db, 'fretes'), where('motoristaId', '==', user.uid), where('status', 'in', ACTIVE_STATUSES), limit(1));
     const unsubscribe = onSnapshot(activeQuery, snapshot => {
       if (!mountedRef.current) return;
@@ -364,7 +376,7 @@ export default function Motorista() {
       
       const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
       const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-      return timeB - timeA;
+      return timeB - timeA; // DESCENDENTE: Mais novos primeiro
     });
   }, [availableFreights, filtroOrigem, filtroDestino, driverData?.modoRetorno, driverData?.destinoRetorno]);
 
@@ -497,7 +509,6 @@ export default function Motorista() {
                       transition={{ duration: 0.3 }}
                       className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden transition-all hover:border-slate-700 mb-6"
                     >
-                      {/* 🔥 CTO FIX: Tags Dinâmicas (Urgente vs Agendado vs Imediato) */}
                       {freight.prioridade ? (
                          <div className="absolute top-0 right-0 bg-gradient-to-r from-red-600 to-orange-500 px-4 py-1.5 rounded-bl-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-1.5 shadow-lg">
                             <Flame size={12} className="animate-pulse"/> Urgente
@@ -512,7 +523,6 @@ export default function Motorista() {
                          </div>
                       )}
 
-                      {/* 🔥 CTO FIX: Adicionado Visualização Financeira Transparente */}
                       <div className="flex justify-between items-start mb-6 pt-2">
                          <div className="flex flex-col gap-1.5">
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
@@ -547,7 +557,6 @@ export default function Motorista() {
                          </div>
                       </div>
 
-                      {/* 🔥 CTO FIX: Removida a categoria repetida, adicionado o número de Entregas */}
                       <div className="grid grid-cols-3 gap-2 mb-6">
                         <div className="bg-slate-900 rounded-xl p-3 text-center border border-slate-800">
                           <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Entregas</p>
@@ -614,7 +623,6 @@ export default function Motorista() {
               onSelectFreight={handleSelectFreight} 
               onCloseFreight={handleCloseFreight} 
               onAcceptFreight={handleAcceptFreight} 
-              onRejectFreight={handleRejectFreight} 
             />
           </div>
         </>
