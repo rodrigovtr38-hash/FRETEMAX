@@ -1,10 +1,10 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
-// CTO-Log: Telemetria Live e Tratamento de Exceções (Cancelamento do Motorista).
-// Status: Certificado. Escrita em Batch para evitar anomalias de conexão.
+// CTO-Log: Telemetria Live e Tratamento de Exceções.
+// Status: Nova função de Injeção de Chave PIX adicionada.
 // =========================================================
 
-import { writeBatch, doc } from 'firebase/firestore';
+import { writeBatch, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { firebaseRealtimeService } from './firebaseRealtimeService';
 import { locationRealtimeService } from './locationRealtimeService';
@@ -115,7 +115,6 @@ class DispatchRealtimeService {
     }
   }
 
-  // 🔥 CTO FIX: Válvula de Escape (Motorista Aborta a Missão)
   async cancelarViagemMotorista(driverId: string, freteId: string, motivo: string) {
     try {
       const batch = writeBatch(db);
@@ -134,11 +133,11 @@ class DispatchRealtimeService {
 
       // 2. Devolve a carga para o Feed e limpa os dados do motorista atual
       batch.update(freteRef, {
-        status: AppTripState.DISPONIVEL, // Volta a aparecer no radar de todos
+        status: AppTripState.DISPONIVEL,
         motoristaId: null,
         motoristaNome: null,
         motoristaZap: null,
-        alertaInsucesso: true, // Acende o alerta na tela do Admin
+        alertaInsucesso: true,
         motivoCancelamento: motivo,
         canceladoPorMotoristaEm: timestamp,
         atualizadoEm: timestamp,
@@ -217,6 +216,19 @@ class DispatchRealtimeService {
       });
     } catch (error) {
       console.error('ERRO STATUS TRIP:', error);
+    }
+  }
+
+  // 🔥 CTO FIX: Salvar Chave PIX direto no banco para o Painel Admin ler
+  async salvarChavePix(freteId: string, chavePix: string) {
+    try {
+      await updateDoc(doc(db, 'fretes', freteId), {
+        chavePixMotorista: chavePix,
+        pixEnviadoEm: Date.now()
+      });
+    } catch (error) {
+      console.error('ERRO AO SALVAR PIX:', error);
+      throw error;
     }
   }
 }
