@@ -1,7 +1,6 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverRadar.tsx
-// CTO-Log: Chave de Ignição e Modo Retorno.
-// Status: Regra de negócios validada. UI do botão de Power Uber-style.
+// CTO-Log: Auditoria finalizada. Código intacto e higienizado para manter estabilidade.
 // =========================================================
 
 import { useState } from 'react';
@@ -66,8 +65,6 @@ export default function DriverRadar({ isOnline, setIsOnline, user, driver }: Dri
 
   return (
     <div className="mx-auto mt-6 w-full max-w-7xl px-4 animate-in fade-in duration-500">
-
-      {/* BOTÃO CENTRAL POWER (ESTILO UBER) */}
       <div className="flex flex-col items-center justify-center py-10 md:py-16">
         <button
           onClick={() => setIsOnline(!isOnline)}
@@ -103,7 +100,6 @@ export default function DriverRadar({ isOnline, setIsOnline, user, driver }: Dri
         </div>
       </div>
 
-      {/* MODO RETORNO */}
       {isOnline && (
         <div className="mt-4 w-full rounded-[2rem] border border-blue-500/20 bg-blue-500/5 p-6 md:p-8 backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-6 shadow-[0_10px_30px_rgba(59,130,246,0.05)] border-dashed">
           <div className="flex items-start gap-4">
@@ -146,7 +142,6 @@ export default function DriverRadar({ isOnline, setIsOnline, user, driver }: Dri
         </div>
       )}
 
-      {/* MURAL DE VALORES FRETOGO (APENAS QUANDO OFFLINE) */}
       {!isOnline && (
         <div className="mt-4 rounded-[2.5rem] border border-slate-800 bg-slate-950/50 p-6 md:p-10">
           <div className="flex items-center justify-between mb-8">
@@ -192,7 +187,6 @@ export default function DriverRadar({ isOnline, setIsOnline, user, driver }: Dri
         </div>
       )}
 
-      {/* MODAL RETORNO */}
       {isRetornoModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="w-full max-w-sm rounded-[2.5rem] border border-blue-500/30 bg-slate-900 p-8 shadow-2xl relative">
