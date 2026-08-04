@@ -1,12 +1,14 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
 // CTO-Log: Vitrine Operacional Refatorada.
-// - Filtro Anti-Fantasma (TTL 10 min) injetado.
-// - Tags de Engenharia de Valor (Pagamento Garantido, Premium) adicionadas.
+// - Remoção total do botão problemático (Ver Rota/Scale).
+// - Conexão ativa com dispatchRealtimeService para Telemetria.
+// - Injeção de Renda Bruta (Conversão Psicológica).
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertOctagon, CheckCircle2, Flame, Package, X, Zap, ShieldCheck, Scale, Ruler } from 'lucide-react';
+import { AlertOctagon, CheckCircle2, Flame, Package, Zap, ShieldCheck, Ruler, ThumbsUp, Star, Share2 } from 'lucide-react';
+import { dispatchRealtimeService } from '../../../services/dispatchRealtimeService';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
 interface AvailableFreightsProps {
@@ -26,7 +28,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   bitrem: 'Bitrem',
 };
 
-// Tempo máximo que uma carga pode ficar na tela (10 minutos)
 const FREIGHT_TTL_MS = 10 * 60 * 1000; 
 
 export default function AvailableFreights({
@@ -37,46 +38,58 @@ export default function AvailableFreights({
 }: AvailableFreightsProps) {
   const prevFreightsLength = useRef(freights.length);
   const [tick, setTick] = useState(0);
+  const viewedFreights = useRef<Set<string>>(new Set());
 
-  // Relógio interno para forçar re-render e limpar "Fantasmas" a cada 30s
   useEffect(() => {
     if (!isOnline) return;
     const interval = setInterval(() => setTick(t => t + 1), 30000);
     return () => clearInterval(interval);
   }, [isOnline]);
 
-  // Gatilho Sonoro de Nova Carga
   useEffect(() => {
-    if (isOnline && freights.length > prevFreightsLength.current) {
-      try {
-        const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        beep.play().catch(() => console.warn('[UX] Bloqueio nativo de autoplay evitado.'));
-        
-        if (Notification.permission === 'granted') {
-          new Notification('Fretogo: Carga na Mesa!', {
-            body: 'Toque para visualizar os detalhes e garantir o frete.',
-            icon: '/icon-192.png'
-          });
+    if (isOnline && freights.length > 0) {
+      // Gatilho de Telemetria B2B: Conta 1 Visualização no Banco do Cliente
+      freights.forEach(freight => {
+        if (!viewedFreights.current.has(freight.id)) {
+          viewedFreights.current.add(freight.id);
+          dispatchRealtimeService.registrarVisualizacao(freight.id);
         }
-      } catch (e) {
-        console.error('[UX_ERROR] Falha no alerta sonoro', e);
+      });
+
+      if (freights.length > prevFreightsLength.current) {
+        try {
+          const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+          beep.play().catch(() => console.warn('[UX] Bloqueio nativo evitado.'));
+          
+          if (Notification.permission === 'granted') {
+            new Notification('Fretogo: Carga na Mesa!', {
+              body: 'Toque para visualizar os detalhes e garantir o frete.',
+              icon: '/icon-192.png'
+            });
+          }
+        } catch (e) {}
       }
     }
     prevFreightsLength.current = freights.length;
   }, [freights, isOnline]);
 
-  // 🔥 CTO FIX: Expurgo de Cargas Fantasmas (Filtro Client-Side)
   const now = Date.now();
   const validFreights = freights.filter(freight => {
-    // Se a carga não tem timestamp, permite. Se tem, valida se passou de 10 min.
+    if (freight.agendado) return true;
     const timestamp = freight.criadoEm || freight.atualizadoEm || now;
     return (now - timestamp) < FREIGHT_TTL_MS;
   });
 
+  const handleSocialAction = (e: React.MouseEvent, action: string, freightId: string) => {
+    e.stopPropagation();
+    if (action === 'interesse') {
+      dispatchRealtimeService.registrarInteresse(freightId);
+    }
+  };
+
   return (
     <section className="relative w-full pb-20 animate-in fade-in duration-500">
       
-      {/* HEADER DA SEÇÃO */}
       <div className="mb-8 px-2 flex items-end justify-between">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-white uppercase italic drop-shadow-md">
@@ -94,17 +107,15 @@ export default function AvailableFreights({
         )}
       </div>
 
-      {/* ESTADO: CARREGANDO */}
       {isOnline && loading && (
         <div className="py-16 text-center bg-slate-900/40 rounded-[2.5rem] border border-cyan-500/10 backdrop-blur-sm">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent shadow-[0_0_20px_rgba(6,182,212,0.5)]" />
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
           <p className="mt-6 text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 animate-pulse">
             Sincronizando Torre...
           </p>
         </div>
       )}
 
-      {/* ESTADO: NENHUMA CARGA */}
       {isOnline && !loading && validFreights.length === 0 && (
         <div className="rounded-[2.5rem] border border-dashed border-white/10 bg-slate-900/20 p-16 text-center backdrop-blur-sm">
           <Package className="mx-auto h-14 w-14 text-slate-600 mb-5 animate-pulse" />
@@ -115,11 +126,12 @@ export default function AvailableFreights({
         </div>
       )}
 
-      {/* GRID DE CARDS */}
       {isOnline && validFreights.length > 0 && (
         <div className="grid gap-5 sm:grid-cols-1 lg:grid-cols-2">
           {validFreights.map((freight) => {
             const isHot = freight.prioridade || (freight.valorMotorista && freight.valorMotorista > 150);
+            const km = freight.distanciaTotalKm || freight.distanciaEntregaKm || 1;
+            const ganhoPorKm = (freight.valorMotorista || 0) / km;
 
             return (
               <div
@@ -132,12 +144,10 @@ export default function AvailableFreights({
                   }
                 `}
               >
-                {/* BARRA DE ESCASSEZ PSICOLÓGICA */}
                 <div className="absolute top-0 left-0 h-1.5 bg-slate-950 w-full overflow-hidden">
-                   <div className={`h-full w-full animate-[shrink_20s_linear] origin-left ${isHot ? 'bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.8)]' : 'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)]'}`} />
+                   <div className={`h-full w-full animate-[shrink_20s_linear] origin-left ${isHot ? 'bg-orange-500' : 'bg-cyan-500'}`} />
                 </div>
 
-                {/* HEADER DO CARD */}
                 <div className="flex items-start justify-between mb-5 mt-2">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
@@ -157,10 +167,9 @@ export default function AvailableFreights({
                   </div>
                 </div>
 
-                {/* ROTA COMPACTA */}
                 <div className="space-y-3 mb-6 bg-slate-950/50 p-4 rounded-2xl border border-white/5 relative">
                   <div className="flex items-start gap-3">
-                    <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-cyan-500 flex-shrink-0 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+                    <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-cyan-500 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Coleta</p>
                       <p className="text-sm font-bold text-white truncate mt-0.5">{freight.enderecoColetaTexto}</p>
@@ -170,7 +179,7 @@ export default function AvailableFreights({
                      <AlertOctagon size={14} className="text-slate-700" />
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-emerald-500 flex-shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                    <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Destino</p>
                       <p className="text-sm font-bold text-white truncate mt-0.5">{freight.enderecoEntregaTexto}</p>
@@ -178,12 +187,10 @@ export default function AvailableFreights({
                   </div>
                 </div>
 
-                {/* MÉTRICAS ENRIQUECIDAS */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
-                    <Scale size={14} className="text-slate-400 mb-1" />
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Peso Bruto</p>
-                    <p className="text-xs font-black text-white mt-1">{(freight.pesoKg || 0).toFixed(0)} kg</p>
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center shadow-inner">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Renda Bruta</p>
+                    <p className="text-xs font-black text-emerald-400">R$ {ganhoPorKm.toFixed(2)}/km</p>
                   </div>
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
                     <Ruler size={14} className="text-slate-400 mb-1" />
@@ -197,7 +204,21 @@ export default function AvailableFreights({
                   </div>
                 </div>
 
-                {/* AÇÕES RAPIDAS */}
+                <div className="flex gap-2 border-t border-slate-800/50 pt-5 mb-5">
+                   <button onClick={(e) => handleSocialAction(e, 'interesse', freight.id)} className="flex-1 flex flex-col items-center justify-center gap-1.5 text-slate-500 hover:text-blue-400 transition-colors">
+                      <ThumbsUp size={16}/>
+                      <span className="text-[8px] font-black uppercase tracking-widest">Interesse</span>
+                   </button>
+                   <button onClick={(e) => { e.stopPropagation(); }} className="flex-1 flex flex-col items-center justify-center gap-1.5 text-slate-500 hover:text-amber-400 transition-colors">
+                      <Star size={16}/>
+                      <span className="text-[8px] font-black uppercase tracking-widest">Salvar</span>
+                   </button>
+                   <button onClick={(e) => { e.stopPropagation(); }} className="flex-1 flex flex-col items-center justify-center gap-1.5 text-slate-500 hover:text-cyan-400 transition-colors">
+                      <Share2 size={16}/>
+                      <span className="text-[8px] font-black uppercase tracking-widest">Enviar</span>
+                   </button>
+                </div>
+
                 <div className="flex gap-3">
                   <button
                     onClick={(e) => {
@@ -216,7 +237,6 @@ export default function AvailableFreights({
                   </button>
                 </div>
 
-                {/* TAG ABSOLUTA DE PRIORIDADE */}
                 {isHot && (
                   <div className="absolute top-3 right-3 pointer-events-none">
                     <div className="bg-orange-500/10 border border-orange-500/30 text-orange-400 text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-md">
