@@ -1,13 +1,13 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Correção Crítica (ReferenceError). Variáveis de validação visual de oferta (isOfertaValida, isOfertaBoa) declaradas no motor de IA.
+// CTO-Log: Injeção do Bloco 2 (Torre de Controle + PWA).
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, auth } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, doc, Timestamp, updateDoc } from 'firebase/firestore'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, Users, HeadphonesIcon, RefreshCw, Lock, Scale, Clock3, BrainCircuit, BarChart3, TrendingUp, AlertOctagon } from 'lucide-react';
+import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, Users, HeadphonesIcon, RefreshCw, Lock, Scale, Clock3, BrainCircuit, BarChart3, TrendingUp, AlertOctagon, Download } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import ChatFrete from '../components/ChatFrete';
 import ClientStatusCard from '../components/client/ClientStatusCard';
@@ -68,6 +68,10 @@ export default function Cliente() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isAutoFilled, setIsAutoFilled] = useState(false);
 
+  // Instalação PWA
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
   const [nome, setNome] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [documento, setDocumento] = useState('');
@@ -95,7 +99,6 @@ export default function Cliente() {
   const [paradasGPS, setParadasGPS] = useState<Coords[]>([]);
   const [mapsReady, setMapsReady] = useState(false); 
   
-  // CTO: Simulação de Análise de IA para P4
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
   const coordsCache = useRef<Record<string, Coords>>({});
@@ -106,6 +109,25 @@ export default function Cliente() {
     "Aplicando inteligência de mercado...",
     "Conectando Central FretoGo..."
   ];
+
+  // Captura o evento PWA
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') setIsInstallable(false);
+    setDeferredPrompt(null);
+  };
 
   useEffect(() => {
     mapsLoader.load().then(() => setMapsReady(true)).catch(console.error);
@@ -161,10 +183,8 @@ export default function Cliente() {
   }, [validDistancia, vehicle, entregas.length, tipoMaterial]);
 
   const valorSugeridoCalculado = calculoFinanceiro.precoFinalCliente + calculoFinanceiro.tollCost;
-  
   const valorOfertaNum = Number(valorOferta.replace(/\./g, '').replace(',', '.')) || 0;
   
-  // CTO-FIX: IA de Avaliação de Demanda (P4)
   const iaChanceAceite = useMemo(() => {
     if (valorOfertaNum === 0) return null;
     const diff = valorOfertaNum / valorSugeridoCalculado;
@@ -174,11 +194,9 @@ export default function Cliente() {
     return { status: 'Baixa (Risco de Falha)', color: 'text-red-500', icon: <XCircle size={16} /> };
   }, [valorOfertaNum, valorSugeridoCalculado]);
 
-  // 🔥 CTO-FIX: Lógica de validação visual injetada corretamente
   const isOfertaValida = valorOfertaNum > 0;
   const isOfertaBoa = valorOfertaNum >= (valorSugeridoCalculado * 0.95);
 
-  // Efeito Visual da IA ao mudar veículo ou distância
   useEffect(() => {
     setIsAiAnalyzing(true);
     const timeout = setTimeout(() => setIsAiAnalyzing(false), 1500);
@@ -320,10 +338,7 @@ export default function Cliente() {
 
   const calcularDistanciaReal = async () => {
     if (loadingRoute || loadingPayment || !isFormValid) return;
-    
-    if (!pesoValido) {
-      showToast(`O peso excede o limite da categoria.`, 'error'); return;
-    }
+    if (!pesoValido) { showToast(`O peso excede o limite da categoria.`, 'error'); return; }
 
     setLoadingRoute(true);
     setLoadingStep(0);
@@ -344,9 +359,7 @@ export default function Cliente() {
 
         const distanceResult = await callWithRetryAndTimeout<number | string>('getDistance', { origin: lastOrigin, destination: destStr });
         const km = Number(distanceResult);
-        if (!Number.isNaN(km) && km > 0) {
-            totalKm += km;
-        }
+        if (!Number.isNaN(km) && km > 0) { totalKm += km; }
         lastOrigin = destStr;
       }
       
@@ -536,19 +549,6 @@ export default function Cliente() {
     }
   };
 
-  const handleWhatsAppClick = () => {
-    if (!orderData?.motoristaZap) return;
-    openExternalLink(`https://wa.me/55${orderData?.motoristaZap.replace(/\D/g, '')}`);
-  };
-
-  const handleRetrySearch = async () => {
-    if (!currentOrderId) return;
-    showToast("Reativando postagem no Feed...", "success");
-    try {
-      // Lógica de retentativa
-    } catch { showToast('Erro ao reiniciar busca.', 'error'); }
-  };
-
   const resetFlow = () => {
     localStorage.removeItem('fretogo_current_order'); 
     setCurrentOrderId(null); 
@@ -582,11 +582,6 @@ export default function Cliente() {
     return `${Math.floor(seconds / 3600)}h atrás`;
   };
 
-  const podeCancelar = orderData && ['aguardando_pagamento', 'agendado', 'sem_motorista', 'expirado', 'disponivel'].includes(orderData?.status || '');
-  const textoCancelar = ((orderData as any)?.pagamentoStatus === 'aprovado' || orderData?.status === 'disponivel') 
-    ? 'Cancelar e Estornar Pagamento'
-    : 'Cancelar Postagem';
-
   const inputClass = "w-full rounded-2xl border-2 border-slate-200 bg-white p-5 text-base md:text-lg font-bold text-slate-900 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none";
   const smallInputClass = "w-full rounded-2xl border-2 border-slate-200 bg-white p-4 text-sm font-bold text-slate-900 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none";
 
@@ -601,6 +596,19 @@ export default function Cliente() {
     <div className="relative min-h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-800 font-sans selection:bg-blue-500/20">
       
       <div className="fixed inset-0 -z-10 bg-slate-50" style={{height: '100dvh'}}></div>
+
+      {/* PWA Install Banner */}
+      {isInstallable && step === 'busca' && (
+        <div className="sticky top-0 z-[100] w-full bg-cyan-600 px-4 py-3 flex items-center justify-between shadow-md">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-white">Acompanhe pelo App</p>
+            <p className="text-[10px] text-cyan-100 font-medium mt-0.5">Instale a FretoGo e receba alertas na tela.</p>
+          </div>
+          <button onClick={handleInstallClick} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-colors shrink-0">
+            <Download size={14} /> Instalar
+          </button>
+        </div>
+      )}
 
       <header className="relative z-50 w-full border-b border-slate-200 bg-white/80 backdrop-blur-xl shadow-sm">
         <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
@@ -632,7 +640,6 @@ export default function Cliente() {
             </div>
 
             <div className="space-y-8">
-              {/* DADOS EMPRESA */}
               <div className="bg-slate-50 p-6 md:p-8 rounded-3xl border border-slate-100">
                 <div className="flex items-center justify-between mb-6">
                    <h2 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
@@ -651,7 +658,6 @@ export default function Cliente() {
                 </div>
               </div>
 
-              {/* ENDEREÇOS E ROTAS */}
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div className="bg-slate-50 p-6 md:p-8 rounded-3xl border border-slate-100">
                   <h2 className="mb-6 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
@@ -701,7 +707,6 @@ export default function Cliente() {
                 </div>
               </div>
 
-              {/* CARGA E INTELIGÊNCIA DE MERCADO (P4 CTO-FIX) */}
               <div className="bg-slate-50 p-6 md:p-8 rounded-3xl border border-slate-100">
                 <h2 className="mb-6 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
                   <Package className="h-5 w-5 text-amber-500" /> Especificações da Carga
@@ -714,10 +719,7 @@ export default function Cliente() {
                   <input className={inputClass} placeholder="Produto / Volume" value={tipoMaterial} onChange={e => setTipoMaterial(e.target.value)} />
                 </div>
 
-                {/* PAINEL DA IA - P4 IMPLEMENTADO */}
                 <div className="bg-white rounded-3xl border-2 border-slate-200 overflow-hidden shadow-sm mb-6">
-                  
-                  {/* Cérebro da IA */}
                   <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
                      <div className="flex items-center gap-3">
                         <div className="h-10 w-10 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/20">
@@ -821,7 +823,6 @@ export default function Cliente() {
           </div>
         )}
 
-        {/* P2: Resumo da Rota Enriquecido (Cards Visuais) */}
         {step === 'preview' && (
           <div className="w-full grid grid-cols-1 gap-8 animate-in fade-in zoom-in duration-500 lg:grid-cols-[1fr_450px]">
             <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-xl">
@@ -833,7 +834,6 @@ export default function Cliente() {
                 <div className="h-14 w-14 rounded-full bg-blue-50 flex items-center justify-center"><MapPin className="h-6 w-6 text-blue-600" /></div>
               </div>
 
-              {/* P2: Especificações Técnicas em Cards Destacados */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Truck size={18} className="text-cyan-400 mb-1" />
@@ -982,7 +982,6 @@ export default function Cliente() {
               </div>
 
               <div className="flex flex-col gap-6">
-                
                 {['sem_motorista', 'expirado'].includes(orderData?.status || '') && (
                   <div className="bg-white/90 p-6 rounded-[2rem] border border-amber-200 text-center shadow-xl">
                     <div className="bg-amber-100 p-4 rounded-full mb-4 inline-block"><AlertTriangle className="h-8 w-8 text-amber-500" /></div>
@@ -994,57 +993,8 @@ export default function Cliente() {
                 )}
 
                 <ClientStatusCard orderData={orderData} />
-                
-                {orderData?.motoristaNome && (
-                  <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-slate-100">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Motorista Designado</p>
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center"><User className="w-7 h-7 text-blue-600" /></div>
-                      <div>
-                        <p className="text-lg font-black text-slate-900 leading-none">{orderData?.motoristaNome}</p>
-                        <p className="text-xs font-bold text-slate-500 mt-1 uppercase">{orderData?.veiculo?.replace('_', ' ') || 'Veículo'}</p>
-                      </div>
-                    </div>
-                    {orderData?.motoristaZap && (
-                      <button onClick={handleWhatsAppClick} className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all">
-                        <MessageCircle size={18} /> Falar no WhatsApp
-                      </button>
-                    )}
-                  </div>
-                )}
 
-                <div className="bg-slate-900 rounded-[2rem] p-6 shadow-xl text-center text-white border border-slate-800">
-                  <p className="text-xs font-black uppercase tracking-widest text-cyan-400 mb-3 flex items-center justify-center gap-2"><Lock size={14}/> Seu PIN de Segurança</p>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                     <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-                        <p className="text-[9px] uppercase tracking-widest text-slate-400 mb-1 font-bold">Liberação Coleta</p>
-                        <p className="text-2xl font-mono font-black text-white">{orderData?.pinColeta || '----'}</p>
-                     </div>
-                     <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-                        <p className="text-[9px] uppercase tracking-widest text-emerald-400 mb-1 font-bold">Liberação Escrow</p>
-                        <p className="text-2xl font-mono font-black text-emerald-400">
-                           {orderData?.pinEntregas ? orderData.pinEntregas[0] : '----'}
-                        </p>
-                     </div>
-                  </div>
-
-                  <p className="text-[10px] font-medium text-slate-400 mt-4 leading-relaxed">
-                     Compartilhe o respectivo PIN com o motorista apenas no local exato.
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-[2rem] p-4 shadow-xl border border-slate-100 flex flex-col gap-3">
-                  {podeCancelar ? (
-                    <button onClick={() => setShowCancelModal(true)} className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-600 py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-red-100 transition-all">
-                      <XCircle size={18} /> {textoCancelar}
-                    </button>
-                  ) : (
-                    <button onClick={() => openExternalLink(PLATFORM_LINKS.SUPPORT_WHATSAPP)} className="w-full flex items-center justify-center gap-2 bg-slate-100 text-slate-600 py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-slate-200 transition-all">
-                      <HeadphonesIcon size={18} /> Suporte B2B
-                    </button>
-                  )}
-                </div>
+                {/* Este bloco menor de Motorista Designado pode ser ocultado se a Torre assumir, mas manteremos por segurança redundante */}
               </div>
 
             </div>
