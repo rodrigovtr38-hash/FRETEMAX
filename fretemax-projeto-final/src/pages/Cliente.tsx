@@ -1,6 +1,6 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Integração Real-Time Tracking, P2 (Dados Visuais) e P4 (UI da IA).
+// CTO-Log: Correção Crítica (ReferenceError). Variáveis de validação visual de oferta (isOfertaValida, isOfertaBoa) declaradas no motor de IA.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -173,6 +173,10 @@ export default function Cliente() {
     if (diff >= 0.85) return { status: 'Média (Pode Demorar)', color: 'text-amber-500', icon: <AlertTriangle size={16} /> };
     return { status: 'Baixa (Risco de Falha)', color: 'text-red-500', icon: <XCircle size={16} /> };
   }, [valorOfertaNum, valorSugeridoCalculado]);
+
+  // 🔥 CTO-FIX: Lógica de validação visual injetada corretamente
+  const isOfertaValida = valorOfertaNum > 0;
+  const isOfertaBoa = valorOfertaNum >= (valorSugeridoCalculado * 0.95);
 
   // Efeito Visual da IA ao mudar veículo ou distância
   useEffect(() => {
