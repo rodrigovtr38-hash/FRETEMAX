@@ -21,9 +21,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
   const paradaAtualIndex = orderData?.paradaAtualIndex || 0;
   const multiplasEntregas = orderData?.multiplasEntregas || false;
 
-  // =========================================================
-  // GATILHO VISUAL DO FEED (15 MINUTOS)
-  // =========================================================
   const TEMPO_FEED_SEGUNDOS = 15 * 60; // 15 minutos
   const [timeLeft, setTimeLeft] = useState(TEMPO_FEED_SEGUNDOS);
 
@@ -34,7 +31,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
         setTimeLeft((prev) => prev - 1);
       }, 1000);
     } else if (status !== 'disponivel') {
-      // Reseta ou pausa se mudar de status
       setTimeLeft(TEMPO_FEED_SEGUNDOS);
     }
     return () => clearInterval(interval);
@@ -46,9 +42,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // =========================================================
-  // TRATAMENTO DE STATUS (SEMÁFORO DE TELEMETRIA)
-  // =========================================================
   let safeStatus = 'Sincronizando operação...';
   let statusColor = 'text-cyan-400';
   let bgColor = 'bg-cyan-500/10 border-cyan-500/30';
@@ -72,8 +65,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
 
   return (
     <div className="rounded-[2.5rem] border border-white/10 bg-slate-900/80 p-6 md:p-8 shadow-2xl backdrop-blur-xl animate-in fade-in duration-300">
-
-      {/* HEADER DE STATUS & RELÓGIO */}
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className={`p-3.5 rounded-[1.5rem] border ${bgColor}`}>
@@ -93,7 +84,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
           </div>
         </div>
 
-        {/* RELÓGIO VISUAL (Aparece apenas quando a carga está no Feed) */}
         {status === 'disponivel' && (
           <div className="flex items-center gap-3 bg-slate-950/80 border border-cyan-500/20 px-4 py-2.5 rounded-2xl">
             <Timer className="text-cyan-400 animate-pulse" size={20} />
@@ -105,7 +95,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
         )}
       </div>
 
-      {/* UPSELL / RETENÇÃO */}
       {showWarning && (
         <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5 flex items-start gap-4">
            <TrendingUp className="text-amber-400 shrink-0 mt-0.5" size={20} />
@@ -118,10 +107,7 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
         </div>
       )}
 
-      {/* DETALHES OPERACIONAIS */}
       <div className="space-y-4">
-
-        {/* MOTORISTA */}
         <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-4 flex items-center justify-between transition-colors hover:bg-slate-950/80">
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 shrink-0">
@@ -136,7 +122,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
           </div>
         </div>
 
-        {/* VEÍCULO */}
         <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-4 flex items-center gap-3 transition-colors hover:bg-slate-950/80">
           <div className="p-2.5 bg-green-500/10 rounded-xl text-green-400 shrink-0">
             <Truck size={20} />
@@ -149,7 +134,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
           </div>
         </div>
 
-        {/* ROTA E FINANCEIRO */}
         <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-4 flex items-center justify-between transition-colors hover:bg-slate-950/80">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-yellow-500/10 rounded-xl text-yellow-400 shrink-0">
@@ -166,7 +150,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
           </div>
         </div>
 
-        {/* PINS DE SEGURANÇA BANCÁRIA */}
         {(pinColeta || (pinEntregas && pinEntregas.length > 0)) && (
           <div className="rounded-[1.5rem] border border-cyan-500/30 bg-cyan-950/30 p-5 mt-6 relative overflow-hidden shadow-inner">
             <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
