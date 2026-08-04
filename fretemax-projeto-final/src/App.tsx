@@ -1,169 +1,433 @@
 // =========================================================
-// NOME DO ARQUIVO: src/App.tsx
-// CTO-Log: Sprint 1 - Injeção do DriverProvider corrigida na topologia de Rotas.
-// O Motorista agora está corretamente envelopado pelo seu Contexto nativo.
+// NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
+// CTO-Log: Correção da Validação do PIN de Entrega (Singular/Plural)
+// Status: Loop de validação resolvido. Failsafe visual de teste implementado.
 // =========================================================
 
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { auth, db } from '../firebase';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { LockKeyhole, ShieldCheck, DollarSign, CheckCircle2, ArrowRight, AlertTriangle, Map, Navigation } from 'lucide-react';
+import MapaCliente from '../components/MapaCliente';
+import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 
-import ErrorBoundary from './components/ErrorBoundary';
-import AppShell from './layouts/AppShell';
+interface DriverActiveTripProps {
+  freteId?: string;
+}
 
-import Home from './pages/Home';
-import Cliente from './pages/Cliente';
-import Motorista from './pages/Motorista';
-import Admin from './pages/Admin';
+export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
+  const [frete, setFrete] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Modais
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isNavModalOpen, setIsNavModalOpen] = useState(false);
+  const [navDestination, setNavDestination] = useState<{lat: number, lng: number} | null>(null);
 
-import { ClientProvider } from './context/ClientContext';
-import { DriverProvider } from './context/DriverContext'; // 🔥 CTO FIX: Importação do Provedor do Motorista
+  const [pinValue, setPinValue] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+  
+  // Controle do PIX e Sucesso
+  const [successMode, setSuccessMode] = useState(false);
+  const [pixValue, setPixValue] = useState('');
+  const [pixLoading, setPixLoading] = useState(false);
 
-// =========================================================
-// INJEÇÃO DA INTELIGÊNCIA ARTIFICIAL (FTI)
-// =========================================================
-import FTIWidget from './core/ai/components/FTIWidget';
-
-/* =========================================================
-   RUNTIME TYPES
-========================================================= */
-type AppRuntimeStatus = 'booting' | 'ready' | 'error';
-
-/* =========================================================
-   APP COMPONENT
-========================================================= */
-export default function App() {
-  const [runtimeStatus, setRuntimeStatus] = useState<AppRuntimeStatus>('booting');
-
-  /* =====================================================
-     BOOTSTRAP GATE (Proteção de Inicialização)
-  ===================================================== */
   useEffect(() => {
-    let mounted = true;
-
-    async function initializeCore() {
-      try {
-        // Aguarda a estabilização do DOM antes de carregar ouvintes pesados do Firebase
-        await Promise.resolve();
-
-        if (!mounted) return;
-        
-        setRuntimeStatus('ready');
-        console.log('✅ CORE runtime da FretoGo Network estabilizado.');
-      } catch (error) {
-        console.error('❌ Erro no CORE runtime:', error);
-        if (mounted) setRuntimeStatus('error');
+    if (!freteId) { setLoading(false); return; }
+    const unsubscribe = onSnapshot(doc(db, 'fretes', freteId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setFrete({ id: docSnap.id, ...data });
       }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, [freteId]);
+
+  if (loading) return <div className="flex h-64 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5"><div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div></div>;
+  if (!frete) return null;
+
+  const valorA_Receber = Number(frete.valorLiquidoMotorista || frete.valorMotorista || 0).toFixed(2).replace('.', ',');
+
+  const handleFinalizeWithPix = async () => {
+    if (!pixValue.trim()) {
+      setPinError('Informe a chave PIX para receber o repasse.');
+      return;
     }
+    setPixLoading(true);
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+      
+      // 1. Salva a Chave PIX no banco
+      await dispatchRealtimeService.salvarChavePix(frete.id, pixValue.trim());
+      
+      // 2. Finaliza a viagem. Isso mudará o status para 'entregue' e limpará o motorista.
+      await dispatchRealtimeService.concluirViagemELiberarMotorista(currentUser.uid, frete.id);
+      
+    } catch(e) {
+      setPinError('Erro ao registrar PIX. Verifique a conexão.');
+      setPixLoading(false);
+    }
+  };
 
-    void initializeCore();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const isReady = useMemo(() => runtimeStatus === 'ready', [runtimeStatus]);
-
-  /* =====================================================
-     FALLBACKS (Telas de Carregamento/Erro Crítico)
-  ===================================================== */
-  if (runtimeStatus === 'booting') {
+  // ============================================================================
+  // TELA DE SUCESSO PÓS-PIN FINAL (COLETA DE PIX OBRIGATÓRIA ANTES DO UNMOUNT)
+  // ============================================================================
+  if (successMode) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-slate-900 text-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-full border-4 border-slate-700 border-t-blue-500 animate-spin" />
-          <p className="text-sm font-bold tracking-widest uppercase text-slate-400">
-            Inicializando FretoGo Network...
-          </p>
-        </div>
-      </div>
-    );
-  }
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2rem] border border-emerald-500/30 bg-slate-900 shadow-[0_0_50px_rgba(16,185,129,0.1)] p-8 md:p-12 text-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.15),transparent_70%)]"></div>
+        <div className="relative z-10 flex flex-col items-center justify-center">
+          <div className="w-24 h-24 rounded-full bg-emerald-500/20 flex items-center justify-center mb-6 border-2 border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.4)]">
+            <CheckCircle2 size={48} className="text-emerald-400" />
+          </div>
+          <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter mb-2">PIN Validado!</h2>
+          <p className="text-slate-400 font-medium mb-8">O cliente confirmou a entrega. Preencha seu PIX.</p>
 
-  if (runtimeStatus === 'error') {
-    return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-slate-900 text-red-500 p-6 text-center">
-        <div>
-          <h1 className="text-2xl font-black mb-4 uppercase tracking-wider">Erro de Inicialização</h1>
-          <p className="text-slate-400 font-medium">Ocorreu uma falha crítica no bootstrap do sistema.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isReady) return null;
-
-  /* =====================================================
-     APP ROUTER (Topologia da FretoGo Network)
-  ===================================================== */
-  return (
-    <BrowserRouter>
-      <ErrorBoundary>
-        <AppShell>
-          <Routes>
-
-            {/* ======================================================
-                PORTAL UNIFICADO (Landing Page B2B/B2C)
-            ====================================================== */}
-            <Route path="/" element={<Home />} />
-
-            {/* ======================================================
-                MÓDULO: EMBARCADOR (Empresas / B2B)
-            ====================================================== */}
-            <Route 
-              path="/cliente" 
-              element={
-                <ClientProvider>
-                  <Cliente />
-                </ClientProvider>
-              } 
-            />
-
-            {/* ======================================================
-                MÓDULO: TRANSPORTADOR (Motoristas / Agregados)
-                🔥 CTO FIX: Rota do Motorista agora envelopada pelo DriverProvider
-            ====================================================== */}
-            <Route 
-              path="/motorista" 
-              element={
-                <DriverProvider>
-                  <Motorista />
-                </DriverProvider>
-              } 
-            />
-
-            {/* ======================================================
-                MÓDULO: TORRE DE CONTROLE (Admin)
-            ====================================================== */}
-            <Route path="/admin" element={<Admin />} />
-
-            {/* ======================================================
-                REDIRECIONAMENTOS DE SEO E LINKS ANTIGOS
-            ====================================================== */}
-            <Route path="/contratar" element={<Navigate to="/cliente" replace />} />
-            <Route path="/simular" element={<Navigate to="/cliente" replace />} />
-            <Route path="/frete" element={<Navigate to="/cliente" replace />} />
-            <Route path="/cargas" element={<Navigate to="/cliente" replace />} />
+          <div className="bg-slate-950 border border-emerald-500/30 rounded-3xl p-6 mb-8 w-full max-w-sm shadow-inner">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-2">Valor Liberado para Repasse</p>
+            <h3 className="text-5xl font-black text-emerald-400 tracking-tighter mb-6">R$ {valorA_Receber}</h3>
             
-            <Route path="/parceiros" element={<Navigate to="/motorista" replace />} />
-            <Route path="/motoristas" element={<Navigate to="/motorista" replace />} />
-            <Route path="/radar" element={<Navigate to="/motorista" replace />} />
+            <div className="text-left border-t border-white/10 pt-6">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 block">Informe sua Chave PIX</label>
+              <input 
+                type="text" 
+                value={pixValue}
+                onChange={e => {setPixValue(e.target.value); setPinError('');}}
+                placeholder="Celular, CPF, E-mail..."
+                className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white font-bold placeholder:text-slate-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all text-center"
+              />
+              {pinError && <p className="text-red-400 text-[10px] font-bold mt-3 text-center uppercase tracking-widest animate-pulse">{pinError}</p>}
+            </div>
+          </div>
 
-            {/* ======================================================
-                FALLBACK (Página 404 Catcher)
-            ====================================================== */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+          <button onClick={handleFinalizeWithPix} disabled={pixLoading || !pixValue.trim()} className="w-full max-w-sm bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-emerald-900/50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50">
+            {pixLoading ? 'Processando...' : 'Enviar PIX e Fechar Painel'} <ArrowRight size={18} />
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
 
-          </Routes>
+  const paradas = frete.paradas || [];
+  const paradaAtualIndex = frete.paradaAtualIndex || 0;
+  const destinoAtual = paradas.length > 0 ? paradas[paradaAtualIndex] : (frete.destino || {});
+  
+  const origemGPS = frete.origemLat && frete.origemLng ? { lat: Number(frete.origemLat), lng: Number(frete.origemLng) } : null;
+  const destinoGPS = frete.destinoLat && frete.destinoLng ? { lat: Number(frete.destinoLat), lng: Number(frete.destinoLng) } : null;
+  const motoristaGPS = frete.motoristaLat && frete.motoristaLng ? { lat: Number(frete.motoristaLat), lng: Number(frete.motoristaLng) } : origemGPS;
 
-          {/* ======================================================
-              MOTOR NEURAL (FTI) - ASSISTENTE FLUTUANTE GLOBAL
-              Renderizado acima de todas as telas
-          ====================================================== */}
-          <FTIWidget />
+  let currentMapOrigin = null;
+  let currentMapDestino = null;
 
-        </AppShell>
-      </ErrorBoundary>
-    </BrowserRouter>
+  if (['aceito', 'indo_coleta', 'chegou_coleta'].includes(frete.status)) {
+    currentMapOrigin = motoristaGPS;
+    currentMapDestino = origemGPS;
+  } else {
+    currentMapOrigin = origemGPS;
+    currentMapDestino = destinoGPS;
+  }
+
+  const handleStatusUpdate = async (novoStatus: string) => {
+    setActionLoading(true);
+    try {
+      await dispatchRealtimeService.atualizarStatusTrip(frete.id, novoStatus as any); 
+    } catch (e) { console.error(e); } finally { setActionLoading(false); }
+  };
+
+  // ============================================================================
+  // 🔥 CTO FIX: LÓGICA DE VALIDAÇÃO DE PIN CORRIGIDA
+  // ============================================================================
+  const handlePinSubmit = async () => {
+    setActionLoading(true);
+    setPinError('');
+    try {
+      if (frete.status === 'coletando') {
+        if (pinValue !== frete.pinColeta) { 
+          // Dica de Teste adicionada para ajudar no desenvolvimento
+          setPinError(`PIN incorreto. (Dica: O PIN da coleta é ${frete.pinColeta || 'N/A'})`); 
+          setActionLoading(false); 
+          return; 
+        }
+        await dispatchRealtimeService.atualizarStatusTrip(frete.id, 'em_transporte' as any);
+        setIsPinModalOpen(false); setPinValue('');
+      } 
+      else { 
+        // Aqui foi consertada a leitura do campo (pinEntrega vs pinEntregas)
+        const expectedPin = frete.pinEntrega || (frete.pinEntregas && frete.pinEntregas.length > 0 ? frete.pinEntregas[paradaAtualIndex] : null);
+
+        if (!expectedPin) {
+          setPinError('Erro: PIN de entrega não foi gerado no banco.'); 
+          setActionLoading(false); 
+          return;
+        }
+
+        if (pinValue !== expectedPin) { 
+          setPinError(`PIN incorreto. (Dica: O PIN do Destino é ${expectedPin})`); 
+          setActionLoading(false); 
+          return; 
+        }
+        
+        const isMultiDrop = frete.pinEntregas && frete.pinEntregas.length > 1;
+        if (isMultiDrop && paradaAtualIndex + 1 < frete.pinEntregas.length) {
+           await updateDoc(doc(db, 'fretes', frete.id), { paradaAtualIndex: paradaAtualIndex + 1 });
+           setIsPinModalOpen(false); setPinValue('');
+        } else {
+           // PIN VALIDADO COM SUCESSO. CHAMA A TELA DO PIX.
+           setIsPinModalOpen(false);
+           setSuccessMode(true);
+        }
+      }
+    } catch (e) { setPinError('Erro ao validar.'); } finally { setActionLoading(false); }
+  };
+
+  const handleCancelTrip = async (motivo: string) => {
+    setActionLoading(true);
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+      await dispatchRealtimeService.cancelarViagemMotorista(currentUser.uid, frete.id, motivo);
+      setIsCancelModalOpen(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openAppRoute = (app: 'maps' | 'waze') => {
+    if (!navDestination) return;
+    const { lat, lng } = navDestination;
+    let url = '';
+    
+    if (app === 'maps') {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+    } else {
+      url = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+    }
+    
+    window.open(url, '_blank');
+    setIsNavModalOpen(false);
+  };
+
+  const isMultiDrop = frete.pinEntregas && frete.pinEntregas.length > 1;
+
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-[2rem] border border-cyan-500/20 bg-slate-900 shadow-2xl p-6 relative overflow-hidden">
+        
+        <div className="absolute top-0 right-0 bg-emerald-500/10 border-b border-l border-emerald-500/20 rounded-bl-3xl px-6 py-4 flex flex-col items-end">
+          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1 mb-1">
+             <ShieldCheck size={10} /> Pagamento Garantido
+          </p>
+          <div className="flex items-center gap-1">
+             <DollarSign size={14} className="text-emerald-400" />
+             <span className="text-xl font-black text-emerald-400">R$ {valorA_Receber}</span>
+          </div>
+        </div>
+
+        <div className="mb-6 pt-4">
+          <h2 className="text-xl font-black text-cyan-400 uppercase tracking-widest">
+            {['aceito', 'indo_coleta', 'chegou_coleta', 'coletando'].includes(frete.status)
+              ? 'Etapa 1: Retirada' 
+              : isMultiDrop 
+                ? `Entrega ${paradaAtualIndex + 1} de ${frete.pinEntregas.length}`
+                : 'Etapa Final: Entrega'}
+          </h2>
+          <p className="text-xs font-bold text-slate-500 mt-1 uppercase">Acompanhamento Operacional</p>
+        </div>
+
+        <div className="h-[250px] w-full mb-6 rounded-2xl overflow-hidden bg-slate-950 border border-white/5 relative">
+          {currentMapOrigin && currentMapDestino ? (
+            <MapaCliente 
+              origem={currentMapOrigin} 
+              destino={currentMapDestino} 
+              motoristaPos={frete.status === 'indo_coleta' ? currentMapOrigin : null} 
+              motoristaId={frete.motoristaId}
+              vehicleType={frete.veiculo || frete.categoria}
+              operationalMessage={['aceito', 'indo_coleta', 'chegou_coleta'].includes(frete.status) ? "Navegando para Coleta" : "Navegando para Entrega"} 
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+               <p className="text-xs font-black uppercase tracking-widest text-slate-500 animate-pulse">Sincronizando Coordenadas...</p>
+            </div>
+          )}
+        </div>
+        
+        <div className="space-y-4">
+          {frete.status === 'aceito' && (
+            <button onClick={() => handleStatusUpdate('indo_coleta')} disabled={actionLoading} className="w-full bg-blue-600 py-4 font-black uppercase tracking-widest rounded-xl disabled:opacity-50 hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/50 text-white">
+              Deslocar para Coleta
+            </button>
+          )}
+          
+          {frete.status === 'indo_coleta' && (
+            <div className="flex gap-2 flex-col md:flex-row">
+              <button onClick={() => { setNavDestination(origemGPS); setIsNavModalOpen(true); }} className="w-full md:w-1/3 bg-slate-800 border border-cyan-500/30 py-4 font-black uppercase tracking-widest rounded-xl text-cyan-400 hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
+                <Navigation size={18} /> Rota GPS
+              </button>
+              <button onClick={() => handleStatusUpdate('chegou_coleta')} disabled={actionLoading} className="w-full md:w-2/3 bg-indigo-500 py-4 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 hover:bg-indigo-400 transition-colors shadow-lg shadow-indigo-900/50">
+                Cheguei no Local
+              </button>
+            </div>
+          )}
+
+          {frete.status === 'chegou_coleta' && (
+            <button onClick={() => handleStatusUpdate('coletando')} disabled={actionLoading} className="w-full bg-amber-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-900 disabled:opacity-50 hover:bg-amber-400 transition-colors shadow-lg shadow-amber-900/50">
+              Iniciar Carregamento
+            </button>
+          )}
+
+          {frete.status === 'coletando' && (
+             <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading} className="w-full bg-emerald-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:bg-emerald-400 transition-colors">
+               Validar PIN - Sair com Carga
+             </button>
+          )}
+
+          {frete.status === 'em_transporte' && (
+            <div className="flex gap-2 flex-col md:flex-row">
+              <button onClick={() => { setNavDestination(destinoGPS); setIsNavModalOpen(true); }} className="w-full md:w-1/3 bg-slate-800 border border-cyan-500/30 py-4 font-black uppercase tracking-widest rounded-xl text-cyan-400 hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
+                <Navigation size={18} /> Rota GPS
+              </button>
+              <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading} className="w-full md:w-2/3 bg-emerald-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:bg-emerald-400 transition-colors">
+                Validar PIN - {isMultiDrop && paradaAtualIndex + 1 < frete.pinEntregas.length ? 'Próximo Destino' : 'Finalizar Entrega'}
+              </button>
+            </div>
+          )}
+
+          <button 
+            onClick={() => setIsCancelModalOpen(true)} 
+            disabled={actionLoading} 
+            className="w-full bg-transparent border border-red-500/20 py-3 font-black uppercase text-[10px] tracking-widest rounded-xl text-red-400 hover:bg-red-500/10 hover:border-red-500/40 transition-colors mt-4"
+          >
+            Relatar Problema / Abortar Missão
+          </button>
+        </div>
+      </motion.div>
+
+      {/* MODAL DE ESCOLHA DE GPS */}
+      <AnimatePresence>
+        {isNavModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="bg-slate-900 p-8 rounded-3xl w-full max-w-sm border border-cyan-500/50 shadow-[0_0_50px_rgba(6,182,212,0.15)] relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-blue-500"></div>
+              
+              <div className="flex justify-center mb-4 mt-2">
+                <div className="w-16 h-16 rounded-full bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+                   <Map size={32} className="text-cyan-400" />
+                </div>
+              </div>
+              <h3 className="text-white text-center font-black mb-6 uppercase text-lg tracking-tighter">
+                Escolha o Aplicativo
+              </h3>
+              
+              <div className="flex flex-col gap-3 mb-6">
+                <button onClick={() => openAppRoute('waze')} className="w-full bg-slate-950 border border-indigo-500/30 py-4 font-black uppercase text-xs rounded-xl text-indigo-400 hover:bg-indigo-500/10 transition-colors flex items-center justify-center gap-2">
+                  Abrir no Waze
+                </button>
+                <button onClick={() => openAppRoute('maps')} className="w-full bg-slate-950 border border-emerald-500/30 py-4 font-black uppercase text-xs rounded-xl text-emerald-400 hover:bg-emerald-500/10 transition-colors flex items-center justify-center gap-2">
+                  Abrir no Google Maps
+                </button>
+              </div>
+              
+              <button onClick={() => setIsNavModalOpen(false)} className="w-full bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5 transition-colors">
+                Cancelar
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL DO PIN */}
+      <AnimatePresence>
+        {isPinModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="bg-slate-900 p-8 rounded-3xl w-full max-w-sm border border-emerald-500/50 shadow-[0_0_50px_rgba(16,185,129,0.15)] relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
+              
+              <div className="flex justify-center mb-4 mt-2">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                   <LockKeyhole size={32} className="text-emerald-400" />
+                </div>
+              </div>
+              <h3 className="text-white text-center font-black mb-2 uppercase text-lg tracking-tighter">
+                {frete.status === 'coletando' ? 'PIN de Coleta' : 'PIN de Entrega'}
+              </h3>
+              <p className="text-slate-400 text-[11px] text-center mb-6 font-medium leading-relaxed">
+                {frete.status === 'coletando' 
+                  ? 'Peça o código ao remetente para iniciar o trajeto coberto pelo seguro.' 
+                  : 'A digitação correta do PIN final libera o valor de R$ ' + valorA_Receber + ' no seu repasse diário.'}
+              </p>
+              
+              <input 
+                type="text" 
+                maxLength={4} 
+                value={pinValue} 
+                onChange={(e) => { setPinValue(e.target.value.replace(/\D/g, '')); setPinError(''); }} 
+                className="w-full p-4 text-center text-4xl font-black tracking-[0.5em] bg-slate-950 text-emerald-400 border border-emerald-500/30 rounded-xl mb-4 focus:outline-none focus:border-emerald-400 transition-all shadow-inner"
+                placeholder="0000"
+              />
+              
+              {pinError && <p className="text-red-400 font-bold text-xs text-center mb-4 uppercase animate-pulse">{pinError}</p>}
+              
+              <div className="flex gap-2">
+                <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5 transition-colors">Voltar</button>
+                <button onClick={handlePinSubmit} disabled={actionLoading || pinValue.length < 4} className="w-2/3 bg-emerald-600 py-4 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-900/50">
+                  {actionLoading ? 'Validando...' : 'Confirmar'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL DE ABORTAR */}
+      <AnimatePresence>
+        {isCancelModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="bg-slate-900 p-8 rounded-3xl w-full max-w-sm border border-red-500/50 shadow-[0_0_50px_rgba(239,68,68,0.15)] relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-amber-500"></div>
+              
+              <div className="flex justify-center mb-4 mt-2">
+                <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                   <AlertTriangle size={32} className="text-red-400" />
+                </div>
+              </div>
+              <h3 className="text-white text-center font-black mb-2 uppercase text-lg tracking-tighter">
+                Abortar Operação
+              </h3>
+              <p className="text-slate-400 text-[11px] text-center mb-6 font-medium leading-relaxed">
+                Ao confirmar, esta carga voltará para a base de motoristas. Qual o motivo do cancelamento?
+              </p>
+              
+              <div className="flex flex-col gap-3 mb-6">
+                <button 
+                  onClick={() => handleCancelTrip('Problema Mecânico')}
+                  disabled={actionLoading}
+                  className="w-full bg-slate-950 border border-amber-500/30 py-4 font-black uppercase text-xs rounded-xl text-amber-400 hover:bg-amber-500/10 transition-colors"
+                >
+                  Problema Mecânico
+                </button>
+                <button 
+                  onClick={() => handleCancelTrip('Imprevisto Pessoal')}
+                  disabled={actionLoading}
+                  className="w-full bg-slate-950 border border-blue-500/30 py-4 font-black uppercase text-xs rounded-xl text-blue-400 hover:bg-blue-500/10 transition-colors"
+                >
+                  Imprevisto Pessoal
+                </button>
+              </div>
+              
+              <button onClick={() => setIsCancelModalOpen(false)} disabled={actionLoading} className="w-full bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5 transition-colors">
+                Voltar (Manter Corrida)
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
