@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Refatoração Flow-First sem React Context (Crash Proof). 
-// Sistema de deep linking nativo injetado para Waze/Maps (Prioridade 1).
+// CTO-Log: Coleta obrigatória de Chave PIX no encerramento da viagem.
+// Status: Ejeção automática removida. Motorista DEVE informar o PIX para voltar ao Feed.
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -11,12 +11,15 @@ import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { LockKeyhole, ShieldCheck, DollarSign, CheckCircle2, ArrowRight, AlertTriangle, Map, Navigation } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
+import { useDriverContext } from '../context/DriverContext';
 
 interface DriverActiveTripProps {
   freteId?: string;
 }
 
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
+  const { setCurrentFreight } = useDriverContext();
+  
   const [frete, setFrete] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
@@ -30,6 +33,10 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [pinError, setPinError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [successMode, setSuccessMode] = useState(false);
+  
+  // Controle do PIX
+  const [pixValue, setPixValue] = useState('');
+  const [pixLoading, setPixLoading] = useState(false);
 
   useEffect(() => {
     if (!freteId) { setLoading(false); return; }
@@ -38,23 +45,39 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         const data = docSnap.data();
         setFrete({ id: docSnap.id, ...data });
         
-        // Se bateu entregue no banco e a tela ainda está aberta, renderiza Sucesso.
-        // O Motorista.tsx vai fechar este componente via onSnapshot master.
         if (['entregue', 'finalizado'].includes(data.status)) {
            setSuccessMode(true);
         }
+      } else {
+        setCurrentFreight(null);
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [freteId]);
+  }, [freteId, setCurrentFreight]);
 
   if (loading) return <div className="flex h-64 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5"><div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div></div>;
   if (!frete) return null;
 
   const valorA_Receber = Number(frete.valorLiquidoMotorista || frete.valorMotorista || 0).toFixed(2).replace('.', ',');
 
-  // TELA DE SUCESSO PÓS-PIN FINAL
+  const handleFinalizeWithPix = async () => {
+    if (!pixValue.trim()) {
+      setPinError('Informe a chave PIX para receber o repasse.');
+      return;
+    }
+    setPixLoading(true);
+    try {
+      // Salva a chave PIX no banco para o painel Admin e então limpa a tela
+      await dispatchRealtimeService.salvarChavePix(frete.id, pixValue.trim());
+      setCurrentFreight(null); 
+    } catch(e) {
+      setPinError('Erro ao registrar PIX. Verifique a conexão.');
+      setPixLoading(false);
+    }
+  };
+
+  // TELA DE SUCESSO PÓS-PIN FINAL (COLETA DE PIX OBRIGATÓRIA)
   if (successMode) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2rem] border border-emerald-500/30 bg-slate-900 shadow-[0_0_50px_rgba(16,185,129,0.1)] p-8 md:p-12 text-center relative overflow-hidden">
@@ -64,13 +87,28 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             <CheckCircle2 size={48} className="text-emerald-400" />
           </div>
           <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter mb-2">Corrida Finalizada!</h2>
-          <p className="text-slate-400 font-medium mb-8">O cliente liberou o pagamento. Fechando painel...</p>
+          <p className="text-slate-400 font-medium mb-8">O cliente liberou o pagamento no sistema.</p>
 
-          <div className="bg-slate-950 border border-white/10 rounded-3xl p-6 mb-8 w-full max-w-sm">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Valor Garantido</p>
-            <h3 className="text-5xl font-black text-emerald-400 tracking-tighter">R$ {valorA_Receber}</h3>
-            <p className="text-[10px] font-bold text-emerald-500/70 mt-3 uppercase tracking-widest bg-emerald-500/10 py-2 rounded-xl">O repasse via PIX ocorrerá em até 24h.</p>
+          <div className="bg-slate-950 border border-emerald-500/30 rounded-3xl p-6 mb-8 w-full max-w-sm shadow-inner">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-2">Valor Liberado para Repasse</p>
+            <h3 className="text-5xl font-black text-emerald-400 tracking-tighter mb-6">R$ {valorA_Receber}</h3>
+            
+            <div className="text-left border-t border-white/10 pt-6">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 block">Informe sua Chave PIX</label>
+              <input 
+                type="text" 
+                value={pixValue}
+                onChange={e => {setPixValue(e.target.value); setPinError('');}}
+                placeholder="Celular, CPF, E-mail..."
+                className="w-full bg-slate-900 border border-white/10 rounded-xl p-4 text-white font-bold placeholder:text-slate-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all text-center"
+              />
+              {pinError && <p className="text-red-400 text-[10px] font-bold mt-3 text-center uppercase tracking-widest animate-pulse">{pinError}</p>}
+            </div>
           </div>
+
+          <button onClick={handleFinalizeWithPix} disabled={pixLoading || !pixValue.trim()} className="w-full max-w-sm bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-emerald-900/50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50">
+            {pixLoading ? 'Processando...' : 'Enviar PIX e Concluir'} <ArrowRight size={18} />
+          </button>
         </div>
       </motion.div>
     );
@@ -124,7 +162,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         } else {
            const currentUser = auth.currentUser;
            if(currentUser) {
-             // O dispatch altera o status no banco. O Motorista.tsx limpa a tela automaticamente.
              setSuccessMode(true);
              await dispatchRealtimeService.concluirViagemELiberarMotorista(currentUser.uid, frete.id);
            }
@@ -138,9 +175,9 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     try {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
-      // Cancela no banco, Motorista.tsx remove a tela automaticamente
       await dispatchRealtimeService.cancelarViagemMotorista(currentUser.uid, frete.id, motivo);
       setIsCancelModalOpen(false);
+      setCurrentFreight(null); 
     } catch (e) {
       console.error(e);
     } finally {
@@ -148,7 +185,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     }
   };
 
-  // NAVEGAÇÃO ASSISTIDA (P1)
   const openAppRoute = (app: 'maps' | 'waze') => {
     if (!navDestination) return;
     const { lat, lng } = navDestination;
@@ -249,7 +285,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             </div>
           )}
 
-          {/* VÁLVULA DE ESCAPE: ABORTAR MISSÃO */}
           <button 
             onClick={() => setIsCancelModalOpen(true)} 
             disabled={actionLoading} 
