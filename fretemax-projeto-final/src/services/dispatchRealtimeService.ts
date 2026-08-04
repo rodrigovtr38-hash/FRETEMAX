@@ -1,10 +1,10 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
-// CTO-Log: Correção de Path Crítico no Firestore.
-// Status: Coleção corrigida de 'motoristas' para 'motoristas_cadastros' para evitar Batch Rejection (Falha Silenciosa).
+// CTO-Log: Correção de Path e Injeção de Telemetria Atômica.
+// Status: Coleção corrigida. Gatilhos de 'Visualizações' e 'Interesses' adicionados para o Embarcador.
 // =========================================================
 
-import { writeBatch, doc, updateDoc } from 'firebase/firestore';
+import { writeBatch, doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '../firebase';
 import { firebaseRealtimeService } from './firebaseRealtimeService';
 import { locationRealtimeService } from './locationRealtimeService';
@@ -61,7 +61,6 @@ class DispatchRealtimeService {
       const batch = writeBatch(db);
       const timestamp = Date.now();
 
-      // 🔥 CTO FIX: Coleção corrigida de 'motoristas' para 'motoristas_cadastros'
       const driverRef = doc(db, 'motoristas_cadastros', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
@@ -93,7 +92,6 @@ class DispatchRealtimeService {
       const batch = writeBatch(db);
       const timestamp = Date.now();
 
-      // 🔥 CTO FIX: Coleção corrigida de 'motoristas' para 'motoristas_cadastros'
       const driverRef = doc(db, 'motoristas_cadastros', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
@@ -115,9 +113,7 @@ class DispatchRealtimeService {
       await batch.commit();
       locationRealtimeService.stop();
       
-      // Dispara evento global para forçar o Frontend a limpar o Cache
       window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
-
     } catch (error) {
       console.error('ERRO AO CONCLUIR VIAGEM (BATCH):', error);
       throw error;
@@ -129,7 +125,6 @@ class DispatchRealtimeService {
       const batch = writeBatch(db);
       const timestamp = Date.now();
 
-      // 🔥 CTO FIX: Coleção corrigida de 'motoristas' para 'motoristas_cadastros'
       const driverRef = doc(db, 'motoristas_cadastros', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
@@ -156,9 +151,7 @@ class DispatchRealtimeService {
       await batch.commit();
       locationRealtimeService.stop();
 
-      // Dispara evento global para forçar o Frontend a limpar o Cache
       window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
-
     } catch (error) {
       console.error('ERRO AO ABORTAR VIAGEM (BATCH):', error);
       throw error;
@@ -242,6 +235,30 @@ class DispatchRealtimeService {
     } catch (error) {
       console.error('ERRO AO SALVAR PIX:', error);
       throw error;
+    }
+  }
+
+  // =========================================================
+  // GATILHOS DE TELEMETRIA B2B (Métricas do Embarcador)
+  // =========================================================
+  
+  async registrarVisualizacao(freteId: string) {
+    try {
+      await updateDoc(doc(db, 'fretes', freteId), {
+        visualizacoes: increment(1)
+      });
+    } catch (error) {
+      console.warn('Falha silenciosa ao registrar view no banco:', error);
+    }
+  }
+
+  async registrarInteresse(freteId: string) {
+    try {
+      await updateDoc(doc(db, 'fretes', freteId), {
+        interessados: increment(1)
+      });
+    } catch (error) {
+      console.warn('Falha silenciosa ao registrar interesse no banco:', error);
     }
   }
 }
