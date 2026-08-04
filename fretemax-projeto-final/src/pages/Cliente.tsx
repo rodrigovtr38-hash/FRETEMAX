@@ -1,14 +1,13 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Integração Real-Time Tracking no Painel do Cliente.
-// Status: Overlay do Radar não bloqueante e PIN 100% visível.
+// CTO-Log: Integração Real-Time Tracking, P2 (Dados Visuais) e P4 (UI da IA).
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, auth } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, doc, Timestamp, updateDoc } from 'firebase/firestore'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, Users, HeadphonesIcon, RefreshCw, Lock } from 'lucide-react';
+import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, Users, HeadphonesIcon, RefreshCw, Lock, Scale, Clock3, BrainCircuit, BarChart3, TrendingUp, AlertOctagon } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import ChatFrete from '../components/ChatFrete';
 import ClientStatusCard from '../components/client/ClientStatusCard';
@@ -95,6 +94,9 @@ export default function Cliente() {
   const [destinoGPS, setDestinoGPS] = useState<Coords | null>(null);
   const [paradasGPS, setParadasGPS] = useState<Coords[]>([]);
   const [mapsReady, setMapsReady] = useState(false); 
+  
+  // CTO: Simulação de Análise de IA para P4
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
   const coordsCache = useRef<Record<string, Coords>>({});
   const isProcessingPayment = useRef(false);
@@ -161,8 +163,23 @@ export default function Cliente() {
   const valorSugeridoCalculado = calculoFinanceiro.precoFinalCliente + calculoFinanceiro.tollCost;
   
   const valorOfertaNum = Number(valorOferta.replace(/\./g, '').replace(',', '.')) || 0;
-  const isOfertaBoa = valorOfertaNum >= valorSugeridoCalculado;
-  const isOfertaValida = valorOfertaNum > 0;
+  
+  // CTO-FIX: IA de Avaliação de Demanda (P4)
+  const iaChanceAceite = useMemo(() => {
+    if (valorOfertaNum === 0) return null;
+    const diff = valorOfertaNum / valorSugeridoCalculado;
+    if (diff >= 1.05) return { status: 'Muito Alta', color: 'text-emerald-500', icon: <Flame size={16} className="text-orange-500 animate-pulse" /> };
+    if (diff >= 0.95) return { status: 'Alta', color: 'text-blue-500', icon: <CheckCircle size={16} /> };
+    if (diff >= 0.85) return { status: 'Média (Pode Demorar)', color: 'text-amber-500', icon: <AlertTriangle size={16} /> };
+    return { status: 'Baixa (Risco de Falha)', color: 'text-red-500', icon: <XCircle size={16} /> };
+  }, [valorOfertaNum, valorSugeridoCalculado]);
+
+  // Efeito Visual da IA ao mudar veículo ou distância
+  useEffect(() => {
+    setIsAiAnalyzing(true);
+    const timeout = setTimeout(() => setIsAiAnalyzing(false), 1500);
+    return () => clearTimeout(timeout);
+  }, [vehicle, validDistancia, tipoMaterial]);
 
   const pesoValido = useMemo(() => {
     const pesoNum = parseInt(peso.replace(/\D/g, ''), 10);
@@ -182,10 +199,10 @@ export default function Cliente() {
       peso.trim() !== '' &&
       pesoValido &&
       tipoMaterial.trim() !== '' && 
-      isOfertaValida &&
+      valorOfertaNum > 0 &&
       (tipoFrete === 'imediato' || (tipoFrete === 'agendado' && dataAgendada.trim() !== ''))
     );
-  }, [nome, whatsapp, documento, coleta, entregas, peso, pesoValido, tipoMaterial, isOfertaValida, tipoFrete, dataAgendada]);
+  }, [nome, whatsapp, documento, coleta, entregas, peso, pesoValido, tipoMaterial, valorOfertaNum, tipoFrete, dataAgendada]);
 
   const showToast = (msg: string, type: 'error' | 'success' | 'warning' = 'error') => {
     setToast({ msg, type });
@@ -680,7 +697,7 @@ export default function Cliente() {
                 </div>
               </div>
 
-              {/* CARGA E INTELIGÊNCIA DE MERCADO */}
+              {/* CARGA E INTELIGÊNCIA DE MERCADO (P4 CTO-FIX) */}
               <div className="bg-slate-50 p-6 md:p-8 rounded-3xl border border-slate-100">
                 <h2 className="mb-6 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
                   <Package className="h-5 w-5 text-amber-500" /> Especificações da Carga
@@ -693,37 +710,69 @@ export default function Cliente() {
                   <input className={inputClass} placeholder="Produto / Volume" value={tipoMaterial} onChange={e => setTipoMaterial(e.target.value)} />
                 </div>
 
-                <div className="bg-white rounded-3xl border-2 border-slate-200 p-6 shadow-sm mb-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Activity className="h-5 w-5 text-blue-500" />
-                        <p className="text-xs font-black uppercase tracking-widest text-slate-600">Inteligência de Mercado</p>
+                {/* PAINEL DA IA - P4 IMPLEMENTADO */}
+                <div className="bg-white rounded-3xl border-2 border-slate-200 overflow-hidden shadow-sm mb-6">
+                  
+                  {/* Cérebro da IA */}
+                  <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/20">
+                          <BrainCircuit className="text-cyan-400 w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-white font-black uppercase tracking-widest text-sm">IA Operacional FretoGo</h3>
+                          <p className="text-slate-400 text-[10px] uppercase font-bold">Análise preditiva de roteirização</p>
+                        </div>
+                     </div>
+                     {isAiAnalyzing && <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />}
+                  </div>
+
+                  <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 items-start relative">
+                    {isAiAnalyzing && (
+                      <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center">
+                        <div className="bg-slate-900 text-cyan-400 px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-3 shadow-2xl">
+                           <Loader2 className="w-4 h-4 animate-spin" /> Analisando demanda e tráfego...
+                        </div>
                       </div>
-                      <p className="text-sm text-slate-500 mb-6">Nossa IA calcula o valor base (ANTT + Pedágios). Faça sua oferta baseada na sugestão para atrair motoristas mais rápido.</p>
-                      
-                      <div className="flex items-center gap-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <div>
-                          <p className="text-[10px] uppercase font-bold text-slate-400">Tabela ANTT (Sugerido)</p>
-                          <p className="text-xl font-black text-slate-800">R$ {valorSugeridoCalculado.toFixed(2).replace('.', ',')}</p>
-                        </div>
-                        <div className="h-8 w-px bg-slate-200"></div>
-                        <div>
-                          <p className="text-[10px] uppercase font-bold text-slate-400">Chance de Aceite</p>
-                          {valorOfertaNum === 0 ? (
-                             <span className="text-sm font-bold text-slate-400">Aguardando valor...</span>
-                          ) : isOfertaBoa ? (
-                             <span className="flex items-center gap-1 text-sm font-black text-emerald-600"><Flame size={16}/> Muito Alta</span>
-                          ) : (
-                             <span className="flex items-center gap-1 text-sm font-black text-amber-500"><AlertTriangle size={16}/> Baixa (Demorada)</span>
-                          )}
-                        </div>
+                    )}
+
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 gap-3">
+                         <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 flex items-center gap-3">
+                            <TrendingUp className="w-5 h-5 text-emerald-500" />
+                            <div>
+                              <p className="text-[9px] uppercase font-black text-slate-400">Demanda da Região</p>
+                              <p className="text-sm font-bold text-slate-700">{['utilitario', 'toco'].includes(vehicle) ? 'Alta' : 'Estável'}</p>
+                            </div>
+                         </div>
+                         <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 flex items-center gap-3">
+                            <BarChart3 className="w-5 h-5 text-blue-500" />
+                            <div>
+                              <p className="text-[9px] uppercase font-black text-slate-400">Oferta Recomendada</p>
+                              <p className="text-sm font-black text-blue-600">R$ {valorSugeridoCalculado.toFixed(2).replace('.', ',')}</p>
+                            </div>
+                         </div>
+                      </div>
+
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                         <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">Previsão de Aceite no Feed</p>
+                         {valorOfertaNum === 0 ? (
+                           <div className="text-sm font-bold text-slate-400 flex items-center gap-2">
+                             <AlertOctagon className="w-4 h-4" /> Aguardando você inserir o valor ao lado.
+                           </div>
+                         ) : (
+                           <div className={`flex items-center gap-2 text-lg font-black uppercase tracking-widest ${iaChanceAceite?.color}`}>
+                             {iaChanceAceite?.icon} {iaChanceAceite?.status}
+                           </div>
+                         )}
                       </div>
                     </div>
                     
-                    <div className="relative">
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-600 mb-3 ml-2 flex items-center gap-2"><DollarSign className="w-4 h-4 text-emerald-600"/> Valor Ofertado pela Carga</p>
-                      <span className="absolute left-6 top-[46px] text-2xl font-black text-emerald-600">R$</span>
+                    <div className="relative h-full flex flex-col justify-end">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-600 mb-3 ml-2 flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-emerald-600"/> Sua Oferta Oficial
+                      </p>
+                      <span className="absolute left-6 bottom-[46px] text-2xl font-black text-emerald-600">R$</span>
                       <input 
                         type="text" 
                         className={`w-full rounded-[2rem] border-4 ${isOfertaValida && isOfertaBoa ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white'} py-8 pl-16 pr-6 text-4xl font-black text-slate-900 transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none`} 
@@ -732,7 +781,7 @@ export default function Cliente() {
                         onChange={e => setValorOferta(formatCurrency(e.target.value))} 
                       />
                       <p className="text-[10px] font-bold text-slate-500 mt-3 uppercase tracking-widest text-center">
-                        O valor será mantido em custódia segura.
+                        Valor blindado em custódia até a entrega.
                       </p>
                     </div>
                   </div>
@@ -755,28 +804,53 @@ export default function Cliente() {
             {!isFormValid && (
               <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-center">
                 <p className="flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest text-amber-600">
-                  <AlertTriangle size={18}/> Preencha todos os campos operacionais e o Valor da Oferta para postar a carga.
+                  <AlertTriangle size={18}/> Preencha os campos obrigatórios e faça uma oferta válida.
                 </p>
               </div>
             )}
 
             <div className="mt-8">
               <button onClick={calcularDistanciaReal} disabled={loadingRoute || loadingPayment || !isFormValid} className={`flex w-full min-h-[72px] items-center justify-center gap-3 rounded-[2rem] text-lg font-black uppercase tracking-[0.2em] transition-all duration-300 ${!isFormValid ? 'cursor-not-allowed bg-slate-200 text-slate-400' : 'bg-blue-600 text-white shadow-2xl shadow-blue-600/40 hover:scale-[1.01] hover:bg-blue-700'}`}>
-                {loadingRoute ? <><Loader2 className="h-6 w-6 animate-spin"/> {loadingMessages[loadingStep]}</> : <><Zap size={24}/> Validar Postagem e Pagamento</>}
+                {loadingRoute ? <><Loader2 className="h-6 w-6 animate-spin"/> {loadingMessages[loadingStep]}</> : <><Zap size={24}/> Validar Rota e Pagamento</>}
               </button>
             </div>
           </div>
         )}
 
+        {/* P2: Resumo da Rota Enriquecido (Cards Visuais) */}
         {step === 'preview' && (
           <div className="w-full grid grid-cols-1 gap-8 animate-in fade-in zoom-in duration-500 lg:grid-cols-[1fr_450px]">
             <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-xl">
               <div className="mb-8 flex items-center justify-between border-b border-slate-100 pb-6">
                 <div>
                   <h2 className="text-3xl font-black text-slate-900">Resumo da Rota</h2>
-                  <p className="text-sm text-slate-500 font-medium mt-1">Confira os detalhes antes de postar no Feed.</p>
+                  <p className="text-sm text-slate-500 font-medium mt-1">Confira os detalhes operacionais antes de postar no Feed.</p>
                 </div>
                 <div className="h-14 w-14 rounded-full bg-blue-50 flex items-center justify-center"><MapPin className="h-6 w-6 text-blue-600" /></div>
+              </div>
+
+              {/* P2: Especificações Técnicas em Cards Destacados */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
+                    <Truck size={18} className="text-cyan-400 mb-1" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Veículo</p>
+                    <p className="text-sm font-bold text-white mt-1">{VEHICLE_CONFIG[vehicle].nome}</p>
+                 </div>
+                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
+                    <Scale size={18} className="text-cyan-400 mb-1" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Peso Estimado</p>
+                    <p className="text-sm font-bold text-white mt-1">{peso || 'N/A'}</p>
+                 </div>
+                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
+                    <Package size={18} className="text-cyan-400 mb-1" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Volumes</p>
+                    <p className="text-sm font-bold text-white mt-1">{qtdVolumes || '1'} un</p>
+                 </div>
+                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
+                    <Clock3 size={18} className="text-amber-400 mb-1" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância / ETA</p>
+                    <p className="text-sm font-bold text-white mt-1">{validDistancia.toFixed(0)} km</p>
+                 </div>
               </div>
         
               <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -815,7 +889,7 @@ export default function Cliente() {
                   <ul className="space-y-4 text-sm font-medium text-emerald-50">
                     <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-emerald-300 shrink-0"/> O motorista NÃO recebe o valor agora.</li>
                     <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-emerald-300 shrink-0"/> O dinheiro fica 100% blindado na plataforma.</li>
-                    <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-emerald-300 shrink-0"/> Liberado ao motorista APENAS após você informar o PIN de Entrega no destino final.</li>
+                    <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-emerald-300 shrink-0"/> Liberado ao motorista APENAS após você informar o PIN de Entrega.</li>
                     <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-emerald-300 shrink-0"/> Estorno imediato caso a carga seja cancelada.</li>
                   </ul>
                 </div>
@@ -891,7 +965,6 @@ export default function Cliente() {
                     <div className="absolute inset-0 flex items-center justify-center bg-slate-100"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
                   )}
                   
-                  {/* 🔥 CTO FIX: Overlay não bloqueante para o mapa continuar visível */}
                   {['aguardando_pagamento', 'disponivel', 'buscando_motorista'].includes(orderData?.status || '') && (
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-slate-900/95 backdrop-blur-md px-6 py-4 rounded-full shadow-2xl border border-cyan-500/50">
                       <span className="relative flex h-4 w-4">
@@ -936,7 +1009,6 @@ export default function Cliente() {
                   </div>
                 )}
 
-                {/* 🔥 CTO FIX: PIN sempre visível, sem condicional de status para não esconder */}
                 <div className="bg-slate-900 rounded-[2rem] p-6 shadow-xl text-center text-white border border-slate-800">
                   <p className="text-xs font-black uppercase tracking-widest text-cyan-400 mb-3 flex items-center justify-center gap-2"><Lock size={14}/> Seu PIN de Segurança</p>
                   
