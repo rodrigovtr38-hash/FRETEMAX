@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Refatoração Flow-First. Bug do PIN resolvido. 
-// Sistema de deep linking para Waze/Maps injetado.
-// Desmontagem automática do componente no final da operação.
+// CTO-Log: Refatoração Flow-First sem React Context (Crash Proof). 
+// Sistema de deep linking nativo injetado para Waze/Maps (Prioridade 1).
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -12,16 +11,12 @@ import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { LockKeyhole, ShieldCheck, DollarSign, CheckCircle2, ArrowRight, AlertTriangle, Map, Navigation } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
-import { useDriverContext } from '../context/DriverContext';
 
 interface DriverActiveTripProps {
   freteId?: string;
 }
 
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
-  // CTO-FIX: Trazendo o contexto para "matar" a missão localmente
-  const { setCurrentFreight } = useDriverContext();
-  
   const [frete, setFrete] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
@@ -34,30 +29,25 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [pinValue, setPinValue] = useState('');
   const [pinError, setPinError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [successMode, setSuccessMode] = useState(false);
 
   useEffect(() => {
     if (!freteId) { setLoading(false); return; }
     const unsubscribe = onSnapshot(doc(db, 'fretes', freteId), (docSnap) => {
       if (docSnap.exists()) {
-        setFrete({ id: docSnap.id, ...docSnap.data() });
-      } else {
-        // Se deletaram do banco, limpa a sessão local
-        setCurrentFreight(null);
+        const data = docSnap.data();
+        setFrete({ id: docSnap.id, ...data });
+        
+        // Se bateu entregue no banco e a tela ainda está aberta, renderiza Sucesso.
+        // O Motorista.tsx vai fechar este componente via onSnapshot master.
+        if (['entregue', 'finalizado'].includes(data.status)) {
+           setSuccessMode(true);
+        }
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [freteId, setCurrentFreight]);
-
-  // CTO-FIX: Ejeção Automática (Prevenção de Loop de PIN)
-  useEffect(() => {
-    if (frete?.status === 'entregue' || frete?.status === 'finalizado') {
-      const timer = setTimeout(() => {
-        setCurrentFreight(null); // Desmonta a tela e volta ao Radar após 5s
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [frete?.status, setCurrentFreight]);
+  }, [freteId]);
 
   if (loading) return <div className="flex h-64 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5"><div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div></div>;
   if (!frete) return null;
@@ -65,7 +55,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const valorA_Receber = Number(frete.valorLiquidoMotorista || frete.valorMotorista || 0).toFixed(2).replace('.', ',');
 
   // TELA DE SUCESSO PÓS-PIN FINAL
-  if (frete.status === 'entregue' || frete.status === 'finalizado') {
+  if (successMode) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2rem] border border-emerald-500/30 bg-slate-900 shadow-[0_0_50px_rgba(16,185,129,0.1)] p-8 md:p-12 text-center relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.15),transparent_70%)]"></div>
@@ -74,17 +64,13 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             <CheckCircle2 size={48} className="text-emerald-400" />
           </div>
           <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter mb-2">Corrida Finalizada!</h2>
-          <p className="text-slate-400 font-medium mb-8">O cliente liberou o pagamento.</p>
+          <p className="text-slate-400 font-medium mb-8">O cliente liberou o pagamento. Fechando painel...</p>
 
           <div className="bg-slate-950 border border-white/10 rounded-3xl p-6 mb-8 w-full max-w-sm">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Valor Garantido</p>
             <h3 className="text-5xl font-black text-emerald-400 tracking-tighter">R$ {valorA_Receber}</h3>
             <p className="text-[10px] font-bold text-emerald-500/70 mt-3 uppercase tracking-widest bg-emerald-500/10 py-2 rounded-xl">O repasse via PIX ocorrerá em até 24h.</p>
           </div>
-
-          <button onClick={() => setCurrentFreight(null)} className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-900/50 transition-all active:scale-95 flex items-center justify-center gap-2">
-            Voltar para o Radar <ArrowRight size={18} />
-          </button>
         </div>
       </motion.div>
     );
@@ -123,6 +109,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       if (frete.status === 'coletando') {
         if (pinValue !== frete.pinColeta) { setPinError('PIN de Coleta incorreto.'); setActionLoading(false); return; }
         await dispatchRealtimeService.atualizarStatusTrip(frete.id, 'em_transporte' as any);
+        setIsPinModalOpen(false); setPinValue('');
       } 
       else { 
         const pinEntregas = frete.pinEntregas || [];
@@ -133,16 +120,16 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         const isMultiDrop = pinEntregas.length > 1;
         if (isMultiDrop && paradaAtualIndex + 1 < pinEntregas.length) {
            await updateDoc(doc(db, 'fretes', frete.id), { paradaAtualIndex: paradaAtualIndex + 1 });
+           setIsPinModalOpen(false); setPinValue('');
         } else {
            const currentUser = auth.currentUser;
            if(currentUser) {
+             // O dispatch altera o status no banco. O Motorista.tsx limpa a tela automaticamente.
+             setSuccessMode(true);
              await dispatchRealtimeService.concluirViagemELiberarMotorista(currentUser.uid, frete.id);
-             // A tela de sucesso "Corrida Finalizada" será renderizada via onSnapshot,
-             // e o useEffect ejetará o driver em 5 segundos.
            }
         }
       }
-      setIsPinModalOpen(false); setPinValue('');
     } catch (e) { setPinError('Erro ao validar.'); } finally { setActionLoading(false); }
   };
 
@@ -151,10 +138,9 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     try {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
+      // Cancela no banco, Motorista.tsx remove a tela automaticamente
       await dispatchRealtimeService.cancelarViagemMotorista(currentUser.uid, frete.id, motivo);
       setIsCancelModalOpen(false);
-      // CTO-FIX: Ejetar para o Radar instantaneamente
-      setCurrentFreight(null); 
     } catch (e) {
       console.error(e);
     } finally {
