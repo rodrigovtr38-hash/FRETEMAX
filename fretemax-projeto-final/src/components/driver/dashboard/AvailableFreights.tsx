@@ -1,10 +1,12 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
-// CTO-Log: Vitrine Operacional. UX voltada para urgência visual (Heatmap de oportunidades).
+// CTO-Log: Vitrine Operacional Refatorada.
+// - Filtro Anti-Fantasma (TTL 10 min) injetado.
+// - Tags de Engenharia de Valor (Pagamento Garantido, Premium) adicionadas.
 // =========================================================
 
-import { useEffect, useRef } from 'react';
-import { AlertOctagon, CheckCircle2, Flame, Package, X, Zap } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AlertOctagon, CheckCircle2, Flame, Package, X, Zap, ShieldCheck, Scale, Ruler } from 'lucide-react';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
 interface AvailableFreightsProps {
@@ -24,6 +26,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   bitrem: 'Bitrem',
 };
 
+// Tempo máximo que uma carga pode ficar na tela (10 minutos)
+const FREIGHT_TTL_MS = 10 * 60 * 1000; 
+
 export default function AvailableFreights({
   freights,
   isOnline,
@@ -31,13 +36,21 @@ export default function AvailableFreights({
   onSelectFreight,
 }: AvailableFreightsProps) {
   const prevFreightsLength = useRef(freights.length);
+  const [tick, setTick] = useState(0);
 
-  // Gatilho Sonoro de Nova Carga (Segurança contra bloqueio de Autoplay do Browser)
+  // Relógio interno para forçar re-render e limpar "Fantasmas" a cada 30s
+  useEffect(() => {
+    if (!isOnline) return;
+    const interval = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(interval);
+  }, [isOnline]);
+
+  // Gatilho Sonoro de Nova Carga
   useEffect(() => {
     if (isOnline && freights.length > prevFreightsLength.current) {
       try {
         const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        beep.play().catch(() => console.warn('[UX] Bloqueio nativo de autoplay evitado. Áudio silenciado pelo navegador.'));
+        beep.play().catch(() => console.warn('[UX] Bloqueio nativo de autoplay evitado.'));
         
         if (Notification.permission === 'granted') {
           new Notification('Fretogo: Carga na Mesa!', {
@@ -52,8 +65,16 @@ export default function AvailableFreights({
     prevFreightsLength.current = freights.length;
   }, [freights, isOnline]);
 
+  // 🔥 CTO FIX: Expurgo de Cargas Fantasmas (Filtro Client-Side)
+  const now = Date.now();
+  const validFreights = freights.filter(freight => {
+    // Se a carga não tem timestamp, permite. Se tem, valida se passou de 10 min.
+    const timestamp = freight.criadoEm || freight.atualizadoEm || now;
+    return (now - timestamp) < FREIGHT_TTL_MS;
+  });
+
   return (
-    <section className="relative w-full pb-20">
+    <section className="relative w-full pb-20 animate-in fade-in duration-500">
       
       {/* HEADER DA SEÇÃO */}
       <div className="mb-8 px-2 flex items-end justify-between">
@@ -62,7 +83,7 @@ export default function AvailableFreights({
             Malha <span className="text-cyan-500">Ativa</span>
           </h2>
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mt-1.5">
-            {isOnline ? `${freights.length} cargas interceptadas` : 'Sistema em repouso'}
+            {isOnline ? `${validFreights.length} cargas interceptadas` : 'Sistema em repouso'}
           </p>
         </div>
         {isOnline && (
@@ -84,7 +105,7 @@ export default function AvailableFreights({
       )}
 
       {/* ESTADO: NENHUMA CARGA */}
-      {isOnline && !loading && freights.length === 0 && (
+      {isOnline && !loading && validFreights.length === 0 && (
         <div className="rounded-[2.5rem] border border-dashed border-white/10 bg-slate-900/20 p-16 text-center backdrop-blur-sm">
           <Package className="mx-auto h-14 w-14 text-slate-600 mb-5 animate-pulse" />
           <h3 className="text-xl font-black text-white uppercase tracking-tight">Radar Limpo</h3>
@@ -95,9 +116,9 @@ export default function AvailableFreights({
       )}
 
       {/* GRID DE CARDS */}
-      {isOnline && freights.length > 0 && (
+      {isOnline && validFreights.length > 0 && (
         <div className="grid gap-5 sm:grid-cols-1 lg:grid-cols-2">
-          {freights.map((freight) => {
+          {validFreights.map((freight) => {
             const isHot = freight.prioridade || (freight.valorMotorista && freight.valorMotorista > 150);
 
             return (
@@ -116,9 +137,13 @@ export default function AvailableFreights({
                    <div className={`h-full w-full animate-[shrink_20s_linear] origin-left ${isHot ? 'bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.8)]' : 'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)]'}`} />
                 </div>
 
+                {/* HEADER DO CARD */}
                 <div className="flex items-start justify-between mb-5 mt-2">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Pagamento na Entrega</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck size={12} className="text-emerald-400" />
+                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Pagamento Garantido</p>
+                    </div>
                     <h2 className={`text-4xl font-black tracking-tighter drop-shadow-md ${isHot ? 'text-orange-400' : 'text-emerald-400'}`}>
                       <span className="text-xl mr-1">R$</span>
                       {(freight.valorMotorista || 0).toFixed(2).replace('.', ',')}
@@ -133,9 +158,9 @@ export default function AvailableFreights({
                 </div>
 
                 {/* ROTA COMPACTA */}
-                <div className="space-y-3 mb-6 bg-slate-950/50 p-4 rounded-2xl border border-white/5">
+                <div className="space-y-3 mb-6 bg-slate-950/50 p-4 rounded-2xl border border-white/5 relative">
                   <div className="flex items-start gap-3">
-                    <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-cyan-500 flex-shrink-0" />
+                    <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-cyan-500 flex-shrink-0 shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
                     <div className="min-w-0">
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Coleta</p>
                       <p className="text-sm font-bold text-white truncate mt-0.5">{freight.enderecoColetaTexto}</p>
@@ -145,7 +170,7 @@ export default function AvailableFreights({
                      <AlertOctagon size={14} className="text-slate-700" />
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                    <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-emerald-500 flex-shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
                     <div className="min-w-0">
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Destino</p>
                       <p className="text-sm font-bold text-white truncate mt-0.5">{freight.enderecoEntregaTexto}</p>
@@ -153,19 +178,22 @@ export default function AvailableFreights({
                   </div>
                 </div>
 
-                {/* MÉTRICAS EM GRID */}
+                {/* MÉTRICAS ENRIQUECIDAS */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 text-center">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Trajeto</p>
-                    <p className="text-sm font-black text-white mt-1">{(freight.distanciaTotalKm || 0).toFixed(0)} km</p>
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
+                    <Scale size={14} className="text-slate-400 mb-1" />
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Peso Bruto</p>
+                    <p className="text-xs font-black text-white mt-1">{(freight.pesoKg || 0).toFixed(0)} kg</p>
                   </div>
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 text-center">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Carga</p>
-                    <p className="text-sm font-black text-white mt-1">{(freight.pesoKg || 0).toFixed(0)} kg</p>
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
+                    <Ruler size={14} className="text-slate-400 mb-1" />
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Distância</p>
+                    <p className="text-xs font-black text-white mt-1">{(freight.distanciaTotalKm || 0).toFixed(0)} km</p>
                   </div>
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 text-center">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Tempo</p>
-                    <p className="text-sm font-black text-white mt-1">{freight.etaMinutes || 20} min</p>
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
+                    <Package size={14} className="text-slate-400 mb-1" />
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Volumes</p>
+                    <p className="text-xs font-black text-white mt-1">{freight.volumes || 1} un</p>
                   </div>
                 </div>
 
@@ -184,13 +212,7 @@ export default function AvailableFreights({
                     `}
                   >
                     <CheckCircle2 size={18} />
-                    {isHot ? 'Capturar Urgente' : 'Visualizar Carga'}
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); }}
-                    className="flex-1 flex items-center justify-center rounded-[1.5rem] bg-slate-950 py-4 text-slate-500 transition-all hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 active:scale-95 border border-white/5"
-                  >
-                    <X size={20} />
+                    {isHot ? 'Capturar Urgente' : 'Analisar Operação'}
                   </button>
                 </div>
 
