@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Admin.tsx
 // CTO-Log: Auditoria Concluída - FASE 3
-// Status: Painel de Malha Live enriquecido com dados logísticos completos (KM, Categoria, Peso).
+// Status: Notificador Visual de Repasses e Exibição de PIX integrado.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -415,7 +415,7 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
             {[
               { id: 'dashboard', label: 'Visão Operacional', icon: Activity },
               { id: 'motoristas', label: 'Homologação de Frota', icon: Users, badge: motoristasPendentes.length },
-              { id: 'corridas', label: 'Malha Logística Live', icon: MapIcon },
+              { id: 'corridas', label: 'Malha Logística Live', icon: MapIcon, badge: stats.repasses }, // 🔥 CTO FIX: Badge de repasses pendentes adicionado
               { id: 'concierge', label: 'Concierge IA', icon: Bot }
             ].map(item => (
               <button
@@ -776,13 +776,13 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
                   </div>
                 ) : (
                   fretesFiltrados.map(f => (
-                    <div key={f.id} className="bg-slate-900/80 border rounded-[2.5rem] p-6 md:p-8 transition-all relative overflow-hidden group shadow-2xl backdrop-blur-md border-white/5 hover:border-cyan-500/30">
+                    <div key={f.id} className={`bg-slate-900/80 border rounded-[2.5rem] p-6 md:p-8 transition-all relative overflow-hidden group shadow-2xl backdrop-blur-md ${f.status === AppTripState.ENTREGUE ? 'border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.1)]' : 'border-white/5 hover:border-cyan-500/30'}`}>
                       
                       <div className="flex flex-col lg:flex-row justify-between gap-8 pl-2">
                         
                         <div className="flex-[1.5]">
                           <div className="flex items-center gap-4 mb-6 border-b border-white/5 pb-4">
-                            <span className="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
+                            <span className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${f.status === AppTripState.ENTREGUE ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 animate-pulse' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'}`}>
                               {f.status.replace('_', ' ')}
                             </span>
                             <span className="text-[10px] font-mono text-slate-500 font-bold">OP_ID: #{f.id.slice(0,8).toUpperCase()}</span>
@@ -806,7 +806,6 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
                              </div>
                           </div>
 
-                          {/* 🔥 INJEÇÃO CTO 3: Resumo Logístico p/ o CEO */}
                           <div className="grid grid-cols-3 gap-2 mt-6 bg-slate-950 p-4 rounded-2xl border border-white/5">
                              <div className="text-center border-r border-white/5">
                                <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Distância</p>
@@ -825,14 +824,24 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
 
                         <div className="flex flex-col gap-3 min-w-[200px] border-l border-white/5 pl-4 justify-center">
                            
-                           {/* AÇÕES DE REPASSE DE DINHEIRO E REEMBOLSO */}
+                           {/* 🔥 INJEÇÃO CTO 4: AÇÕES DE REPASSE COM EXIBIÇÃO DE PIX */}
                            {f.status === AppTripState.ENTREGUE && (
-                             <div className="flex flex-col gap-2">
-                               <button onClick={() => handlePedirChavePix(f)} className="bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all flex items-center justify-center gap-2">
-                                 <MessageCircle size={14} /> Cobrar Chave PIX
-                               </button>
+                             <div className="flex flex-col gap-3">
+                               
+                               {/* SE O MOTORISTA DIGITOU O PIX, MOSTRA AQUI. SE NÃO, MOSTRA O BOTÃO DE COBRAR */}
+                               {f.chavePixMotorista ? (
+                                 <div className="bg-emerald-950/40 border border-emerald-500/40 p-3 rounded-xl flex flex-col items-center gap-1 text-center relative overflow-hidden">
+                                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.1),transparent_70%)]"></div>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500 relative z-10 flex items-center gap-1"><Zap size={10}/> Chave PIX:</span>
+                                    <span className="text-sm font-black text-white select-all relative z-10 tracking-widest">{f.chavePixMotorista}</span>
+                                 </div>
+                               ) : (
+                                 <button onClick={() => handlePedirChavePix(f)} className="bg-amber-600 hover:bg-amber-500 text-white py-3 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-all flex items-center justify-center gap-2">
+                                   <MessageCircle size={14} /> Cobrar Chave PIX
+                                 </button>
+                               )}
 
-                               <button onClick={() => forceStatus(f.id, 'finalizado')} className="bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all flex flex-col items-center justify-center gap-1 group">
+                               <button onClick={() => forceStatus(f.id, 'finalizado')} className="bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all flex flex-col items-center justify-center gap-1 group mt-2">
                                  <span className="flex items-center gap-1"><Wallet size={14} /> Liquidar Repasse</span>
                                  <span className="text-[10px] font-bold text-purple-200">R$ {Number(f.valorLiquidoMotorista || f.valorMotorista).toFixed(2).replace('.',',')}</span>
                                </button>
