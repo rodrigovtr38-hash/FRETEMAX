@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/context/DriverContext.tsx
-// CTO-Log: Arquivo higienizado. Storage atualizado para Fretogo V2. Prevenção de quebras de cache.
+// CTO-Log: Arquivo higienizado. Event-Driven State Cleansing acoplado.
+// Status: Agora se auto-reseta ao finalizar ou abortar missões.
 // =========================================================
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
@@ -36,7 +37,6 @@ interface DriverProviderProps {
   children: ReactNode;
 }
 
-// ATUALIZADO: Rebranding para FretoGo e versão V2
 const DRIVER_RUNTIME_STORAGE = 'fretogo_driver_runtime_v2';
 
 export function DriverProvider({ children }: DriverProviderProps) {
@@ -51,6 +51,40 @@ export function DriverProvider({ children }: DriverProviderProps) {
     trackingActive: true,
     radarActive: true,
   });
+
+  const resetDriverRuntime = useCallback(() => {
+    setIsOnlineState(false);
+    setCurrentFreightState(null);
+    setSecurityCodeState(null);
+    setRealtime({
+      connected: true,
+      reconnecting: false,
+      dispatchActive: true,
+      trackingActive: true,
+      radarActive: true,
+    });
+    localStorage.removeItem(DRIVER_RUNTIME_STORAGE);
+  }, []);
+
+  // 🔥 CTO FIX: Escuta de Evento Global para limpar o cache quando a missão acaba
+  useEffect(() => {
+    const handleTripFinished = () => {
+      console.log('🔄 SINAL RECEBIDO: Limpando Cache do Motorista (Fim de Missão)');
+      // Apenas limpa a missão, mas mantém o status online se ele estava online
+      setCurrentFreightState(null);
+      setSecurityCodeState(null);
+      // Remove do cache de disco, mas recria mantendo o status online
+      localStorage.setItem(
+        DRIVER_RUNTIME_STORAGE,
+        JSON.stringify({ isOnline: true, currentFreight: null, securityCode: null, realtime })
+      );
+    };
+
+    window.addEventListener('FRETOGO_TRIP_FINISHED', handleTripFinished);
+    return () => {
+      window.removeEventListener('FRETOGO_TRIP_FINISHED', handleTripFinished);
+    };
+  }, [realtime]);
 
   // Hydration (Recuperar dados ao abrir o app)
   useEffect(() => {
@@ -108,20 +142,6 @@ export function DriverProvider({ children }: DriverProviderProps) {
   const setRadarActive = useCallback((value: boolean) => { setRealtime(previous => ({ ...previous, radarActive: value })); }, []);
   const setRealtimeConnected = useCallback((value: boolean) => { setRealtime(previous => ({ ...previous, connected: value })); }, []);
   const setRealtimeReconnecting = useCallback((value: boolean) => { setRealtime(previous => ({ ...previous, reconnecting: value })); }, []);
-
-  const resetDriverRuntime = useCallback(() => {
-    setIsOnlineState(false);
-    setCurrentFreightState(null);
-    setSecurityCodeState(null);
-    setRealtime({
-      connected: true,
-      reconnecting: false,
-      dispatchActive: true,
-      trackingActive: true,
-      radarActive: true,
-    });
-    localStorage.removeItem(DRIVER_RUNTIME_STORAGE);
-  }, []);
 
   const value = useMemo(
     () => ({
