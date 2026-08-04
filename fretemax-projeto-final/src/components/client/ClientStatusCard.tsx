@@ -1,11 +1,10 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
-// CTO-Log: Torre de Controle Ativa injetada. 
-// Status: Painel agora exibe ETA, Linha do tempo de operação e Avatar (quando o motorista existe).
+// CTO-Log: Injeção do Bloco 2 (Torre de Controle NASA).
 // =========================================================
 
 import { useState, useEffect } from 'react';
-import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star } from 'lucide-react';
+import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star, MapPin, CheckCircle2 } from 'lucide-react';
 
 interface ClientStatusCardProps {
   orderData: any;
@@ -67,6 +66,37 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
   // ETA Mock (Poderia vir do banco no futuro via Google Matrix)
   const etaMinutes = isDataReady ? Math.max(10, Math.round(distancia * 1.5)) : 0;
 
+  // Lógica da Linha do Tempo (Timeline)
+  const getTimelineStepStatus = (stepIndex: number) => {
+    const statusSequence = [
+      ['aceito', 'indo_coleta', 'chegou_coleta'],
+      ['coletando'],
+      ['em_transporte', 'parado_operacional'],
+      ['finalizando', 'entregue', 'finalizado']
+    ];
+    
+    // Verifica em qual índice o status atual se encontra
+    let currentStepIndex = -1;
+    for (let i = 0; i < statusSequence.length; i++) {
+      if (statusSequence[i].includes(status)) {
+        currentStepIndex = i;
+        break;
+      }
+    }
+
+    if (currentStepIndex === -1) return 'pending'; // Antes do aceite
+    if (stepIndex < currentStepIndex) return 'completed';
+    if (stepIndex === currentStepIndex) return 'active';
+    return 'pending';
+  };
+
+  const steps = [
+    { title: 'A Caminho', icon: <Navigation size={14} /> },
+    { title: 'Coletando', icon: <Package size={14} /> },
+    { title: 'Em Trânsito', icon: <Truck size={14} /> },
+    { title: 'Entregue', icon: <CheckCircle2 size={14} /> }
+  ];
+
   return (
     <div className="rounded-[2.5rem] border border-white/10 bg-slate-900/80 p-6 md:p-8 shadow-2xl backdrop-blur-xl animate-in fade-in duration-300">
       
@@ -114,26 +144,57 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
 
       <div className="space-y-4">
         
-        {/* 🔥 CTO FIX: Torre de Controle Expandida (Rastreio) */}
+        {/* LINHA DO TEMPO DA OPERAÇÃO (Só aparece após o aceite) */}
+        {motoristaNome && !showWarning && (
+          <div className="mb-6 py-4">
+            <div className="flex items-center justify-between relative">
+              <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-800 -translate-y-1/2 z-0"></div>
+              {steps.map((step, idx) => {
+                const stepStatus = getTimelineStepStatus(idx);
+                return (
+                  <div key={idx} className="relative z-10 flex flex-col items-center gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                      stepStatus === 'completed' ? 'bg-emerald-500 border-emerald-400 text-slate-900' :
+                      stepStatus === 'active' ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(59,130,246,0.6)]' :
+                      'bg-slate-900 border-slate-700 text-slate-600'
+                    }`}>
+                      {step.icon}
+                    </div>
+                    <span className={`text-[8px] font-black uppercase tracking-widest absolute -bottom-5 whitespace-nowrap ${
+                      stepStatus === 'completed' ? 'text-emerald-500' :
+                      stepStatus === 'active' ? 'text-blue-400' :
+                      'text-slate-600'
+                    }`}>{step.title}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* MOTORISTA (TORRE DA NASA) */}
         {motoristaNome && (
-          <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors hover:bg-slate-950/80">
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mt-6">
             <div className="flex items-center gap-4 min-w-0">
-              <div className="relative">
-                <div className="w-14 h-14 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
+              <div className="relative shrink-0">
+                <div className="w-14 h-14 rounded-full bg-slate-800 overflow-hidden border-2 border-blue-500/50 flex items-center justify-center">
                   <User size={24} className="text-blue-400" />
                 </div>
-                <div className="absolute -bottom-1 -right-1 bg-amber-500 text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-slate-900">
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-slate-900 shadow-md">
                   5.0 <Star size={8} fill="currentColor"/>
                 </div>
               </div>
               <div className="min-w-0">
-                <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Profissional Designado</span>
+                <span className="text-[9px] font-black uppercase tracking-wider text-blue-400 block mb-0.5">Parceiro Verificado</span>
                 <p className="text-lg font-black truncate text-white leading-tight">
                   {motoristaNome}
                 </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] font-bold text-cyan-400 uppercase bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="text-[10px] font-bold text-slate-300 uppercase bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
                     {veiculo?.replace('_', ' ') || 'Veículo'}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+                    PLACA: F**-***9
                   </span>
                 </div>
               </div>
@@ -141,8 +202,8 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
             
             {/* ETA Real-Time View */}
             {['aceito', 'indo_coleta', 'em_transporte'].includes(status) && (
-              <div className="w-full md:w-auto bg-slate-900 rounded-xl p-3 border border-white/5 flex items-center gap-3 shrink-0">
-                <Navigation size={18} className="text-blue-400 animate-pulse" />
+              <div className="w-full md:w-auto bg-slate-950/80 rounded-xl p-3 border border-white/10 flex items-center gap-3 shrink-0 shadow-inner">
+                <Navigation size={18} className="text-cyan-400 animate-pulse" />
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Estimativa (ETA)</p>
                   <p className="text-sm font-black text-white">{etaMinutes} min restantes</p>
