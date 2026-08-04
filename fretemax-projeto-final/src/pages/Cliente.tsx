@@ -1,6 +1,6 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Injeção do Bloco 2 (Torre de Controle + PWA).
+// CTO-Log: Injeção do Bloco 2 (Smart Pricing / Auto-Bid) e Correção de Crash.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -522,6 +522,59 @@ export default function Cliente() {
     } finally { setLoadingPayment(false); isProcessingPayment.current = false; }
   };
 
+  // 🔥 CTO FIX: Lógica de Smart Pricing (Auto-Bid)
+  const handleSmartPricing = async (valorAdicional: number) => {
+    if (!currentOrderId || !orderData) return;
+    try {
+      showToast('Recalculando e injetando nova oferta...', 'warning');
+      
+      const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(orderData.veiculo || '');
+      const taxaPlataforma = isHeavy ? 0.15 : 0.20;
+      
+      const novoBruto = (orderData.valorFreteBruto || 0) + valorAdicional;
+      const novoLucro = novoBruto * taxaPlataforma;
+      const novoLiquido = novoBruto - novoLucro;
+
+      const dataExpiracao = new Date();
+      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 15);
+
+      await updateDoc(doc(db, 'fretes', currentOrderId), {
+        valorTotal: novoBruto,
+        valorFreteBruto: novoBruto,
+        valorMotorista: Number(novoLiquido.toFixed(2)),
+        valorLiquidoMotorista: Number(novoLiquido.toFixed(2)),
+        lucroPlataforma: Number(novoLucro.toFixed(2)),
+        status: 'disponivel', // Volta pro radar
+        prioridade: true, // Tag de urgência ativada
+        ofertaExpiraEm: Timestamp.fromDate(dataExpiracao),
+        createdAt: serverTimestamp() // Volta pro topo da lista
+      });
+      
+      showToast(`Sucesso! Oferta aumentada em R$ ${valorAdicional}.`, 'success');
+    } catch (error) {
+      showToast('Erro ao atualizar a oferta no banco.', 'error');
+    }
+  };
+
+  // 🔥 CTO FIX: Republicar sem alterar o valor
+  const handleRepublicar = async () => {
+    if (!currentOrderId) return;
+    try {
+      showToast('Reiniciando radar...', 'warning');
+      const dataExpiracao = new Date();
+      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 15);
+
+      await updateDoc(doc(db, 'fretes', currentOrderId), {
+        status: 'disponivel',
+        ofertaExpiraEm: Timestamp.fromDate(dataExpiracao),
+        createdAt: serverTimestamp()
+      });
+      showToast('Carga republicada no topo do Feed.', 'success');
+    } catch (error) {
+      showToast('Erro ao republicar.', 'error');
+    }
+  };
+
   const handleCancelarPedido = async () => {
     if (!currentOrderId || isCancelling) return;
     setIsCancelling(true);
@@ -982,19 +1035,15 @@ export default function Cliente() {
               </div>
 
               <div className="flex flex-col gap-6">
-                {['sem_motorista', 'expirado'].includes(orderData?.status || '') && (
-                  <div className="bg-white/90 p-6 rounded-[2rem] border border-amber-200 text-center shadow-xl">
-                    <div className="bg-amber-100 p-4 rounded-full mb-4 inline-block"><AlertTriangle className="h-8 w-8 text-amber-500" /></div>
-                    <h3 className="text-xl font-black text-slate-900 mb-2">Nenhum Aceite</h3>
-                    <p className="text-xs font-bold text-slate-500 mb-6">A oferta expirou no Feed.</p>
-                    <button onClick={handleRetrySearch} className="w-full flex items-center justify-center gap-2 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-xs mb-3 shadow-lg"><RefreshCw size={16} /> Republicar Carga</button>
-                    <button onClick={() => setShowCancelModal(true)} className="w-full flex items-center justify-center gap-2 py-4 bg-red-50 text-red-600 border border-red-200 rounded-xl font-black uppercase text-xs hover:bg-red-100"><XCircle size={16} /> Cancelar e Reembolsar PIX</button>
-                  </div>
-                )}
+                
+                {/* 🔥 CTO FIX: Passando as funções de negociação para a Torre de Controle */}
+                <ClientStatusCard 
+                  orderData={orderData} 
+                  onSmartPricing={handleSmartPricing}
+                  onRepublicar={handleRepublicar}
+                  onCancelar={() => setShowCancelModal(true)}
+                />
 
-                <ClientStatusCard orderData={orderData} />
-
-                {/* Este bloco menor de Motorista Designado pode ser ocultado se a Torre assumir, mas manteremos por segurança redundante */}
               </div>
 
             </div>
