@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/App.tsx
-// CTO-Log: Sprint 1 - Limpeza de Topologia e Preparação de Rotas B2B/B2C.
-// Integração do Firebase e Contextos mantida INTACTA para evitar quebra de listeners.
-// Injeção Global da Inteligência Artificial (FTI) implementada.
+// CTO-Log: Sprint 1 - Injeção do DriverProvider corrigida na topologia de Rotas.
+// O Motorista agora está corretamente envelopado pelo seu Contexto nativo.
 // =========================================================
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
@@ -17,6 +16,7 @@ import Motorista from './pages/Motorista';
 import Admin from './pages/Admin';
 
 import { ClientProvider } from './context/ClientContext';
+import { DriverProvider } from './context/DriverContext'; // 🔥 CTO FIX: Importação do Provedor do Motorista
 
 // =========================================================
 // INJEÇÃO DA INTELIGÊNCIA ARTIFICIAL (FTI)
@@ -109,7 +109,6 @@ export default function App() {
 
             {/* ======================================================
                 MÓDULO: EMBARCADOR (Empresas / B2B)
-                Nota: ClientProvider mantido provisoriamente para proteção do Firebase
             ====================================================== */}
             <Route 
               path="/cliente" 
@@ -122,8 +121,16 @@ export default function App() {
 
             {/* ======================================================
                 MÓDULO: TRANSPORTADOR (Motoristas / Agregados)
+                🔥 CTO FIX: Rota do Motorista agora envelopada pelo DriverProvider
             ====================================================== */}
-            <Route path="/motorista" element={<Motorista />} />
+            <Route 
+              path="/motorista" 
+              element={
+                <DriverProvider>
+                  <Motorista />
+                </DriverProvider>
+              } 
+            />
 
             {/* ======================================================
                 MÓDULO: TORRE DE CONTROLE (Admin)
