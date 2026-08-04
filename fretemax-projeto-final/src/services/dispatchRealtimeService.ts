@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
-// CTO-Log: Telemetria Live, Tratamento Atômico e Limpeza de Estado Zumbi (Event-Driven).
-// Status: Failsafe para liberação de motorista implementado.
+// CTO-Log: Correção de Path Crítico no Firestore.
+// Status: Coleção corrigida de 'motoristas' para 'motoristas_cadastros' para evitar Batch Rejection (Falha Silenciosa).
 // =========================================================
 
 import { writeBatch, doc, updateDoc } from 'firebase/firestore';
@@ -61,13 +61,14 @@ class DispatchRealtimeService {
       const batch = writeBatch(db);
       const timestamp = Date.now();
 
-      const driverRef = doc(db, 'motoristas', driverId);
+      // 🔥 CTO FIX: Coleção corrigida de 'motoristas' para 'motoristas_cadastros'
+      const driverRef = doc(db, 'motoristas_cadastros', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
       batch.update(driverRef, {
         state: DriverState.ACEITOU,
         freteAtualId: freteId,
-        activeTripId: freteId, // Prevenção de legado
+        activeTripId: freteId, 
         disponivel: false,
         atualizadoEm: timestamp,
       });
@@ -92,15 +93,15 @@ class DispatchRealtimeService {
       const batch = writeBatch(db);
       const timestamp = Date.now();
 
-      const driverRef = doc(db, 'motoristas', driverId);
+      // 🔥 CTO FIX: Coleção corrigida de 'motoristas' para 'motoristas_cadastros'
+      const driverRef = doc(db, 'motoristas_cadastros', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
-      // 🔥 CTO FIX: Limpeza absoluta de qualquer rastro de viagem no motorista
       batch.update(driverRef, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
-        activeTripId: null, // Mata o zumbi
-        currentTripId: null, // Mata o zumbi
+        activeTripId: null, 
+        currentTripId: null, 
         disponivel: true,
         atualizadoEm: timestamp,
       });
@@ -114,7 +115,7 @@ class DispatchRealtimeService {
       await batch.commit();
       locationRealtimeService.stop();
       
-      // 🔥 CTO FIX: Dispara evento global para forçar o Frontend a limpar o Cache
+      // Dispara evento global para forçar o Frontend a limpar o Cache
       window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
 
     } catch (error) {
@@ -128,10 +129,10 @@ class DispatchRealtimeService {
       const batch = writeBatch(db);
       const timestamp = Date.now();
 
-      const driverRef = doc(db, 'motoristas', driverId);
+      // 🔥 CTO FIX: Coleção corrigida de 'motoristas' para 'motoristas_cadastros'
+      const driverRef = doc(db, 'motoristas_cadastros', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
-      // 🔥 CTO FIX: Limpeza absoluta de qualquer rastro de viagem
       batch.update(driverRef, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
@@ -141,7 +142,6 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
-      // 2. Devolve a carga para o Feed e limpa os dados do motorista atual
       batch.update(freteRef, {
         status: AppTripState.DISPONIVEL,
         motoristaId: null,
@@ -156,7 +156,7 @@ class DispatchRealtimeService {
       await batch.commit();
       locationRealtimeService.stop();
 
-      // 🔥 CTO FIX: Dispara evento global para forçar o Frontend a limpar o Cache
+      // Dispara evento global para forçar o Frontend a limpar o Cache
       window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
 
     } catch (error) {
