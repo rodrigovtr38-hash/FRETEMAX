@@ -1,16 +1,19 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
-// CTO-Log: Injeção do Bloco 2 (Torre de Controle NASA).
+// CTO-Log: Injeção do Bloco 2 (Painel Inteligente de Auto-Bid).
 // =========================================================
 
 import { useState, useEffect } from 'react';
-import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star, MapPin, CheckCircle2 } from 'lucide-react';
+import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star, MapPin, CheckCircle2, DollarSign, Plus, RefreshCw, XCircle } from 'lucide-react';
 
 interface ClientStatusCardProps {
   orderData: any;
+  onSmartPricing: (valorAdicional: number) => void;
+  onRepublicar: () => void;
+  onCancelar: () => void;
 }
 
-export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
+export default function ClientStatusCard({ orderData, onSmartPricing, onRepublicar, onCancelar }: ClientStatusCardProps) {
   const status = orderData?.status;
   const motoristaNome = orderData?.motoristaNome;
   const veiculo = orderData?.veiculo;
@@ -42,13 +45,16 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // 🔥 CTO FIX: Gatilho robusto de expiração (quando o tempo zera, a Torre assume)
+  const isTimeExpired = (status === 'disponivel' && timeLeft === 0) || status === 'sem_motorista' || status === 'expirado';
+
   let safeStatus = 'Sincronizando operação...';
   let statusColor = 'text-cyan-400';
   let bgColor = 'bg-cyan-500/10 border-cyan-500/30';
 
-  if (status === 'aguardando_pagamento') { safeStatus = 'Aguardando Escrow'; }
+  if (isTimeExpired) { safeStatus = 'Baixa Procura (Mural)'; statusColor = 'text-amber-400'; bgColor = 'bg-amber-500/10 border-amber-500/30'; }
+  else if (status === 'aguardando_pagamento') { safeStatus = 'Aguardando Escrow'; }
   else if (status === 'disponivel' || status === 'buscando_motorista') { safeStatus = 'Radar Ativo no Feed'; }
-  else if (status === 'sem_motorista' || status === 'expirado') { safeStatus = 'Tempo Esgotado'; statusColor = 'text-amber-400'; bgColor = 'bg-amber-500/10 border-amber-500/30'; }
   else if (status === 'cancelado') { safeStatus = 'Operação Abortada'; statusColor = 'text-red-400'; bgColor = 'bg-red-500/10 border-red-500/30'; }
   else if (status === 'aceito') { safeStatus = 'Motorista a Caminho'; statusColor = 'text-blue-400'; bgColor = 'bg-blue-500/10 border-blue-500/30'; }
   else if (status === 'indo_coleta') { safeStatus = 'Indo para Coleta'; statusColor = 'text-blue-400'; bgColor = 'bg-blue-500/10 border-blue-500/30'; }
@@ -61,12 +67,8 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
   const displayDistance = isDataReady ? `${distancia.toFixed(1)} km` : 'Calculando...';
   const displayPrice = isDataReady ? `R$ ${valorTotal.toFixed(2).replace('.', ',')}` : '---';
 
-  const showWarning = status === 'sem_motorista' || status === 'expirado';
-
-  // ETA Mock (Poderia vir do banco no futuro via Google Matrix)
   const etaMinutes = isDataReady ? Math.max(10, Math.round(distancia * 1.5)) : 0;
 
-  // Lógica da Linha do Tempo (Timeline)
   const getTimelineStepStatus = (stepIndex: number) => {
     const statusSequence = [
       ['aceito', 'indo_coleta', 'chegou_coleta'],
@@ -75,7 +77,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
       ['finalizando', 'entregue', 'finalizado']
     ];
     
-    // Verifica em qual índice o status atual se encontra
     let currentStepIndex = -1;
     for (let i = 0; i < statusSequence.length; i++) {
       if (statusSequence[i].includes(status)) {
@@ -84,7 +85,7 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
       }
     }
 
-    if (currentStepIndex === -1) return 'pending'; // Antes do aceite
+    if (currentStepIndex === -1) return 'pending'; 
     if (stepIndex < currentStepIndex) return 'completed';
     if (stepIndex === currentStepIndex) return 'active';
     return 'pending';
@@ -103,7 +104,7 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className={`p-3.5 rounded-[1.5rem] border ${bgColor}`}>
-            {showWarning ? (
+            {isTimeExpired ? (
               <AlertTriangle className="h-7 w-7 text-amber-400" />
             ) : (
               <Radar className={`h-7 w-7 ${statusColor} ${['disponivel', 'aguardando_pagamento'].includes(status) ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
@@ -119,7 +120,7 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
           </div>
         </div>
 
-        {status === 'disponivel' && (
+        {status === 'disponivel' && !isTimeExpired && (
           <div className="flex items-center gap-3 bg-slate-950/80 border border-cyan-500/20 px-4 py-2.5 rounded-2xl">
             <Timer className="text-cyan-400 animate-pulse" size={20} />
             <div>
@@ -130,22 +131,45 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
         )}
       </div>
 
-      {showWarning && (
-        <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5 flex items-start gap-4">
-           <TrendingUp className="text-amber-400 shrink-0 mt-0.5" size={20} />
-           <div>
-              <p className="text-xs font-black text-amber-400 uppercase tracking-widest mb-1">Dica de Mercado</p>
-              <p className="text-xs font-bold text-amber-100/80 leading-relaxed">
-                Nenhum parceiro aceitou a carga neste valor dentro do tempo limite. Feche este pedido e poste novamente com uma tarifa maior para atrair a frota rapidamente.
-              </p>
+      {/* 🔥 CTO FIX: PAINEL SMART PRICING (SÓ APARECE QUANDO O TEMPO ZERA) */}
+      {isTimeExpired && (
+        <div className="mb-6 rounded-[2rem] border border-amber-500/30 bg-amber-500/10 p-6 animate-in slide-in-from-bottom-4 shadow-xl">
+           <div className="flex items-start gap-4 mb-6">
+              <TrendingUp className="text-amber-400 shrink-0 mt-1" size={24} />
+              <div>
+                 <p className="text-sm font-black text-amber-400 uppercase tracking-widest mb-1">Carga parada no mural</p>
+                 <p className="text-xs font-medium text-amber-100/90 leading-relaxed">
+                   O tempo limite de 15 minutos foi atingido e a carga não recebeu aceites nesse valor. 
+                   Utilize a ferramenta de Auto-Bid abaixo para injetar um valor extra e chamar a atenção imediata da frota.
+                 </p>
+              </div>
+           </div>
+           
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+              <button onClick={() => { onSmartPricing(20); setTimeLeft(TEMPO_FEED_SEGUNDOS); }} className="w-full flex items-center justify-between px-5 py-4 bg-slate-900 border border-amber-500/30 rounded-xl hover:bg-slate-800 transition-colors">
+                 <span className="text-xs font-black text-slate-300 uppercase">Injetar Oferta</span>
+                 <span className="text-sm font-black text-emerald-400 flex items-center gap-1"><Plus size={14}/> R$ 20,00</span>
+              </button>
+              <button onClick={() => { onSmartPricing(50); setTimeLeft(TEMPO_FEED_SEGUNDOS); }} className="w-full flex items-center justify-between px-5 py-4 bg-slate-900 border border-amber-500/30 rounded-xl hover:bg-slate-800 transition-colors">
+                 <span className="text-xs font-black text-slate-300 uppercase">Injetar Oferta</span>
+                 <span className="text-sm font-black text-emerald-400 flex items-center gap-1"><Plus size={14}/> R$ 50,00</span>
+              </button>
+           </div>
+           
+           <div className="grid grid-cols-2 gap-3 pt-3 border-t border-amber-500/20">
+              <button onClick={() => { onRepublicar(); setTimeLeft(TEMPO_FEED_SEGUNDOS); }} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900/50 text-slate-400 border border-slate-700/50 rounded-xl font-black uppercase text-[10px] hover:text-white transition-all">
+                <RefreshCw size={14} /> Manter valor e Republicar
+              </button>
+              <button onClick={onCancelar} className="w-full flex items-center justify-center gap-2 py-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl font-black uppercase text-[10px] hover:bg-red-500/20 transition-all">
+                <XCircle size={14} /> Cancelar e Estornar
+              </button>
            </div>
         </div>
       )}
 
       <div className="space-y-4">
         
-        {/* LINHA DO TEMPO DA OPERAÇÃO (Só aparece após o aceite) */}
-        {motoristaNome && !showWarning && (
+        {motoristaNome && !isTimeExpired && (
           <div className="mb-6 py-4">
             <div className="flex items-center justify-between relative">
               <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-800 -translate-y-1/2 z-0"></div>
@@ -172,7 +196,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
           </div>
         )}
 
-        {/* MOTORISTA (TORRE DA NASA) */}
         {motoristaNome && (
           <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mt-6">
             <div className="flex items-center gap-4 min-w-0">
@@ -200,7 +223,6 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
               </div>
             </div>
             
-            {/* ETA Real-Time View */}
             {['aceito', 'indo_coleta', 'em_transporte'].includes(status) && (
               <div className="w-full md:w-auto bg-slate-950/80 rounded-xl p-3 border border-white/10 flex items-center gap-3 shrink-0 shadow-inner">
                 <Navigation size={18} className="text-cyan-400 animate-pulse" />
@@ -213,7 +235,7 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
           </div>
         )}
 
-        {!motoristaNome && (
+        {!motoristaNome && !isTimeExpired && (
           <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-4 flex items-center justify-between transition-colors hover:bg-slate-950/80">
             <div className="flex items-center gap-3 min-w-0">
               <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 shrink-0">
@@ -221,15 +243,14 @@ export default function ClientStatusCard({ orderData }: ClientStatusCardProps) {
               </div>
               <div className="min-w-0">
                 <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Profissional Designado</span>
-                <p className={`text-sm font-bold truncate mt-0.5 ${showWarning ? 'text-amber-400/80' : 'text-white'}`}>
-                  {showWarning ? 'Aguardando republicação' : 'Buscando parceiros no raio...'}
+                <p className="text-sm font-bold truncate mt-0.5 text-white">
+                  Buscando parceiros no raio...
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* ROTA E FINANCEIRO */}
         <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-4 flex items-center justify-between transition-colors hover:bg-slate-950/80">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-yellow-500/10 rounded-xl text-yellow-400 shrink-0">
