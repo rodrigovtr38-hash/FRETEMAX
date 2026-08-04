@@ -1,28 +1,35 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Injeção de Válvula de Escape (Abortar Missão).
-// Status: Motorista pode cancelar a corrida e o sistema devolve o frete ao Feed.
+// CTO-Log: Refatoração Flow-First. Bug do PIN resolvido. 
+// Sistema de deep linking para Waze/Maps injetado.
+// Desmontagem automática do componente no final da operação.
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth, db } from '../firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
-import { LockKeyhole, ShieldCheck, DollarSign, CheckCircle2, ArrowRight, AlertTriangle } from 'lucide-react';
+import { LockKeyhole, ShieldCheck, DollarSign, CheckCircle2, ArrowRight, AlertTriangle, Map, Navigation } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
+import { useDriverContext } from '../context/DriverContext';
 
 interface DriverActiveTripProps {
   freteId?: string;
 }
 
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
+  // CTO-FIX: Trazendo o contexto para "matar" a missão localmente
+  const { setCurrentFreight } = useDriverContext();
+  
   const [frete, setFrete] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
   // Modais
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isNavModalOpen, setIsNavModalOpen] = useState(false);
+  const [navDestination, setNavDestination] = useState<{lat: number, lng: number} | null>(null);
 
   const [pinValue, setPinValue] = useState('');
   const [pinError, setPinError] = useState('');
@@ -34,18 +41,30 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       if (docSnap.exists()) {
         setFrete({ id: docSnap.id, ...docSnap.data() });
       } else {
-        setFrete(null);
+        // Se deletaram do banco, limpa a sessão local
+        setCurrentFreight(null);
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [freteId]);
+  }, [freteId, setCurrentFreight]);
+
+  // CTO-FIX: Ejeção Automática (Prevenção de Loop de PIN)
+  useEffect(() => {
+    if (frete?.status === 'entregue' || frete?.status === 'finalizado') {
+      const timer = setTimeout(() => {
+        setCurrentFreight(null); // Desmonta a tela e volta ao Radar após 5s
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [frete?.status, setCurrentFreight]);
 
   if (loading) return <div className="flex h-64 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5"><div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div></div>;
   if (!frete) return null;
 
   const valorA_Receber = Number(frete.valorLiquidoMotorista || frete.valorMotorista || 0).toFixed(2).replace('.', ',');
 
+  // TELA DE SUCESSO PÓS-PIN FINAL
   if (frete.status === 'entregue' || frete.status === 'finalizado') {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2rem] border border-emerald-500/30 bg-slate-900 shadow-[0_0_50px_rgba(16,185,129,0.1)] p-8 md:p-12 text-center relative overflow-hidden">
@@ -63,7 +82,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             <p className="text-[10px] font-bold text-emerald-500/70 mt-3 uppercase tracking-widest bg-emerald-500/10 py-2 rounded-xl">O repasse via PIX ocorrerá em até 24h.</p>
           </div>
 
-          <button onClick={() => window.location.reload()} className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-900/50 transition-all active:scale-95 flex items-center justify-center gap-2">
+          <button onClick={() => setCurrentFreight(null)} className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-900/50 transition-all active:scale-95 flex items-center justify-center gap-2">
             Voltar para o Radar <ArrowRight size={18} />
           </button>
         </div>
@@ -118,6 +137,8 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
            const currentUser = auth.currentUser;
            if(currentUser) {
              await dispatchRealtimeService.concluirViagemELiberarMotorista(currentUser.uid, frete.id);
+             // A tela de sucesso "Corrida Finalizada" será renderizada via onSnapshot,
+             // e o useEffect ejetará o driver em 5 segundos.
            }
         }
       }
@@ -125,7 +146,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     } catch (e) { setPinError('Erro ao validar.'); } finally { setActionLoading(false); }
   };
 
-  // 🔥 CTO FIX: Tratativa de Abortar Missão
   const handleCancelTrip = async (motivo: string) => {
     setActionLoading(true);
     try {
@@ -133,12 +153,29 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       if (!currentUser) return;
       await dispatchRealtimeService.cancelarViagemMotorista(currentUser.uid, frete.id, motivo);
       setIsCancelModalOpen(false);
-      // Ao cancelar, o motorista volta para o radar limpo instantaneamente via onSnapshot
+      // CTO-FIX: Ejetar para o Radar instantaneamente
+      setCurrentFreight(null); 
     } catch (e) {
       console.error(e);
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // NAVEGAÇÃO ASSISTIDA (P1)
+  const openAppRoute = (app: 'maps' | 'waze') => {
+    if (!navDestination) return;
+    const { lat, lng } = navDestination;
+    let url = '';
+    
+    if (app === 'maps') {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+    } else {
+      url = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+    }
+    
+    window.open(url, '_blank');
+    setIsNavModalOpen(false);
   };
 
   const isMultiDrop = frete.pinEntregas && frete.pinEntregas.length > 1;
@@ -193,9 +230,14 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           )}
           
           {frete.status === 'indo_coleta' && (
-            <button onClick={() => handleStatusUpdate('chegou_coleta')} disabled={actionLoading} className="w-full bg-indigo-500 py-4 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 hover:bg-indigo-400 transition-colors shadow-lg shadow-indigo-900/50">
-              Cheguei no Local
-            </button>
+            <div className="flex gap-2 flex-col md:flex-row">
+              <button onClick={() => { setNavDestination(origemGPS); setIsNavModalOpen(true); }} className="w-full md:w-1/3 bg-slate-800 border border-cyan-500/30 py-4 font-black uppercase tracking-widest rounded-xl text-cyan-400 hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
+                <Navigation size={18} /> Rota GPS
+              </button>
+              <button onClick={() => handleStatusUpdate('chegou_coleta')} disabled={actionLoading} className="w-full md:w-2/3 bg-indigo-500 py-4 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 hover:bg-indigo-400 transition-colors shadow-lg shadow-indigo-900/50">
+                Cheguei no Local
+              </button>
+            </div>
           )}
 
           {frete.status === 'chegou_coleta' && (
@@ -204,10 +246,21 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             </button>
           )}
 
-          {['coletando', 'em_transporte'].includes(frete.status) && (
-            <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading} className="w-full bg-emerald-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:bg-emerald-400 transition-colors">
-              Validar PIN - {frete.status === 'coletando' ? 'Sair com Carga' : (isMultiDrop && paradaAtualIndex + 1 < frete.pinEntregas.length ? 'Próximo Destino' : 'Finalizar Entrega')}
-            </button>
+          {frete.status === 'coletando' && (
+             <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading} className="w-full bg-emerald-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:bg-emerald-400 transition-colors">
+               Validar PIN - Sair com Carga
+             </button>
+          )}
+
+          {frete.status === 'em_transporte' && (
+            <div className="flex gap-2 flex-col md:flex-row">
+              <button onClick={() => { setNavDestination(destinoGPS); setIsNavModalOpen(true); }} className="w-full md:w-1/3 bg-slate-800 border border-cyan-500/30 py-4 font-black uppercase tracking-widest rounded-xl text-cyan-400 hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
+                <Navigation size={18} /> Rota GPS
+              </button>
+              <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading} className="w-full md:w-2/3 bg-emerald-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:bg-emerald-400 transition-colors">
+                Validar PIN - {isMultiDrop && paradaAtualIndex + 1 < frete.pinEntregas.length ? 'Próximo Destino' : 'Finalizar Entrega'}
+              </button>
+            </div>
           )}
 
           {/* VÁLVULA DE ESCAPE: ABORTAR MISSÃO */}
@@ -218,9 +271,41 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           >
             Relatar Problema / Abortar Missão
           </button>
-
         </div>
       </motion.div>
+
+      {/* MODAL DE ESCOLHA DE GPS (WAZE / MAPS) */}
+      <AnimatePresence>
+        {isNavModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="bg-slate-900 p-8 rounded-3xl w-full max-w-sm border border-cyan-500/50 shadow-[0_0_50px_rgba(6,182,212,0.15)] relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-blue-500"></div>
+              
+              <div className="flex justify-center mb-4 mt-2">
+                <div className="w-16 h-16 rounded-full bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+                   <Map size={32} className="text-cyan-400" />
+                </div>
+              </div>
+              <h3 className="text-white text-center font-black mb-6 uppercase text-lg tracking-tighter">
+                Escolha o Aplicativo
+              </h3>
+              
+              <div className="flex flex-col gap-3 mb-6">
+                <button onClick={() => openAppRoute('waze')} className="w-full bg-slate-950 border border-indigo-500/30 py-4 font-black uppercase text-xs rounded-xl text-indigo-400 hover:bg-indigo-500/10 transition-colors flex items-center justify-center gap-2">
+                  Abrir no Waze
+                </button>
+                <button onClick={() => openAppRoute('maps')} className="w-full bg-slate-950 border border-emerald-500/30 py-4 font-black uppercase text-xs rounded-xl text-emerald-400 hover:bg-emerald-500/10 transition-colors flex items-center justify-center gap-2">
+                  Abrir no Google Maps
+                </button>
+              </div>
+              
+              <button onClick={() => setIsNavModalOpen(false)} className="w-full bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5 transition-colors">
+                Cancelar
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* MODAL DO PIN DE SEGURANÇA */}
       <AnimatePresence>
@@ -265,7 +350,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         )}
       </AnimatePresence>
 
-      {/* MODAL DE ABORTAR MISSÃO (VÁLVULA DE ESCAPE) */}
+      {/* MODAL DE ABORTAR MISSÃO */}
       <AnimatePresence>
         {isCancelModalOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
