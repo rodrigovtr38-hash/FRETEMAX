@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
-// CTO-Log: Telemetria Live e Tratamento de Exceções.
-// Status: Nova função de Injeção de Chave PIX adicionada.
+// CTO-Log: Telemetria Live, Tratamento Atômico e Limpeza de Estado Zumbi (Event-Driven).
+// Status: Failsafe para liberação de motorista implementado.
 // =========================================================
 
 import { writeBatch, doc, updateDoc } from 'firebase/firestore';
@@ -67,6 +67,7 @@ class DispatchRealtimeService {
       batch.update(driverRef, {
         state: DriverState.ACEITOU,
         freteAtualId: freteId,
+        activeTripId: freteId, // Prevenção de legado
         disponivel: false,
         atualizadoEm: timestamp,
       });
@@ -94,9 +95,12 @@ class DispatchRealtimeService {
       const driverRef = doc(db, 'motoristas', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
+      // 🔥 CTO FIX: Limpeza absoluta de qualquer rastro de viagem no motorista
       batch.update(driverRef, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
+        activeTripId: null, // Mata o zumbi
+        currentTripId: null, // Mata o zumbi
         disponivel: true,
         atualizadoEm: timestamp,
       });
@@ -109,6 +113,10 @@ class DispatchRealtimeService {
 
       await batch.commit();
       locationRealtimeService.stop();
+      
+      // 🔥 CTO FIX: Dispara evento global para forçar o Frontend a limpar o Cache
+      window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+
     } catch (error) {
       console.error('ERRO AO CONCLUIR VIAGEM (BATCH):', error);
       throw error;
@@ -123,10 +131,12 @@ class DispatchRealtimeService {
       const driverRef = doc(db, 'motoristas', driverId);
       const freteRef = doc(db, 'fretes', freteId);
 
-      // 1. Libera o motorista totalmente
+      // 🔥 CTO FIX: Limpeza absoluta de qualquer rastro de viagem
       batch.update(driverRef, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
+        activeTripId: null,
+        currentTripId: null,
         disponivel: true,
         atualizadoEm: timestamp,
       });
@@ -145,6 +155,10 @@ class DispatchRealtimeService {
 
       await batch.commit();
       locationRealtimeService.stop();
+
+      // 🔥 CTO FIX: Dispara evento global para forçar o Frontend a limpar o Cache
+      window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+
     } catch (error) {
       console.error('ERRO AO ABORTAR VIAGEM (BATCH):', error);
       throw error;
@@ -219,7 +233,6 @@ class DispatchRealtimeService {
     }
   }
 
-  // 🔥 CTO FIX: Salvar Chave PIX direto no banco para o Painel Admin ler
   async salvarChavePix(freteId: string, chavePix: string) {
     try {
       await updateDoc(doc(db, 'fretes', freteId), {
