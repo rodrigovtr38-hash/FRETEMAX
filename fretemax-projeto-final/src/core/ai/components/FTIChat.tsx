@@ -1,23 +1,36 @@
 // ============================================================================
 // ARQUIVO: src/core/ai/components/FTIChat.tsx
-// CTO-Log: Refinamento de Tipagem.
-// Status: Import de contexto corrigido para evitar falha de renderização na compilação.
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: Persistência local ativada. O usuário não perde o chat ao minimizar o pop-over.
 // ============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFTI } from '../hooks/useFTI';
-// 🔥 CTO FIX: Caminho de importação corrigido para o diretório de tipos unificado.
 import { IAContext } from '../types/ia.context';
 
 interface FTIChatProps {
   context: IAContext;
 }
 
+interface Message {
+  role: 'user' | 'fti';
+  text: string;
+}
+
 export const FTIChat: React.FC<FTIChatProps> = ({ context }) => {
   const { interactWithAI, isProcessing } = useFTI(context);
-  
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{role: 'user' | 'fti', text: string}[]>([]);
+  
+  // Inicialização segura com Sessão Local
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = sessionStorage.getItem(`fti_chat_${context.user?.uid || 'guest'}`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Atualização atômica do histórico
+  useEffect(() => {
+    sessionStorage.setItem(`fti_chat_${context.user?.uid || 'guest'}`, JSON.stringify(messages));
+  }, [messages, context.user?.uid]);
 
   const handleSend = async () => {
     if (!input.trim() || isProcessing) return;
@@ -45,31 +58,34 @@ export const FTIChat: React.FC<FTIChatProps> = ({ context }) => {
         {isProcessing && <span className="text-xs text-slate-300 font-normal tracking-widest">PROCESSANDO...</span>}
       </div>
 
-      <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-50">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center opacity-60">
-            <p className="text-slate-600 text-sm font-medium">
-              Operador conectado: {context.name || 'Usuário'}
-            </p>
-            <p className="text-slate-500 text-xs mt-1">
-              Como posso otimizar sua operação de transporte hoje?
-            </p>
-          </div>
-        ) : (
-          messages.map((msg, idx) => (
-            <div key={idx} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div 
-                className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm ${
-                  msg.role === 'user' 
-                    ? 'bg-blue-600 text-white rounded-br-none' 
-                    : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
-                }`}
-              >
-                {msg.text}
-              </div>
+      <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-50 flex flex-col-reverse custom-scrollbar">
+        {/* Usando flex-col-reverse para empurrar mensagens pra baixo se tiver poucas */}
+        <div className="flex flex-col gap-4">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center opacity-60 mt-10">
+              <p className="text-slate-600 text-sm font-medium">
+                Operador conectado: {context.user?.name || 'Usuário'}
+              </p>
+              <p className="text-slate-500 text-xs mt-1">
+                Como posso otimizar sua operação de transporte hoje?
+              </p>
             </div>
-          ))
-        )}
+          ) : (
+            messages.map((msg, idx) => (
+              <div key={idx} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div 
+                  className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm ${
+                    msg.role === 'user' 
+                      ? 'bg-blue-600 text-white rounded-br-none' 
+                      : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
+                  }`}
+                >
+                  {msg.text}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       <div className="p-3 bg-white border-t border-slate-200 flex gap-2 items-center">
