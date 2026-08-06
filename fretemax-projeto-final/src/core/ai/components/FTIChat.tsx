@@ -1,24 +1,22 @@
 // ============================================================================
-// ARQUIVO: FTIChat.tsx
-// PASTA: src/core/ai/components/
-// OBJETIVO: Interface Visual Front-End da FTI (Chat de Alta Conversão/Retenção)
+// ARQUIVO: src/core/ai/components/FTIChat.tsx
+// CTO-Log: Refinamento de Tipagem.
+// Status: Import de contexto corrigido para evitar falha de renderização na compilação.
 // ============================================================================
 
 import React, { useState } from 'react';
 import { useFTI } from '../hooks/useFTI';
-import { IAContext } from '../prompts/ia.prompts';
+// 🔥 CTO FIX: Caminho de importação corrigido para o diretório de tipos unificado.
+import { IAContext } from '../types/ia.context';
 
-// Contrato de propriedades obrigatórias para renderizar o Chat
 interface FTIChatProps {
   context: IAContext;
 }
 
 export const FTIChat: React.FC<FTIChatProps> = ({ context }) => {
-  // Instanciando o Hook que acabamos de criar na pasta anterior
   const { interactWithAI, isProcessing } = useFTI(context);
   
   const [input, setInput] = useState('');
-  // Estado local para renderizar as bolhas de chat na tela
   const [messages, setMessages] = useState<{role: 'user' | 'fti', text: string}[]>([]);
 
   const handleSend = async () => {
@@ -27,13 +25,10 @@ export const FTIChat: React.FC<FTIChatProps> = ({ context }) => {
     const userText = input.trim();
     setInput('');
     
-    // 1. Atualiza a tela imediatamente com a mensagem do motorista (Feedback visual rápido)
     setMessages(prev => [...prev, { role: 'user', text: userText }]);
 
-    // 2. Dispara o processamento neural pesado
     const response = await interactWithAI(userText);
 
-    // 3. Recebe a resposta validada (JSON) e projeta na tela
     if (response && response.content) {
       setMessages(prev => [...prev, { role: 'fti', text: response.content }]);
     }
@@ -42,7 +37,6 @@ export const FTIChat: React.FC<FTIChatProps> = ({ context }) => {
   return (
     <div className="flex flex-col h-96 w-full max-w-md bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
       
-      {/* Header Estratégico (Branding) */}
       <div className="bg-slate-900 text-white p-4 font-bold text-lg flex justify-between items-center border-b-4 border-blue-600">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
@@ -51,12 +45,11 @@ export const FTIChat: React.FC<FTIChatProps> = ({ context }) => {
         {isProcessing && <span className="text-xs text-slate-300 font-normal tracking-widest">PROCESSANDO...</span>}
       </div>
 
-      {/* Área de Rolagem de Mensagens */}
       <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-50">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center opacity-60">
             <p className="text-slate-600 text-sm font-medium">
-              Operador conectado: {context.name}
+              Operador conectado: {context.name || 'Usuário'}
             </p>
             <p className="text-slate-500 text-xs mt-1">
               Como posso otimizar sua operação de transporte hoje?
@@ -79,7 +72,6 @@ export const FTIChat: React.FC<FTIChatProps> = ({ context }) => {
         )}
       </div>
 
-      {/* Input de Comando (Engenharia de Conversão) */}
       <div className="p-3 bg-white border-t border-slate-200 flex gap-2 items-center">
         <input
           type="text"
