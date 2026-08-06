@@ -27,7 +27,6 @@ service cloud.firestore {
     // =========================================================
 
     match /motoristas_cadastros/{userId} {
-      // CORREÇÃO CRÍTICA (LGPD): Motorista só lê o próprio cadastro. Admin lê tudo.
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId);
       allow update: if
@@ -44,7 +43,6 @@ service cloud.firestore {
 
     match /motoristas_online/{userId} {
       allow read: if isAuthenticated();
-      // CORREÇÃO CRÍTICA (RADAR): Removida exigência de lat/lng/status que quebrava o app
       allow create, update: if isOwner(userId) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
     }
@@ -54,7 +52,6 @@ service cloud.firestore {
     // =========================================================
 
     match /fretes/{freteId} {
-      // CORREÇÃO CRÍTICA (LGPD): Cliente/Motorista só lê o que lhe pertence ou o que está disponível
       allow read: if isAuthenticated() && (
         resource.data.clienteId == request.auth.uid ||
         resource.data.motoristaId == request.auth.uid ||
@@ -63,38 +60,54 @@ service cloud.firestore {
         isAdmin()
       );
 
-      // CORREÇÃO (ANTI-FALSIFICAÇÃO): Exige clienteId na criação
       allow create: if isAuthenticated() && request.resource.data.keys().hasAll([
         'status', 'valorTotal', 'cidadeOrigem', 'cidadeDestino', 'createdAt'
       ]) && request.resource.data.clienteId == request.auth.uid;
 
       allow update: if
-        // 1. Admin Mestre
         isAdmin()
         ||
-        // 2. Cliente cancelando o pedido (Apenas altera status e logs de cancelamento)
         (isAuthenticated() && 
          resource.data.clienteId == request.auth.uid &&
          request.resource.data.status == 'cancelado' && 
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'canceladoEm', 'canceladoPor', 'updatedAt']))
         ||
-        // 3. Motorista aceitando frete do radar
         (isAuthenticated() && 
          resource.data.status == 'disponivel' && 
          request.resource.data.status == 'aceito' && 
          request.resource.data.motoristaId == request.auth.uid &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'motoristaId', 'aceitoEm', 'updatedAt']))
         ||
-        // 4. Motorista rodando com a carga (NUNCA pode mexer no dinheiro ou no trajeto original)
+        // Permite que o motorista já aceito altere o andamento da viagem sem mexer na grana
         (isAuthenticated() && 
          resource.data.motoristaId == request.auth.uid && 
          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'valorTotal', 'valorMotorista', 'valorFreteBruto', 'valorLiquidoMotorista', 
           'lucroPlataforma', 'valorPedagio', 'clienteNome', 'clienteZap', 'clienteId',
           'distancia', 'origemLat', 'origemLng', 'destinoLat', 'destinoLng'
-        ]));
+        ]))
+        ||
+        // 🔥 CTO FIX: Liberação para Cliente injetar Auto-Bid (alteração apenas em valor/status e expiração de tempo)
+        (isAuthenticated() &&
+         resource.data.clienteId == request.auth.uid &&
+         (resource.data.status == 'expirado' || resource.data.status == 'sem_motorista' || resource.data.status == 'disponivel') &&
+         request.resource.data.status == 'disponivel' &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'status', 'valorTotal', 'valorMotorista', 'valorFreteBruto', 'valorLiquidoMotorista', 
+           'lucroPlataforma', 'prioridade', 'ofertaExpiraEm', 'createdAt', 'updatedAt'
+         ]));
 
       allow delete: if false;
+      
+      // 🔥 CTO FIX: Liberação para a Coleção Filha de Chat FTI funcionar corretamente
+      match /chat/{mensagemId} {
+        allow read, create: if isAuthenticated() && (
+          get(/databases/$(database)/documents/fretes/$(freteId)).data.clienteId == request.auth.uid ||
+          get(/databases/$(database)/documents/fretes/$(freteId)).data.motoristaId == request.auth.uid ||
+          isAdmin()
+        );
+        allow update, delete: if false;
+      }
     }
 
     // =========================================================
