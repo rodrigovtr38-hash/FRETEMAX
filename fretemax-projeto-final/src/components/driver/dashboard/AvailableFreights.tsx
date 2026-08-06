@@ -1,9 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
-// CTO-Log: Vitrine Operacional Refatorada.
-// - Remoção total do botão problemático (Ver Rota/Scale).
-// - Conexão ativa com dispatchRealtimeService para Telemetria.
-// - Injeção de Renda Bruta (Conversão Psicológica).
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: Tempo de expiração alinhado para 15 minutos, sincronizando visualização B2C com Timer B2B.
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
@@ -28,7 +26,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   bitrem: 'Bitrem',
 };
 
-const FREIGHT_TTL_MS = 10 * 60 * 1000; 
+// 🔥 CTO FIX: Tempo de Vida da Carga estendido para 15min para não esconder cargas no meio do Smart Pricing do Cliente.
+const FREIGHT_TTL_MS = 15 * 60 * 1000; 
 
 export default function AvailableFreights({
   freights,
@@ -76,7 +75,7 @@ export default function AvailableFreights({
   const now = Date.now();
   const validFreights = freights.filter(freight => {
     if (freight.agendado) return true;
-    const timestamp = freight.criadoEm || freight.atualizadoEm || now;
+    const timestamp = freight.criadoEm || freight.atualizadoEm || freight.createdAt?.toMillis?.() || now;
     return (now - timestamp) < FREIGHT_TTL_MS;
   });
 
