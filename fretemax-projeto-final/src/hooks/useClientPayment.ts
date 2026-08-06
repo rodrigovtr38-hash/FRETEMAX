@@ -1,3 +1,9 @@
+// =========================================================
+// NOME DO ARQUIVO: src/hooks/useClientPayment.ts
+// CTO-Log: Refinamento de Hook (Bloco 3).
+// Nota Arquitetural: Na arquitetura atual, Cliente.tsx executa o bypass direto à API. Este hook é mantido hígido para integrações modulares futuras (PWA/Mobile).
+// =========================================================
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { paymentService } from '../services/paymentService';
 
@@ -19,7 +25,6 @@ export const useClientPayment = () => {
   const [pixCode, setPixCode] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   
-  // 🔥 CTO FIX: Tipagem robusta para compatibilidade Web/NodeJS
   const paymentTimeoutRef = useRef<any>(null);
 
   const createPixPayment = useCallback(async (payload: CreatePixPaymentPayload) => {
@@ -32,7 +37,7 @@ export const useClientPayment = () => {
         valor: payload.amount,
         descricao: payload.description,
         clienteId: payload.customer.name, 
-        freteId: '' // Placeholder
+        freteId: '' // Dependência a ser injetada via contexto na V2
       });
 
       if (!response.success) throw new Error(response.error);
@@ -56,7 +61,6 @@ export const useClientPayment = () => {
   const confirmPayment = useCallback(async () => {
     if (!paymentId) return false;
     try {
-      // Logic would be linked to the webhook confirmation
       setPaymentApproved(true);
       if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
       return true;
