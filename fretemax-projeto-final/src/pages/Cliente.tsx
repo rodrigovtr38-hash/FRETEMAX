@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Fase 2 - Homologação Operacional.
-// Status: Bug dos 15km fixos ERRADICADO. Separação Estrita entre "Pricing Distance" (Tabela) e "Display Distance" (Física).
+// CTO-Log: FASE 3 - Homologação de Integração Distribuída.
+// Status: "Vírus dos 15km" erradicado. Single Source of Truth dividida entre visual (distancia) e financeiro (distanciaTarifada).
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -18,7 +18,6 @@ import { AppTripState as TripState } from '../state/tripStateMachine';
 import { mapsLoader } from '../services/mapsLoader'; 
 import { NotificationService } from '../services/notificationService'; 
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
-// 🔥 CTO INJECTION: Motor de distância infalível importado.
 import { locationService } from '../services/locationService';
 
 interface AddressData { cep: string; bairro: string; rua: string; num: string; lat?: number; lng?: number; }
@@ -86,22 +85,18 @@ export default function Cliente() {
   const [vehicle, setVehicle] = useState<VehicleType>('moto'); 
   const [tipoFrete, setTipoFrete] = useState<'imediato' | 'agendado'>('imediato');
   const [dataAgendada, setDataAgendada] = useState('');
-  
   const [valorOferta, setValorOferta] = useState('');
 
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const [distanciaReal, setDistanciaReal] = useState(0);
-  
   const [simViews, setSimViews] = useState(0);
   const [simCompat, setSimCompat] = useState(0);
   const [simInterest, setSimInterest] = useState(0);
-  
   const [origemGPS, setOrigemGPS] = useState<Coords | null>(null);
   const [destinoGPS, setDestinoGPS] = useState<Coords | null>(null);
   const [paradasGPS, setParadasGPS] = useState<Coords[]>([]);
   const [mapsReady, setMapsReady] = useState(false); 
-  
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
   const coordsCache = useRef<Record<string, Coords>>({});
@@ -113,7 +108,6 @@ export default function Cliente() {
     "Conectando Central FretoGo..."
   ];
 
-  // Captura o evento PWA
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
@@ -156,16 +150,18 @@ export default function Cliente() {
                    tipoMaterial.toLowerCase().includes('perigo');
 
     let valorMotoristaBase = 0;
+    
+    // AQUI O 15KM É OBRIGATÓRIO PARA A MATEMÁTICA DE PREÇO (PRICING DISTANCE)
+    const distanciaFinanceira = validDistancia <= 15 ? 15 : validDistancia;
 
-    // 🔥 CTO FIX: Tabela de Cobrança (Pricing Distance). Aqui o 15km é OBRIGATÓRIO comercialmente.
     switch (vehicle) {
-      case 'moto': valorMotoristaBase = validDistancia <= 15 ? 30 : 30 + (validDistancia - 15) * 2; break;
-      case 'carro_pequeno': valorMotoristaBase = validDistancia <= 15 ? 100 : 100 + (validDistancia - 15) * 4; break;
-      case 'utilitario': valorMotoristaBase = validDistancia <= 15 ? 180 : 180 + (validDistancia - 15) * 6; break;
-      case 'toco': valorMotoristaBase = validDistancia <= 15 ? 350 : 350 + (validDistancia - 15) * 7; break;
-      case 'truck': valorMotoristaBase = validDistancia <= 15 ? 550 : 550 + (validDistancia - 15) * 8.5; break;
-      case 'carreta_ls': valorMotoristaBase = Math.max(1200, validDistancia * 10.5); break;
-      case 'bi_trem_cegonha': valorMotoristaBase = Math.max(1800, validDistancia * 12.5); break;
+      case 'moto': valorMotoristaBase = distanciaFinanceira <= 15 ? 30 : 30 + (distanciaFinanceira - 15) * 2; break;
+      case 'carro_pequeno': valorMotoristaBase = distanciaFinanceira <= 15 ? 100 : 100 + (distanciaFinanceira - 15) * 4; break;
+      case 'utilitario': valorMotoristaBase = distanciaFinanceira <= 15 ? 180 : 180 + (distanciaFinanceira - 15) * 6; break;
+      case 'toco': valorMotoristaBase = distanciaFinanceira <= 15 ? 350 : 350 + (distanciaFinanceira - 15) * 7; break;
+      case 'truck': valorMotoristaBase = distanciaFinanceira <= 15 ? 550 : 550 + (distanciaFinanceira - 15) * 8.5; break;
+      case 'carreta_ls': valorMotoristaBase = Math.max(1200, distanciaFinanceira * 10.5); break;
+      case 'bi_trem_cegonha': valorMotoristaBase = Math.max(1800, distanciaFinanceira * 12.5); break;
       default: valorMotoristaBase = 100;
     }
 
@@ -380,7 +376,6 @@ export default function Cliente() {
       setOrigemGPS(fallbackOrigem);
       setDestinoGPS(fallbackDestino);
 
-      // 🔥 CTO FIX: Bug do 15km fixo erradicado. Agora calcula por Haversine real.
       const distHaversine = locationService.calcularDistanciaKm(fallbackOrigem, fallbackDestino);
       const finalDist = distHaversine > 0 ? distHaversine : (5 * entregas.length); // Evita 0km absoluto
       setDistanciaReal(finalDist);
@@ -434,6 +429,9 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
+      // 🔥 CTO FIX: "O Fim do Vírus dos 15km" -> Single Source of Truth Restaurada.
+      // O 'distancia' e 'distanciaTotalKm' transmitem a VERDADE GEOGRÁFICA para o App do Motorista e Mapas.
+      // A regra financeira de 15km mínimos fica blindada na chave 'distanciaTarifada'.
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
@@ -444,8 +442,10 @@ export default function Cliente() {
         clienteZap: whatsapp, 
         clienteDocumento: documentoLimpo,
         
-        // A distância matemática e física guardadas como Single Source of Truth
-        distancia: validDistancia, 
+        distancia: Number(distanciaReal.toFixed(2)), // Força a leitura visual exata em modais antigos
+        distanciaTotalKm: Number(distanciaReal.toFixed(2)), // Display Distance Real (Mapas e Motorista)
+        distanciaTarifada: validDistancia <= 15 ? 15 : validDistancia, // Pricing Distance (Cobrança Base)
+        
         veiculo: vehicle, 
         categoria: vehicle, 
         peso: peso || 'Não informado', 
@@ -569,14 +569,17 @@ export default function Cliente() {
     try {
       showToast('Reiniciando radar...', 'warning');
       const dataExpiracao = new Date();
-      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 15);
+      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 30); // 🔥 CTO FIX: 30 Minutos em republicações.
 
       await updateDoc(doc(db, 'fretes', currentOrderId), {
         status: 'disponivel',
+        prioridade: true,
         ofertaExpiraEm: Timestamp.fromDate(dataExpiracao),
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        criadoEm: Date.now(), // 🔥 Força recálculo do componente AvailableFreights.
+        atualizadoEm: Date.now()
       });
-      showToast('Carga republicada no topo do Feed.', 'success');
+      showToast('Carga republicada no topo do Feed com sucesso.', 'success');
     } catch (error) {
       showToast('Erro ao republicar.', 'error');
     }
@@ -913,7 +916,7 @@ export default function Cliente() {
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Clock3 size={18} className="text-amber-400 mb-1" />
                     <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância / ETA</p>
-                    <p className="text-sm font-bold text-white mt-1">{validDistancia.toFixed(1)} km</p>
+                    <p className="text-sm font-bold text-white mt-1">{distanciaReal.toFixed(1)} km</p>
                  </div>
               </div>
         
