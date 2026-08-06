@@ -1,12 +1,12 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: FASE 3 - Homologação Operacional Distribuída.
-// Status: Delegação de Recusa homologada. A recusa pelo motorista não apaga a carga, mas a joga pro despachante e zera o TTL.
+// CTO-Log: Auditoria Final - Bloco 3
+// Status: Componente validado. O fluxo do PIN e o evento de recusa (DISPONIVEL) agora respeitam a State Machine.
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db, auth } from '../firebase'; // Import auth para pegar o ID do motorista
+import { db, auth } from '../firebase'; 
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
 import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
@@ -98,15 +98,12 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     } catch (e) { setPinError('Erro. Tente novamente.'); } finally { setActionLoading(false); }
   };
 
-  // 🔥 CTO FIX: Delegação Atômica Resolvida
-  // Agora o botão chama o Batch atômico do RealtimeService que cuida da Urgência e limpa o Radar.
   const handleInsucesso = async () => {
     if (!window.confirm("ATENÇÃO: Deseja reportar problema no local? O frete voltará para o Radar e você será desconectado.")) return;
     setActionLoading(true);
     try {
       if (frete.status === AppTripState.COLETANDO || frete.status === AppTripState.CHEGOU_COLETA || frete.status === AppTripState.INDO_COLETA || frete.status === AppTripState.ACEITO) {
         
-        // Chamada direta para o Serviço que possui o Batch do Firestore
         await dispatchRealtimeService.cancelarViagemMotorista(
           auth.currentUser?.uid || 'unknown',
           frete.id,
