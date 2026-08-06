@@ -1,19 +1,59 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverStats.tsx
-// CTO-Log: Gamificação de Motorista. UI Premium para retenção.
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: KPIs Gamificados sincronizados diretamente com a Fonte de Verdade Financeira (Coleção 'fretes').
 // =========================================================
 
+import { useState, useEffect } from 'react';
 import { DollarSign, Truck, Star, Award } from 'lucide-react';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebase'; // 🔥 Injetado para leitura direta
 
 interface DriverDashboardProps {
   driver?: any;
 }
 
 export default function DriverStats({ driver }: DriverDashboardProps) {
-  // Regra de Negócio: Gamificação para Elite
   const isPremium = (driver?.score && Number(driver.score) >= 4.8) || driver?.categoria?.includes('carreta');
-  const ganhosHoje = driver?.ganhosHoje || 0;
-  const entregasHoje = driver?.entregasHoje || 0;
+  
+  // 🔥 CTO FIX: Estados para as métricas financeiras reais
+  const [ganhosHoje, setGanhosHoje] = useState(0);
+  const [entregasHoje, setEntregasHoje] = useState(0);
+
+  useEffect(() => {
+    if (!driver?.id) return;
+
+    // Busca apenas as corridas deste motorista que foram concluídas (entregues/finalizadas)
+    const q = query(
+      collection(db, 'fretes'),
+      where('motoristaId', '==', driver.id),
+      where('status', 'in', ['entregue', 'finalizado'])
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let faturamentoDia = 0;
+      let entregasDia = 0;
+      
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const dataConclusao = data.entregueEm ? new Date(data.entregueEm) : (data.atualizadoEm?.toDate ? data.atualizadoEm.toDate() : new Date());
+        
+        // Conta apenas se for de hoje
+        if (dataConclusao >= hoje) {
+          entregasDia += 1;
+          faturamentoDia += Number(data.valorLiquidoMotorista || data.valorMotorista || 0);
+        }
+      });
+
+      setGanhosHoje(faturamentoDia);
+      setEntregasHoje(entregasDia);
+    });
+
+    return () => unsubscribe();
+  }, [driver?.id]);
 
   return (
     <div className="mx-auto w-full max-w-7xl">
