@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/paymentService.ts
-// CTO-Log: Auditoria Etapa Financeira (LOTE 5)
-// Correção CRÍTICA: Removido import dinâmico que causava erro de compilação/chunking na Vercel. 
-// Status: Motor de Escrow e Anti-Fraude homologados.
+// CTO-Log: Auditoria Etapa Financeira.
+// - Tolerância dinâmica implementada no Escrow para permitir o Smart Pricing (Auto-Bid).
 // =========================================================
 
 import {
@@ -46,7 +45,6 @@ class PaymentService {
 
   async processarPagamento(payload: PaymentPayload): Promise<PaymentResponse> {
     try {
-      // Defesa AntiFraude: Busca o valor inviolável direto do banco de dados
       const freteRef = doc(db, 'fretes', payload.freteId);
       const freteSnap = await getDoc(freteRef);
       
@@ -57,9 +55,10 @@ class PaymentService {
       const freteData = freteSnap.data();
       const valorEsperado = Number(freteData.valorTotal || freteData.valorFreteBruto || 0);
       
-      // Validação rigorosa (2% para diferenças de arredondamento)
-      if (Math.abs(payload.valor - valorEsperado) > valorEsperado * 0.02) {
-        console.error('[CTO-Log] FRAUDE BLOQUEADA - Enviado:', payload.valor, 'Banco:', valorEsperado);
+      // 🔥 CTO FIX: Anti-fraude inteligente.
+      // Barrar se o payload for muito menor que o banco, mas tolerar arredondamentos e permitir o Auto-Bid.
+      if (payload.valor < valorEsperado * 0.98) {
+        console.error('[CTO-Log] FRAUDE BLOQUEADA - Tentativa de pagar menos. Enviado:', payload.valor, 'Banco:', valorEsperado);
         eventBusService.emit(AppEvents.PAYMENT_FAILED, payload);
         return { success: false, error: 'VALOR_INVALIDO_FRAUDE' };
       }
@@ -135,7 +134,6 @@ class PaymentService {
     try {
       let idPedido = freteId;
       
-      // CTO FIX: Importação estática nativa corrigida para estabilidade CI/CD
       if (!idPedido) {
         const q = query(collection(db, 'fretes'), where('pagamentoId', '==', transactionId), limit(1));
         const querySnapshot = await getDocs(q);
