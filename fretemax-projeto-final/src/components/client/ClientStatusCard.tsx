@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
-// CTO-Log: Injeção do Bloco 2 (Painel Inteligente de Auto-Bid).
+// CTO-Log: Fase 2 - Homologação Operacional.
+// Status: ETA lido diretamente da Single Source of Truth (Banco). Recálculo no front-end erradicado.
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -45,7 +46,6 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // 🔥 CTO FIX: Gatilho robusto de expiração (quando o tempo zera, a Torre assume)
   const isTimeExpired = (status === 'disponivel' && timeLeft === 0) || status === 'sem_motorista' || status === 'expirado';
 
   let safeStatus = 'Sincronizando operação...';
@@ -67,7 +67,11 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
   const displayDistance = isDataReady ? `${distancia.toFixed(1)} km` : 'Calculando...';
   const displayPrice = isDataReady ? `R$ ${valorTotal.toFixed(2).replace('.', ',')}` : '---';
 
-  const etaMinutes = isDataReady ? Math.max(10, Math.round(distancia * 1.5)) : 0;
+  // 🔥 CTO FIX (Auditoria 3): Lendo ETA diretamente do Banco de Dados (orderData). Sem invenção do Front-End.
+  // Se o banco falhar, o fallback será mantido (Distância * Fator Conservador de Velocidade).
+  const etaMinutes = orderData?.etaMinutes 
+    ? Number(orderData.etaMinutes) 
+    : isDataReady ? Math.max(10, Math.round(distancia * 1.5)) : 0;
 
   const getTimelineStepStatus = (stepIndex: number) => {
     const statusSequence = [
@@ -131,7 +135,6 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
         )}
       </div>
 
-      {/* 🔥 CTO FIX: PAINEL SMART PRICING (SÓ APARECE QUANDO O TEMPO ZERA) */}
       {isTimeExpired && (
         <div className="mb-6 rounded-[2rem] border border-amber-500/30 bg-amber-500/10 p-6 animate-in slide-in-from-bottom-4 shadow-xl">
            <div className="flex items-start gap-4 mb-6">
