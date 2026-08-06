@@ -1,8 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/driverMatchingService.ts
-// CTO-Log: Correção do Linter (X Vermelho) e Sincronização de Banco.
-// 1. Removidas as categorias fantasmas ('van', 'hr'). Oficializadas as 7 categorias.
-// 2. Operador Firestore corrigido de 'array-contains' para '==' (Tipagem exata de string).
+// CTO-Log: Correção do Linter e Sincronização de Banco.
+// 1. Oficializadas as 7 categorias (Moto a Bi-trem).
+// 2. Operador Firestore corrigido para '=='
 // =========================================================
 
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -61,7 +61,6 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
   return R * c;
 }
 
-// AJUSTE CTO: Cálculo das Bordas do Quadrado para não ler 10k motoristas (Geo-Bounding Box)
 function getBoundingBox(lat: number, lng: number, distanceKm: number) {
   const earthRadius = 6371;
   const latDelta = (distanceKm / earthRadius) * (180 / Math.PI);
@@ -78,21 +77,19 @@ export class DriverMatchingService {
   static async buscarMotoristas(payload: DriverMatchingPayload): Promise<MatchedDriver[]> {
     try {
       const raios = CATEGORY_RADIUS[payload.categoria];
-      if (!raios) return []; // Trava de segurança para categorias indefinidas
+      if (!raios) return []; 
 
-      const maxRaio = raios[raios.length - 1]; // Maior raio possível para a categoria
+      const maxRaio = raios[raios.length - 1]; 
 
-      // AJUSTE CTO: Define a caixa geográfica baseada no raio máximo da categoria
       const box = getBoundingBox(payload.origem.lat, payload.origem.lng, maxRaio);
 
       const motoristasRef = collection(db, 'motoristas_online'); 
       
-      // AJUSTE CTO: Query Mestra Blindada. Consulta apenas dentro do quadrado + filtro exato '=='
       const q = query(
         motoristasRef,
         where('online', '==', true),
         where('disponivel', '==', true),
-        where('categoria', '==', payload.categoria), // Correção Crítica Aqui
+        where('categoria', '==', payload.categoria), 
         where('latitude', '>=', box.latMin),
         where('latitude', '<=', box.latMax)
       );
@@ -106,10 +103,8 @@ export class DriverMatchingService {
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         
-        // Segunda checagem de longitude (pois o Firestore só aceita >= em um campo por vez)
         if (data.longitude < box.lngMin || data.longitude > box.lngMax) return;
 
-        // Filtro de Retorno Anti-Fraude
         if (data.modoRetorno && data.destinoRetorno) {
            const destinoMotoristaFormatado = data.destinoRetorno.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
            if (destinoMotoristaFormatado && destinoFreteFormatado && !destinoFreteFormatado.includes(destinoMotoristaFormatado)) {
@@ -122,7 +117,6 @@ export class DriverMatchingService {
           data.latitude, data.longitude
         );
 
-        // Se está fora até do raio máximo (mesmo estando no quadrado), ignora
         if (distanciaKm > maxRaio) return;
 
         motoristas.push({
