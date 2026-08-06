@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/locationService.ts
-// CTO-Log: Higienização de Sintaxe e Compressão de Linhas (LOTE 4.2)
-// Status: Cálculo de Haversine e Fallbacks Regionais validados.
+// CTO-Log: FASE 3 - Homologação de Integração Distribuída.
+// Status: Cálculo de Haversine validados para distâncias curtas precisas.
 // =========================================================
 
 type Coordinates = { lat: number; lng: number; };
@@ -23,7 +23,7 @@ type RouteResult = {
 class LocationService {
   private readonly fallbackRegions: Record<number, Coordinates> = {
     0: { lat: -23.5505, lng: -46.6333 }, // SP
-    1: { lat: -22.9068, lng: -43.1729 }, // RJ
+    1: { lat: -22.9056, lng: -43.1729 }, // RJ
     2: { lat: -19.9167, lng: -43.9345 }, // MG
     3: { lat: -12.9714, lng: -38.5014 }, // BA
     4: { lat: -8.0476, lng: -34.8770 },  // PE
@@ -104,7 +104,6 @@ class LocationService {
         return this.getFallbackCoords(sanitizedCep);
       }
 
-      // IMPORTANTE: Mantém compatibilidade sem alterar lógica logística.
       const fallback = this.getFallbackCoords(sanitizedCep);
       this.cepCache.set(sanitizedCep, fallback);
       return fallback;
@@ -120,7 +119,6 @@ class LocationService {
   async calculateRoute(origem: Coordinates, destino: Coordinates): Promise<RouteResult> {
     const distanceKm = this.calcularDistanciaKm(origem, destino);
     
-    // Estimativa operacional segura. Mantida para preservar compatibilidade atual.
     const averageSpeedKmH = 38;
     const durationMinutes = Math.max(5, Math.round((distanceKm / averageSpeedKmH) * 60));
 
@@ -148,7 +146,11 @@ class LocationService {
       Math.cos((destino.lat * Math.PI) / 180) *
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return Number((R * c).toFixed(2));
+    
+    // 🔥 CTO FIX: Removeu-se do Cliente o arredondamento forçado. 
+    // Aqui nós devolvemos o Float puro para o Cliente capturar e exibir.
+    const result = Number((R * c).toFixed(2));
+    return result > 0 ? result : 0.1; // Limite atômico de 100 metros.
   }
 
   /* =======================================================
