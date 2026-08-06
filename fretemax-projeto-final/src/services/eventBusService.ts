@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/eventBusService.ts
-// CTO-Log: Barramento de Eventos e Gatilhos Globais - LOTE 4
-// Status: Certificado.
+// CTO-Log: Barramento de Eventos e Gatilhos Globais (Fase 3).
+// Status: Totalmente Rastreável.
 // =========================================================
 
 type EventCallback<T = any> = (payload: T) => void;
