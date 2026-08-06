@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientCancelModal.tsx
 // CTO-Log: Injeção de Fricção (Sunk Cost) para reduzir Churn de Cargas.
+// Status: Homologado.
 // =========================================================
 
 import { AlertTriangle, Loader2 } from 'lucide-react';
