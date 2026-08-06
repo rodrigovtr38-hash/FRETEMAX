@@ -1,9 +1,12 @@
+// =========================================================
+// NOME DO ARQUIVO: src/main.tsx
+// CTO-Log: Auditoria Concluída (Bloco 13).
+// Status: Padronização documental inserida. Boot e Registro de PWA (SW) preservados.
+// =========================================================
+
 import React from 'react';
-
 import ReactDOM from 'react-dom/client';
-
 import App from './App.tsx';
-
 import './index.css';
 
 /* =========================================================
@@ -13,9 +16,7 @@ import './index.css';
 declare global {
   interface Window {
     __FRETOGO_ROOT__?: boolean;
-
     __FRETOGO_BOOTSTRAP__?: boolean;
-
     __FRETOGO_SW_REGISTERED__?: boolean;
   }
 }
@@ -51,8 +52,6 @@ if (window.__FRETOGO_ROOT__) {
 
 function setupRuntimeEnvironment() {
   try {
-    // Viewport já definido no index.html - não modificar
-
     document.documentElement.style.setProperty(
       '--vh',
       `${window.innerHeight * 0.01}px`,
