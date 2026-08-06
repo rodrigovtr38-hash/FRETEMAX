@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
-// CTO-Log: FASE 2 - Homologação Operacional.
-// Status: Tempo de expiração alinhado para 15 minutos, sincronizando visualização B2C com Timer B2B.
+// CTO-Log: FASE 3 - Auditoria de Integração.
+// Status: "Vírus dos 15km" visual erradicado. TTL expandido para 30 minutos.
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
@@ -26,8 +26,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   bitrem: 'Bitrem',
 };
 
-// 🔥 CTO FIX: Tempo de Vida da Carga estendido para 15min para não esconder cargas no meio do Smart Pricing do Cliente.
-const FREIGHT_TTL_MS = 15 * 60 * 1000; 
+// 🔥 CTO FIX: Sincronia de Integração -> Tempo de Vida da Carga estendido para 30min no Frontend.
+const FREIGHT_TTL_MS = 30 * 60 * 1000; 
 
 export default function AvailableFreights({
   freights,
@@ -47,7 +47,6 @@ export default function AvailableFreights({
 
   useEffect(() => {
     if (isOnline && freights.length > 0) {
-      // Gatilho de Telemetria B2B: Conta 1 Visualização no Banco do Cliente
       freights.forEach(freight => {
         if (!viewedFreights.current.has(freight.id)) {
           viewedFreights.current.add(freight.id);
@@ -75,7 +74,7 @@ export default function AvailableFreights({
   const now = Date.now();
   const validFreights = freights.filter(freight => {
     if (freight.agendado) return true;
-    const timestamp = freight.criadoEm || freight.atualizadoEm || freight.createdAt?.toMillis?.() || now;
+    const timestamp = freight.criadoEm || freight.atualizadoEm || (freight.createdAt as any)?.toMillis?.() || now;
     return (now - timestamp) < FREIGHT_TTL_MS;
   });
 
@@ -127,10 +126,11 @@ export default function AvailableFreights({
 
       {isOnline && validFreights.length > 0 && (
         <div className="grid gap-5 sm:grid-cols-1 lg:grid-cols-2">
-          {validFreights.map((freight) => {
+          {validFreights.map((freight: any) => {
             const isHot = freight.prioridade || (freight.valorMotorista && freight.valorMotorista > 150);
-            const km = freight.distanciaTotalKm || freight.distanciaEntregaKm || 1;
-            const ganhoPorKm = (freight.valorMotorista || 0) / km;
+            // 🔥 CTO FIX: Lê a distância real física, ignorando os 15km da tabela de cobrança.
+            const km = freight.distanciaRealKm || freight.distanciaTotalKm || freight.distanciaEntregaKm || freight.distancia || 1;
+            const ganhoPorKm = (freight.valorLiquidoMotorista || freight.valorMotorista || 0) / km;
 
             return (
               <div
@@ -155,7 +155,7 @@ export default function AvailableFreights({
                     </div>
                     <h2 className={`text-4xl font-black tracking-tighter drop-shadow-md ${isHot ? 'text-orange-400' : 'text-emerald-400'}`}>
                       <span className="text-xl mr-1">R$</span>
-                      {(freight.valorMotorista || 0).toFixed(2).replace('.', ',')}
+                      {(freight.valorLiquidoMotorista || freight.valorMotorista || 0).toFixed(2).replace('.', ',')}
                     </h2>
                   </div>
                   <div className={`rounded-xl border px-3 py-1.5 flex items-center gap-1.5 ${isHot ? 'bg-orange-500/10 border-orange-500/30' : 'bg-slate-800 border-white/10'}`}>
@@ -194,7 +194,7 @@ export default function AvailableFreights({
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
                     <Ruler size={14} className="text-slate-400 mb-1" />
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Distância</p>
-                    <p className="text-xs font-black text-white mt-1">{(freight.distanciaTotalKm || 0).toFixed(0)} km</p>
+                    <p className="text-xs font-black text-white mt-1">{(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0).toFixed(1)} km</p>
                   </div>
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
                     <Package size={14} className="text-slate-400 mb-1" />
