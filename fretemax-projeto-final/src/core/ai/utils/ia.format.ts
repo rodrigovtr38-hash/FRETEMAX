@@ -1,7 +1,8 @@
 // ============================================================================
 // ARQUIVO: ia.format.ts
 // PASTA: src/core/ai/utils/
-// OBJETIVO: Motor de Formatação e Sanitização de Dados Logísticos (Produção V1)
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: Handling seguro de NaN homologado (Anti-Crash Visual).
 // ============================================================================
 
 /**
