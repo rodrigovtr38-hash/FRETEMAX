@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/context/ClientContext.tsx
 // CTO-Log: Contexto validado. Storage atualizado para Fretogo V2. Dependências do useMemo otimizadas.
+// Status: Storage Cleansing adicionado para manter sincronia com o Cliente.tsx (Single Source of Truth).
 // =========================================================
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
@@ -92,7 +93,15 @@ export function ClientProvider({ children }: ClientProviderProps) {
     setActiveRequestState(null);
     setDestinationCodeState(null);
     setDriverAcceptedState(false);
+    
+    // Limpeza de cache local do contexto
     localStorage.removeItem(CLIENT_RUNTIME_STORAGE);
+    
+    // 🔥 CTO FIX: "Storage Isolation Wipe". 
+    // Garante que a Single Source of Truth do Cliente.tsx seja expurgada junto, 
+    // evitando ressurreição de corridas antigas ao pressionar F5.
+    localStorage.removeItem('fretogo_current_order');
+    localStorage.removeItem('fretogo_form_backup');
   }, []);
 
   const value = useMemo(
