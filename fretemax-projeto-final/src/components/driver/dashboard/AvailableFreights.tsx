@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
 // CTO-Log: FASE 3 - Auditoria de Integração.
-// Status: "Vírus dos 15km" visual erradicado. TTL expandido para 30 minutos.
+// Status: "Vírus dos 15km" visual erradicado. Conversor Inteligente de Metros injetado.
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
@@ -26,8 +26,14 @@ const CATEGORY_LABELS: Record<string, string> = {
   bitrem: 'Bitrem',
 };
 
-// 🔥 CTO FIX: Sincronia de Integração -> Tempo de Vida da Carga estendido para 30min no Frontend.
 const FREIGHT_TTL_MS = 30 * 60 * 1000; 
+
+// 🔥 CTO FIX: Formatador Inteligente de Distância. Transforma "0.7 km" em "700 m" para UX Perfeita.
+const formatDistance = (km: number | undefined | null) => {
+  if (!km || isNaN(km)) return '0 km';
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(1)} km`;
+};
 
 export default function AvailableFreights({
   freights,
@@ -128,7 +134,6 @@ export default function AvailableFreights({
         <div className="grid gap-5 sm:grid-cols-1 lg:grid-cols-2">
           {validFreights.map((freight: any) => {
             const isHot = freight.prioridade || (freight.valorMotorista && freight.valorMotorista > 150);
-            // 🔥 CTO FIX: Lê a distância real física, ignorando os 15km da tabela de cobrança.
             const km = freight.distanciaRealKm || freight.distanciaTotalKm || freight.distanciaEntregaKm || freight.distancia || 1;
             const ganhoPorKm = (freight.valorLiquidoMotorista || freight.valorMotorista || 0) / km;
 
@@ -194,7 +199,8 @@ export default function AvailableFreights({
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
                     <Ruler size={14} className="text-slate-400 mb-1" />
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Distância</p>
-                    <p className="text-xs font-black text-white mt-1">{(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0).toFixed(1)} km</p>
+                    {/* 🔥 CTO FIX: Renderização convertida de KM para M caso seja < 1km */}
+                    <p className="text-xs font-black text-white mt-1">{formatDistance(km)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
                     <Package size={14} className="text-slate-400 mb-1" />
