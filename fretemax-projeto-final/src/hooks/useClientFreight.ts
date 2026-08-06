@@ -1,4 +1,7 @@
-// src/hooks/useClientFreight.ts
+// =========================================================
+// NOME DO ARQUIVO: src/hooks/useClientFreight.ts
+// CTO-Log: Refinamento de Hook (Bloco 3).
+// =========================================================
 
 import { useCallback, useRef, useState } from 'react';
 import { clientFreightService } from '../services/clientFreightService';
@@ -25,7 +28,7 @@ export const useClientFreight = () => {
     setLoadingPayment(true);
 
     try {
-      const response = await clientFreightService.criarFrete(freightData);
+      const response = await clientFreightService.criarFrete(freightData as any);
 
       if (!response.success) {
         onError?.(response.error || 'Erro ao processar a cotação logística.');
@@ -33,7 +36,6 @@ export const useClientFreight = () => {
       }
 
       if (response.freteId) {
-        // Salva a sessão para evitar perda de carrinho (cliente fechou o app sem querer)
         localStorage.setItem('fretogo_currentorder', response.freteId);
         onSuccess?.(response.freteId);
       }
@@ -60,9 +62,9 @@ export const useClientFreight = () => {
     setIsCancelling(true);
 
     try {
-      const success = await clientFreightService.cancelarFrete(freightId);
+      const response = await clientFreightService.cancelarFrete(freightId);
 
-      if (!success) {
+      if (!response.success) {
         onError?.('Erro ao abortar a operação. Contate o suporte.');
         return;
       }
