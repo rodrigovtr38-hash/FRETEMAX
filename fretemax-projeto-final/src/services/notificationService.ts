@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/notificationService.ts
-// CTO-Log: Auditoria Concluída - IA e WhatsApp Integrados
-// Status: Válvulas de comunicação validadas e sincronizadas com a coleção 'motoristas_cadastros'.
+// CTO-Log: FASE 3 - Integração.
+// Status: Push Notification estendido para alertas de escassez B2B (Auto-Bid).
 // =========================================================
 
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
