@@ -1,15 +1,14 @@
 // ============================================================================
-// ARQUIVO: ia.events.ts
-// PASTA: src/core/ai/events/
-// OBJETIVO: Barramento de Eventos e Gatilhos Autônomos (Radar FTI)
-// Status: Inteligência Ativa. Escutando cancelamentos e postagens.
+// ARQUIVO: src/core/ai/events/ia.events.ts
+// CTO-Log: Blindagem de Eventos Assíncronos.
+// Status: Try-catch injetado ao redor do NotificationService para garantir que falhas no WhatsApp não congelem a Máquina de Estados da carga.
 // ============================================================================
 
 import { NotificationService } from '../../../services/notificationService';
 
 export type FTIEventType = 
-  | 'FREIGHT_POSTED'     // Novo: Carga entrou no radar
-  | 'DRIVER_CANCELED'    // Novo: Motorista acionou a válvula de escape
+  | 'FREIGHT_POSTED'     
+  | 'DRIVER_CANCELED'    
   | 'TRIP_STARTED' 
   | 'TRIP_COMPLETED' 
   | 'LOCATION_UPDATE' 
@@ -49,34 +48,38 @@ export class FTIEventDispatcher {
     }
   }
 
-  // 🔥 Quando o Embarcador posta a carga
   private handleFreightPosted(event: FTIEventPayload): void {
     const freight = event.data;
     console.log(`[FTI Auto-Action] Nova carga na malha. Iniciando rastreio.`, freight);
     
-    // Dispara WhatsApp para o cliente informando que a IA está procurando motorista
     if (freight.clienteZap && freight.clienteNome) {
-      NotificationService.notificarClienteFretePostado(
-        freight.clienteZap, 
-        freight.clienteNome, 
-        freight.id || 'N/A'
-      );
+      try {
+        NotificationService.notificarClienteFretePostado(
+          freight.clienteZap, 
+          freight.clienteNome, 
+          freight.id || 'N/A'
+        );
+      } catch (error) {
+        console.error('[FTI Radar] Falha silenciosa ao notificar WhatsApp da Empresa:', error);
+      }
     }
   }
 
-  // 🔥 Quando o Motorista aperta "Relatar Problema / Abortar Missão"
   private handleDriverCanceled(event: FTIEventPayload): void {
     const freight = event.data;
     console.log(`[FTI Auto-Action] Motorista abortou operação. Re-alocando carga.`, freight);
     
-    // Dispara WhatsApp acalmando o cliente e informando a re-alocação
     if (freight.clienteZap && freight.clienteNome) {
-      NotificationService.notificarClienteMotoristaCancelou(
-        freight.clienteZap,
-        freight.clienteNome,
-        freight.id || 'N/A',
-        freight.motivoCancelamento || 'Imprevisto na rota'
-      );
+      try {
+        NotificationService.notificarClienteMotoristaCancelou(
+          freight.clienteZap,
+          freight.clienteNome,
+          freight.id || 'N/A',
+          freight.motivoCancelamento || 'Imprevisto na rota'
+        );
+      } catch (error) {
+        console.error('[FTI Radar] Falha silenciosa ao notificar WhatsApp da Empresa sobre cancelamento:', error);
+      }
     }
   }
 
@@ -88,13 +91,17 @@ export class FTIEventDispatcher {
     const destino = event.data?.cidadeDestino || 'sua região';
     console.log(`[FTI Auto-Action] Analisando novas demandas para a área de descarga: ${destino}`);
     
-    const currentHour = new Date().getHours();
-    if (currentHour >= 6 && currentHour <= 17) {
-      NotificationService.enviarNotificacaoApp(
-        event.userId, 
-        'Retorno Inteligente', 
-        `Você descarregou em ${destino}. Ative o Modo Retorno no Radar para capturarmos cargas de volta para a sua base.`
-      );
+    try {
+      const currentHour = new Date().getHours();
+      if (currentHour >= 6 && currentHour <= 17) {
+        NotificationService.enviarNotificacaoApp(
+          event.userId, 
+          'Retorno Inteligente', 
+          `Você descarregou em ${destino}. Ative o Modo Retorno no Radar para capturarmos cargas de volta para a sua base.`
+        );
+      }
+    } catch (error) {
+      console.error('[FTI Radar] Falha silenciosa ao notificar retorno do Motorista:', error);
     }
   }
 
@@ -105,26 +112,30 @@ export class FTIEventDispatcher {
     const agora = Date.now();
     const isAgendado = freight.tipoFrete === 'agendado' && freight.dataAgendada;
 
-    if (isAgendado) {
-      const dataAlvo = freight.dataAgendada.toMillis ? freight.dataAgendada.toMillis() : new Date(freight.dataAgendada).getTime();
-      const tempoRestanteMinutos = (dataAlvo - agora) / (1000 * 60);
+    try {
+      if (isAgendado) {
+        const dataAlvo = freight.dataAgendada.toMillis ? freight.dataAgendada.toMillis() : new Date(freight.dataAgendada).getTime();
+        const tempoRestanteMinutos = (dataAlvo - agora) / (1000 * 60);
 
-      if (tempoRestanteMinutos > 0 && tempoRestanteMinutos <= 35) {
-        NotificationService.enviarNotificacaoApp(
-          event.userId,
-          '⏰ Coleta Iminente!',
-          `A coleta do agendamento em ${freight.cidadeOrigem || 'sua região'} está programada para os próximos 30 minutos. Desloque-se.`
-        );
+        if (tempoRestanteMinutos > 0 && tempoRestanteMinutos <= 35) {
+          NotificationService.enviarNotificacaoApp(
+            event.userId,
+            '⏰ Coleta Iminente!',
+            `A coleta do agendamento em ${freight.cidadeOrigem || 'sua região'} está programada para os próximos 30 minutos. Desloque-se.`
+          );
+        }
       }
-    }
 
-    if (!isAgendado && freight.status === 'disponivel') {
-      const criadaEm = freight.createdAt?.toMillis ? freight.createdAt.toMillis() : agora;
-      const minutosParada = (agora - criadaEm) / (1000 * 60);
+      if (!isAgendado && freight.status === 'disponivel') {
+        const criadaEm = freight.createdAt?.toMillis ? freight.createdAt.toMillis() : agora;
+        const minutosParada = (agora - criadaEm) / (1000 * 60);
 
-      if (minutosParada >= 25 && minutosParada <= 30) {
-        console.log(`[FTI Scarcity] Carga parada há quase 30 minutos. Tempo limite de Feed atingido.`);
+        if (minutosParada >= 25 && minutosParada <= 30) {
+          console.log(`[FTI Scarcity] Carga parada há quase 30 minutos. Tempo limite de Feed atingido.`);
+        }
       }
+    } catch (error) {
+      console.error('[FTI Radar] Erro ao checar urgência da carga:', error);
     }
   }
 }
