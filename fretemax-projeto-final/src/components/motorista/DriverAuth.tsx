@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverAuth.tsx
-// CTO-Log: Porta de Entrada (Onboarding). 
-// Status: Autenticação Google blindada. Feedback visual anti-ansiedade implementado.
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: Autenticação Google blindada. Feedback visual anti-ansiedade validado.
 // =========================================================
 
 import { useState, useEffect } from 'react';
