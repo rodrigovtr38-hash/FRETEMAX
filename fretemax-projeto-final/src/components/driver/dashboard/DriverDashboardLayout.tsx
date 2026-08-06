@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverDashboardLayout.tsx
-// CTO-Log: Container Mestre unificado.
-// Status: Auditoria completa. Sem erros de importação.
+// CTO-Log: Container Mestre unificado. Fase 2 Homologada.
+// Status: Auditoria completa. Sem erros de importação ou vazamentos de re-render.
 // =========================================================
 
 import { useCallback, useState } from 'react';
