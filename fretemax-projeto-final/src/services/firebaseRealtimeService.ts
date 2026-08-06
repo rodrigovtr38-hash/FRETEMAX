@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/firebaseRealtimeService.ts
 // CTO-Log: Otimização de Transmissão Firestore - LOTE 4
-// Status: Certificado. Proteção Anti-Drift e Gerenciamento de Memória validados.
+// Correção (Bloco 5): Sincronizado para a coleção oficial 'motoristas_cadastros' evitando o bug do congelamento em tempo real.
 // =========================================================
 
 import { doc, onSnapshot, updateDoc, serverTimestamp, Unsubscribe } from 'firebase/firestore';
@@ -23,7 +23,6 @@ class FirebaseRealtimeService {
 
   private registerListener(key: string, unsubscribe: Unsubscribe) {
     if (this.listeners.has(key)) {
-      // Se já existir, desliga o antigo antes de plugar o novo para evitar Memory Leak
       this.listeners.get(key)!();
     }
     this.listeners.set(key, unsubscribe);
@@ -40,7 +39,8 @@ class FirebaseRealtimeService {
       const key = `driver_${driverId}`;
       if (this.hasListener(key)) return;
 
-      const driverRef = doc(db, 'motoristas', driverId);
+      // 🔥 CTO FIX: Coleção sincronizada com a Fonte de Verdade
+      const driverRef = doc(db, 'motoristas_cadastros', driverId);
 
       const unsubscribe = onSnapshot(
         driverRef,
@@ -76,7 +76,6 @@ class FirebaseRealtimeService {
           if (!snapshot.exists()) return;
           const data = snapshot.data();
           
-          // PROTEÇÃO ANTI-DRIFT: Garante os estados corretos para o Orquestrador
           eventBusService.emit(AppEvents.TRIP_STATUS_CHANGED, {
             id: snapshot.id,
             tripState: data.status,
@@ -101,7 +100,8 @@ class FirebaseRealtimeService {
   async updateDriverRealtime(driverId: string, payload: Record<string, any>) {
     try {
       if (!driverId) return;
-      const driverRef = doc(db, 'motoristas', driverId);
+      // 🔥 CTO FIX: Coleção sincronizada com a Fonte de Verdade
+      const driverRef = doc(db, 'motoristas_cadastros', driverId);
       await updateDoc(driverRef, { ...payload, updatedAt: serverTimestamp() });
     } catch (error) {
       console.error('[CTO-Log] ERRO UPDATE DRIVER:', error);
@@ -121,7 +121,7 @@ class FirebaseRealtimeService {
   stopListener(key: string) {
     const listener = this.listeners.get(key);
     if (!listener) return;
-    listener(); // Chama a função do Firebase que mata o Listener (Mata o Memory Leak)
+    listener(); 
     this.listeners.delete(key);
     this.activeKeys.delete(key);
   }
