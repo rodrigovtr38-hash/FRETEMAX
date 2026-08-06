@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/mapsLoader.ts
-// CTO-Log: Higienização de Sintaxe e Compressão de Linhas (LOTE 4.2)
-// Status: Singleton de carregamento e bibliotecas validadas.
+// CTO-Log: Fase 2 - Homologação Operacional.
+// Status: Singleton e Retry Pattern validados contra Memory Leaks.
 // =========================================================
 
 import { Loader } from '@googlemaps/js-api-loader';
