@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverHeader.tsx
-// CTO-Log: Resolução do X Vermelho (CI/CD). Tipagem customizada para PWA adicionada.
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: PWA Prompt verificado e Single Source of Truth atestada no 'score' e 'categoria'.
 // =========================================================
 
 import { signOut } from 'firebase/auth';
@@ -8,7 +9,6 @@ import { Truck, Star, Download, LogOut } from 'lucide-react';
 import { auth } from '../../firebase';
 import { useState, useEffect } from 'react';
 
-// 🔥 CTO FIX: Criando a interface que o TypeScript não tem por padrão para evitar o X Vermelho
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: Array<string>;
   readonly userChoice: Promise<{
