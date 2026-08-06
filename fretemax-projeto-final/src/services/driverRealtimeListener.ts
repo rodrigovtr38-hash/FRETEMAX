@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/driverRealtimeListener.ts
-// CTO-Log: Auditoria de Eventos em Tempo Real - LOTE 4
-// Status: Certificado. Validação de transição de estado da máquina ativada.
+// CTO-Log: Fase 3 - Homologação Operacional Distribuída
+// Status: Validação atômica do State Machine mantida para evitar concorrência.
 // =========================================================
 
 import { eventBusService, AppEvents } from './eventBusService';
