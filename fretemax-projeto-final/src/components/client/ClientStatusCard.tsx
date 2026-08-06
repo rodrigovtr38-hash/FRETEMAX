@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
 // CTO-Log: FASE 3 - Auditoria de Integração.
-// Status: "Vírus dos 15km" erradicado do Painel do Embarcador. TTL estendido para 30 min.
+// Status: Leitura limpa da distância implementada e conversão para Metros em curtas distâncias.
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -14,6 +14,13 @@ interface ClientStatusCardProps {
   onCancelar: () => void;
 }
 
+// 🔥 CTO FIX: Formatador Inteligente de Distância. Transforma "0.7 km" em "700 m".
+const formatDistance = (km: number | undefined | null) => {
+  if (!km || isNaN(km)) return '0 km';
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(1)} km`;
+};
+
 export default function ClientStatusCard({ orderData, onSmartPricing, onRepublicar, onCancelar }: ClientStatusCardProps) {
   const status = orderData?.status;
   const motoristaNome = orderData?.motoristaNome;
@@ -24,10 +31,8 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
   const paradaAtualIndex = orderData?.paradaAtualIndex || 0;
   const multiplasEntregas = orderData?.multiplasEntregas || false;
 
-  // 🔥 CTO FIX: Distância Mapeada. Se não achar a física, usa a financeira, mas a Física tem prioridade.
   const distancia = orderData?.distanciaRealKm || orderData?.distanciaTotalKm || orderData?.distancia;
 
-  // 🔥 CTO FIX: Tempo estendido para 30 minutos (1800 segundos) para bater com o DispatchService
   const TEMPO_FEED_SEGUNDOS = 30 * 60; 
   const [timeLeft, setTimeLeft] = useState(TEMPO_FEED_SEGUNDOS);
 
@@ -66,8 +71,9 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
   else if (status === 'em_transporte') { safeStatus = 'Carga em Trânsito'; statusColor = 'text-emerald-400'; bgColor = 'bg-emerald-500/10 border-emerald-500/30'; }
   else if (status === 'finalizando' || status === 'entregue' || status === 'finalizado') { safeStatus = 'Entrega Concluída'; statusColor = 'text-emerald-400'; bgColor = 'bg-emerald-500/10 border-emerald-500/30'; }
 
-  const isDataReady = typeof distancia === 'number' && distancia > 0 && typeof valorTotal === 'number' && valorTotal > 0;
-  const displayDistance = isDataReady ? `${distancia.toFixed(1)} km` : 'Calculando...';
+  const isDataReady = typeof distancia === 'number' && typeof valorTotal === 'number' && valorTotal > 0;
+  
+  const displayDistance = isDataReady ? formatDistance(distancia) : 'Calculando...';
   const displayPrice = isDataReady ? `R$ ${valorTotal.toFixed(2).replace('.', ',')}` : '---';
 
   const etaMinutes = orderData?.etaMinutes 
