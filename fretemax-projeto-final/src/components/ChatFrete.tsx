@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/ChatFrete.tsx
-// CTO-Log: Resolução do X Vermelho (CI/CD). Remoção do 'any' com tipagem estrita de DocumentData.
-// UX Refinada para dar sensação de chat criptografado.
+// CTO-Log: Auditoria Concluída (Bloco 4).
+// Status: Tipagem validada. Funcionalidade preservada sem alterações.
 // =========================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -20,7 +20,7 @@ interface ChatMessage {
   texto: string;
   nome: string;
   tipoUsuario: 'cliente' | 'motorista' | 'admin';
-  createdAt?: unknown; // Resolvendo o Any do TypeScript
+  createdAt?: unknown; 
 }
 
 export default function ChatFrete({ freteId, nome, tipoUsuario }: ChatFreteProps) {
@@ -41,7 +41,7 @@ export default function ChatFrete({ freteId, nome, tipoUsuario }: ChatFreteProps
       (snapshot) => {
         const next: ChatMessage[] = [];
         snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as DocumentData; // Resolvendo o 'as any'
+          const data = docSnap.data() as DocumentData; 
           next.push({
             id: docSnap.id,
             texto: data.texto || '',
