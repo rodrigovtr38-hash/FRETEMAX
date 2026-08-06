@@ -1,11 +1,11 @@
 // ============================================================================
 // ARQUIVO: src/core/ai/events/ia.events.ts
-// CTO-Log: FASE 2 - Homologação Operacional
-// Status: Bug de Silêncio do Retorno (Noite) erradicado para retenção de mercado. 
-// Falha silenciosa no WhatsApp ativada.
+// CTO-Log: FASE 3 - Homologação de Integração
+// Status: "Torre Cega" curada. IA agora lê o AppEvents global e dispara Push de Auto-Bid para o Embarcador.
 // ============================================================================
 
 import { NotificationService } from '../../../services/notificationService';
+import { eventBusService, AppEvents } from '../../../services/eventBusService';
 
 export type FTIEventType = 
   | 'FREIGHT_POSTED'     
@@ -25,6 +25,18 @@ export interface FTIEventPayload {
 
 export class FTIEventDispatcher {
   
+  // 🔥 CTO FIX: Fazendo a Torre de Controle "ouvir" o Sistema inteiro (Integração Distribuída)
+  constructor() {
+    eventBusService.on(AppEvents.TRIP_CANCELLED, (payload) => {
+      this.dispatch({
+        userId: payload?.freteData?.clienteId || 'unknown',
+        eventType: 'DRIVER_CANCELED',
+        data: payload?.freteData || payload,
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
+
   public dispatch(event: FTIEventPayload): void {
     console.log(`[FTI Radar] Evento detectado: ${event.eventType} | Target: ${event.userId}`);
     
@@ -97,7 +109,6 @@ export class FTIEventDispatcher {
       let mensagem = `Você descarregou em ${destino}. Ative o Modo Retorno no Radar para capturarmos cargas de volta para a sua base.`;
       let titulo = 'Retorno Inteligente';
 
-      // 🔥 CTO FIX: Não silenciar os alertas de noite. Apenas mudar o tom de voz para agendamento.
       if (currentHour >= 18 || currentHour <= 5) {
         mensagem = `Bom descanso. Você está em ${destino}. Quando for ligar o Radar, deixe o "Modo Retorno" ativado para não rodar vazio na volta.`;
         titulo = 'Viagem Concluída com Sucesso';
@@ -135,11 +146,26 @@ export class FTIEventDispatcher {
       }
 
       if (!isAgendado && freight.status === 'disponivel') {
-        const criadaEm = freight.createdAt?.toMillis ? freight.createdAt.toMillis() : agora;
+        const criadaEm = freight.createdAt?.toMillis ? freight.createdAt.toMillis() : (freight.criadoEm || agora);
         const minutosParada = (agora - criadaEm) / (1000 * 60);
 
-        if (minutosParada >= 25 && minutosParada <= 30) {
-          console.log(`[FTI Scarcity] Carga parada há quase 30 minutos. Tempo limite de Feed atingido.`);
+        // 🔥 CTO FIX (Smart Pricing Integration):
+        // Se bater 15 minutos sem motorista pegar, a IA avisa o cliente. 
+        // Se bater 25 minutos, avisa de novo com urgência máxima. O TTL vai até 30min.
+        if (minutosParada >= 14 && minutosParada <= 16) {
+          console.log(`[FTI Scarcity] 15 Minutos. Avisando cliente para Smart Pricing.`);
+          NotificationService.enviarNotificacaoApp(
+            event.userId,
+            'Baixa Procura Identificada',
+            'Sua carga está há 15 min no radar. Injete +R$20 de Oferta para voltar ao topo e fechar o frete.'
+          );
+        } else if (minutosParada >= 24 && minutosParada <= 26) {
+          console.log(`[FTI Scarcity] 25 Minutos. Último aviso antes do fim do TTL.`);
+          NotificationService.enviarNotificacaoApp(
+            event.userId,
+            'Carga Expirando em 5 minutos',
+            'Injete urgência na oferta (Auto-Bid) agora, senão a carga sairá do radar da frota.'
+          );
         }
       }
     } catch (error) {
