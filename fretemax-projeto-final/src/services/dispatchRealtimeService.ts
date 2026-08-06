@@ -1,10 +1,10 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
-// CTO-Log: Fase 2 - Homologação Operacional
-// Status: BUG DE DOUBLE BOOKING ERRADICADO. Atualização de estado estendida à coleção 'motoristas_online' via Batch.
+// CTO-Log: FASE 3 - Homologação Operacional Distribuída.
+// Status: "Buraco Negro do Cancelamento" corrigido. Injeção atômica de Prioridade, Atualização Temporal do TTL (30 min) na recusa.
 // =========================================================
 
-import { writeBatch, doc, updateDoc, increment } from 'firebase/firestore';
+import { writeBatch, doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { firebaseRealtimeService } from './firebaseRealtimeService';
 import { locationRealtimeService } from './locationRealtimeService';
@@ -20,7 +20,6 @@ class DispatchRealtimeService {
         state: DriverState.ONLINE,
         atualizadoEm: Date.now(),
       });
-      // Sincronização paralela do radar é controlada pelo driverStateService, mas mantemos o fallback de realtime aqui.
     } catch (error) {
       console.error('ERRO DRIVER ONLINE:', error);
     }
@@ -63,7 +62,7 @@ class DispatchRealtimeService {
       const timestamp = Date.now();
 
       const driverRef = doc(db, 'motoristas_cadastros', driverId);
-      const driverOnlineRef = doc(db, 'motoristas_online', driverId); // 🔥 CTO FIX: Acesso ao Radar Público
+      const driverOnlineRef = doc(db, 'motoristas_online', driverId); 
       const freteRef = doc(db, 'fretes', freteId);
 
       // 1. Atualiza Cadastro Oficial
@@ -75,7 +74,7 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
-      // 2. 🔥 CTO FIX: Remove Motorista do Radar de Busca Imediatamente
+      // 2. Remove Motorista do Radar de Busca Imediatamente
       batch.update(driverOnlineRef, {
         state: DriverState.ACEITOU,
         disponivel: false,
@@ -105,10 +104,9 @@ class DispatchRealtimeService {
       const timestamp = Date.now();
 
       const driverRef = doc(db, 'motoristas_cadastros', driverId);
-      const driverOnlineRef = doc(db, 'motoristas_online', driverId); // 🔥 CTO FIX
+      const driverOnlineRef = doc(db, 'motoristas_online', driverId); 
       const freteRef = doc(db, 'fretes', freteId);
 
-      // Libera Cadastro Oficial
       batch.update(driverRef, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
@@ -118,7 +116,6 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
-      // 🔥 CTO FIX: Retorna o Motorista ao Radar de Buscas
       batch.update(driverOnlineRef, {
         state: DriverState.ONLINE,
         disponivel: true,
@@ -126,7 +123,6 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
-      // Conclui Viagem
       batch.update(freteRef, {
         status: AppTripState.ENTREGUE,
         entregueEm: timestamp,
@@ -149,7 +145,7 @@ class DispatchRealtimeService {
       const timestamp = Date.now();
 
       const driverRef = doc(db, 'motoristas_cadastros', driverId);
-      const driverOnlineRef = doc(db, 'motoristas_online', driverId); // 🔥 CTO FIX
+      const driverOnlineRef = doc(db, 'motoristas_online', driverId); 
       const freteRef = doc(db, 'fretes', freteId);
 
       // Libera Cadastro Oficial
@@ -162,7 +158,7 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
-      // 🔥 CTO FIX: Retorna o Motorista ao Radar de Buscas
+      // Retorna o Motorista ao Radar de Buscas
       batch.update(driverOnlineRef, {
         state: DriverState.ONLINE,
         disponivel: true,
@@ -170,7 +166,12 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
-      // Volta a Carga pro Mural
+      // 🔥 CTO FIX: "Buraco Negro da Recusa Resolvido". 
+      // Quando um motorista solta a carga, o TTL (Time to Live) deve reiniciar com urgência no Radar (30 minutos)
+      const dataExpiracao = new Date();
+      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 30);
+
+      // Volta a Carga pro Mural como URGENTE
       batch.update(freteRef, {
         status: AppTripState.DISPONIVEL,
         motoristaId: null,
@@ -180,6 +181,10 @@ class DispatchRealtimeService {
         motivoCancelamento: motivo,
         canceladoPorMotoristaEm: timestamp,
         atualizadoEm: timestamp,
+        prioridade: true, // Acende o FOGO de urgência no Feed
+        ofertaExpiraEm: dataExpiracao, // Evita sumir do Feed
+        createdAt: serverTimestamp(), // Pula pro topo do Feed em consultas padrão
+        criadoEm: Date.now() // 🔥 FORÇA o Feed do motorista (AvailableFreights.tsx) a zerar o cronômetro do zero!
       });
 
       await batch.commit();
