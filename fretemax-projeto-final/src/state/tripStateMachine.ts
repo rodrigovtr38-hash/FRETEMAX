@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/state/tripStateMachine.ts
-// CTO-Log: Enterprise Operational Flow (LOTE 7)
-// Ajuste: Injeção de Transições Diretas e Permissão de Smart Pricing (Auto-Bid).
-// Status: Leis da física da Viagem (Frete) blindadas e flexibilizadas para o mercado B2B/B2C. Homologado.
+// CTO-Log: Auditoria Final - Bloco 3
+// Ajuste: Injeção de Transições para 'DISPONIVEL' nas fases de coleta, validando o retorno urgente ao Radar em caso de recusa no local.
 // =========================================================
 
 export enum AppTripState {
@@ -59,11 +58,10 @@ export const VALID_TRANSITIONS: Record<string, string[]> = {
 
   [AppTripState.AGENDADO]: [AppTripState.DISPONIVEL, AppTripState.ACEITO, AppTripState.CANCELADO],
 
-  // 🔥 CTO FIX: Permite que um frete SEM MOTORISTA receba o Auto-Bid e volte a ficar DISPONIVEL
   [AppTripState.DISPONIVEL]: [AppTripState.ACEITO, AppTripState.BUSCANDO_MOTORISTA, AppTripState.SEM_MOTORISTA, AppTripState.CANCELADO, AppTripState.EXPIRADO],
   [AppTripState.BUSCANDO_MOTORISTA]: [AppTripState.EXPANDINDO_BUSCA, AppTripState.OFERTANDO, AppTripState.SEM_MOTORISTA, AppTripState.CANCELADO],
   [AppTripState.EXPANDINDO_BUSCA]: [AppTripState.OFERTANDO, AppTripState.SEM_MOTORISTA, AppTripState.CANCELADO],
-  [AppTripState.SEM_MOTORISTA]: [AppTripState.CANCELADO, AppTripState.DISPONIVEL], // AQUI É O AUTO-BID DA TELA DO CLIENTE
+  [AppTripState.SEM_MOTORISTA]: [AppTripState.CANCELADO, AppTripState.DISPONIVEL], 
 
   [AppTripState.OFERTANDO]: [AppTripState.MOTORISTA_ENCONTRADO, AppTripState.AGUARDANDO_ACEITE, AppTripState.REDISPATCH, AppTripState.TIMEOUT, AppTripState.CANCELADO],
   [AppTripState.MOTORISTA_ENCONTRADO]: [AppTripState.AGUARDANDO_ACEITE, AppTripState.ACEITO, AppTripState.REDISPATCH],
@@ -71,14 +69,13 @@ export const VALID_TRANSITIONS: Record<string, string[]> = {
   [AppTripState.TIMEOUT]: [AppTripState.REDISPATCH, AppTripState.SEM_MOTORISTA, AppTripState.DISPONIVEL],
   [AppTripState.REDISPATCH]: [AppTripState.DISPONIVEL, AppTripState.BUSCANDO_MOTORISTA, AppTripState.OFERTANDO, AppTripState.SEM_MOTORISTA, AppTripState.CANCELADO],
   
-  // 🔥 CTO FIX: Se expirou no Painel, o botão Injetar R$20 joga ele de volta para Disponível
   [AppTripState.EXPIRADO]: [AppTripState.CANCELADO, AppTripState.DISPONIVEL],
 
-  [AppTripState.ACEITO]: [AppTripState.INDO_COLETA, AppTripState.CANCELADO_MOTORISTA, AppTripState.CANCELADO_CLIENTE, AppTripState.REDISPATCH],
-  
-  [AppTripState.INDO_COLETA]: [AppTripState.CHEGOU_COLETA, AppTripState.CANCELADO, AppTripState.REDISPATCH],
-  [AppTripState.CHEGOU_COLETA]: [AppTripState.COLETANDO, AppTripState.CANCELADO, AppTripState.REDISPATCH],
-  [AppTripState.COLETANDO]: [AppTripState.EM_TRANSPORTE, AppTripState.CANCELADO, AppTripState.REDISPATCH],
+  // 🔥 CTO FIX: Liberação de retorno ao status 'DISPONIVEL' (Feed) nas etapas de coleta caso haja problema no local.
+  [AppTripState.ACEITO]: [AppTripState.INDO_COLETA, AppTripState.CANCELADO_MOTORISTA, AppTripState.CANCELADO_CLIENTE, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
+  [AppTripState.INDO_COLETA]: [AppTripState.CHEGOU_COLETA, AppTripState.CANCELADO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
+  [AppTripState.CHEGOU_COLETA]: [AppTripState.COLETANDO, AppTripState.CANCELADO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
+  [AppTripState.COLETANDO]: [AppTripState.EM_TRANSPORTE, AppTripState.CANCELADO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   
   [AppTripState.EM_TRANSPORTE]: [AppTripState.PARADO_OPERACIONAL, AppTripState.FINALIZANDO, AppTripState.ERRO, AppTripState.REDISPATCH],
   [AppTripState.PARADO_OPERACIONAL]: [AppTripState.EM_TRANSPORTE, AppTripState.ERRO],
