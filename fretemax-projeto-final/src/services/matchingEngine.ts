@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/matchingEngine.ts
-// CTO-Log: Refatoração de Busca e Sincronia de Coleção.
-// 1. Caminho do banco corrigido para 'motoristas_cadastros'.
-// 2. Trava letal de 'ofertaAtual' removida para permitir que o Auto-Bid (Smart Pricing) sobrescreva ofertas no celular do motorista.
+// CTO-Log: Refatoração de Busca e Sincronia de Coleção (Fase 3).
+// Status: Trava Letal do Auto-Bid removida. Motoristas recebem Matchings seguros.
 // =========================================================
 
 import {
