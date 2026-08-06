@@ -1,6 +1,7 @@
 // =========================================================
-// NOME DO ARQUIVO: src/components/motorista/OnlinePulse.tsx
-// CTO-Log: Refinamento de UI/UX. Engenharia Comportamental com pulso de rede.
+// NOME DO ARQUIVO: src/components/driver/dashboard/OnlinePulse.tsx
+// CTO-Log: FASE 3 - Auditoria de Integração.
+// Status: Engessamento estático removido. Alinhamento textual com a Matching Engine dinâmica.
 // =========================================================
 
 import { Activity, Radar, Search, Wifi, Zap } from 'lucide-react';
@@ -68,7 +69,8 @@ export default function OnlinePulse() {
             </div>
             <h3 className="text-lg font-black text-white tracking-wide">Filtro Geográfico</h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
-              Processando raio de 50km da sua localização atual.
+              {/* 🔥 CTO FIX: Remoção do valor engessado para refletir a busca dinâmica da Matching Engine */}
+              Processando raio ideal de acordo com a categoria do seu veículo.
             </p>
           </div>
 
