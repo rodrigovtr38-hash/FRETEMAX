@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/context/DriverContext.tsx
 // CTO-Log: Arquivo higienizado. Event-Driven State Cleansing acoplado.
-// Status: Agora se auto-reseta ao finalizar ou abortar missões.
+// Status: Agora se auto-reseta ao finalizar ou abortar missões mantendo integridade.
 // =========================================================
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
