@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
-// CTO-Log: Correção de Path e Injeção de Telemetria Atômica.
-// Status: Coleção corrigida. Gatilhos de 'Visualizações' e 'Interesses' adicionados para o Embarcador.
+// CTO-Log: Fase 2 - Homologação Operacional
+// Status: BUG DE DOUBLE BOOKING ERRADICADO. Atualização de estado estendida à coleção 'motoristas_online' via Batch.
 // =========================================================
 
 import { writeBatch, doc, updateDoc, increment } from 'firebase/firestore';
@@ -20,6 +20,7 @@ class DispatchRealtimeService {
         state: DriverState.ONLINE,
         atualizadoEm: Date.now(),
       });
+      // Sincronização paralela do radar é controlada pelo driverStateService, mas mantemos o fallback de realtime aqui.
     } catch (error) {
       console.error('ERRO DRIVER ONLINE:', error);
     }
@@ -62,8 +63,10 @@ class DispatchRealtimeService {
       const timestamp = Date.now();
 
       const driverRef = doc(db, 'motoristas_cadastros', driverId);
+      const driverOnlineRef = doc(db, 'motoristas_online', driverId); // 🔥 CTO FIX: Acesso ao Radar Público
       const freteRef = doc(db, 'fretes', freteId);
 
+      // 1. Atualiza Cadastro Oficial
       batch.update(driverRef, {
         state: DriverState.ACEITOU,
         freteAtualId: freteId,
@@ -72,6 +75,15 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
+      // 2. 🔥 CTO FIX: Remove Motorista do Radar de Busca Imediatamente
+      batch.update(driverOnlineRef, {
+        state: DriverState.ACEITOU,
+        disponivel: false,
+        freteAtualId: freteId,
+        atualizadoEm: timestamp,
+      });
+
+      // 3. Atualiza Frete
       batch.update(freteRef, {
         status: AppTripState.ACEITO,
         motoristaId: driverId,
@@ -93,8 +105,10 @@ class DispatchRealtimeService {
       const timestamp = Date.now();
 
       const driverRef = doc(db, 'motoristas_cadastros', driverId);
+      const driverOnlineRef = doc(db, 'motoristas_online', driverId); // 🔥 CTO FIX
       const freteRef = doc(db, 'fretes', freteId);
 
+      // Libera Cadastro Oficial
       batch.update(driverRef, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
@@ -104,6 +118,15 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
+      // 🔥 CTO FIX: Retorna o Motorista ao Radar de Buscas
+      batch.update(driverOnlineRef, {
+        state: DriverState.ONLINE,
+        disponivel: true,
+        freteAtualId: null,
+        atualizadoEm: timestamp,
+      });
+
+      // Conclui Viagem
       batch.update(freteRef, {
         status: AppTripState.ENTREGUE,
         entregueEm: timestamp,
@@ -126,8 +149,10 @@ class DispatchRealtimeService {
       const timestamp = Date.now();
 
       const driverRef = doc(db, 'motoristas_cadastros', driverId);
+      const driverOnlineRef = doc(db, 'motoristas_online', driverId); // 🔥 CTO FIX
       const freteRef = doc(db, 'fretes', freteId);
 
+      // Libera Cadastro Oficial
       batch.update(driverRef, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
@@ -137,6 +162,15 @@ class DispatchRealtimeService {
         atualizadoEm: timestamp,
       });
 
+      // 🔥 CTO FIX: Retorna o Motorista ao Radar de Buscas
+      batch.update(driverOnlineRef, {
+        state: DriverState.ONLINE,
+        disponivel: true,
+        freteAtualId: null,
+        atualizadoEm: timestamp,
+      });
+
+      // Volta a Carga pro Mural
       batch.update(freteRef, {
         status: AppTripState.DISPONIVEL,
         motoristaId: null,
@@ -238,10 +272,6 @@ class DispatchRealtimeService {
     }
   }
 
-  // =========================================================
-  // GATILHOS DE TELEMETRIA B2B (Métricas do Embarcador)
-  // =========================================================
-  
   async registrarVisualizacao(freteId: string) {
     try {
       await updateDoc(doc(db, 'fretes', freteId), {
