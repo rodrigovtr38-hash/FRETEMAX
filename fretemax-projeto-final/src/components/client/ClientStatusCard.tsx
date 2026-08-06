@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
-// CTO-Log: Fase 2 - Homologação Operacional.
-// Status: ETA lido diretamente da Single Source of Truth (Banco). Recálculo no front-end erradicado.
+// CTO-Log: FASE 3 - Auditoria de Integração.
+// Status: "Vírus dos 15km" erradicado do Painel do Embarcador. TTL estendido para 30 min.
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -18,14 +18,17 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
   const status = orderData?.status;
   const motoristaNome = orderData?.motoristaNome;
   const veiculo = orderData?.veiculo;
-  const distancia = orderData?.distancia;
   const valorTotal = orderData?.valorTotal;
   const pinColeta = orderData?.pinColeta;
   const pinEntregas = orderData?.pinEntregas;
   const paradaAtualIndex = orderData?.paradaAtualIndex || 0;
   const multiplasEntregas = orderData?.multiplasEntregas || false;
 
-  const TEMPO_FEED_SEGUNDOS = 15 * 60; 
+  // 🔥 CTO FIX: Distância Mapeada. Se não achar a física, usa a financeira, mas a Física tem prioridade.
+  const distancia = orderData?.distanciaRealKm || orderData?.distanciaTotalKm || orderData?.distancia;
+
+  // 🔥 CTO FIX: Tempo estendido para 30 minutos (1800 segundos) para bater com o DispatchService
+  const TEMPO_FEED_SEGUNDOS = 30 * 60; 
   const [timeLeft, setTimeLeft] = useState(TEMPO_FEED_SEGUNDOS);
 
   useEffect(() => {
@@ -67,8 +70,6 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
   const displayDistance = isDataReady ? `${distancia.toFixed(1)} km` : 'Calculando...';
   const displayPrice = isDataReady ? `R$ ${valorTotal.toFixed(2).replace('.', ',')}` : '---';
 
-  // 🔥 CTO FIX (Auditoria 3): Lendo ETA diretamente do Banco de Dados (orderData). Sem invenção do Front-End.
-  // Se o banco falhar, o fallback será mantido (Distância * Fator Conservador de Velocidade).
   const etaMinutes = orderData?.etaMinutes 
     ? Number(orderData.etaMinutes) 
     : isDataReady ? Math.max(10, Math.round(distancia * 1.5)) : 0;
@@ -142,7 +143,7 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
               <div>
                  <p className="text-sm font-black text-amber-400 uppercase tracking-widest mb-1">Carga parada no mural</p>
                  <p className="text-xs font-medium text-amber-100/90 leading-relaxed">
-                   O tempo limite de 15 minutos foi atingido e a carga não recebeu aceites nesse valor. 
+                   O tempo limite de 30 minutos foi atingido e a carga não recebeu aceites nesse valor. 
                    Utilize a ferramenta de Auto-Bid abaixo para injetar um valor extra e chamar a atenção imediata da frota.
                  </p>
               </div>
