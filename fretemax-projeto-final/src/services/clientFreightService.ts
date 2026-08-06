@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/clientFreightService.ts
-// CTO-Log: Refinamento e Sincronização do Motor de Cálculo (Bloco 3).
-// Status: Matemática financeira alinhada com o frontend (Cliente.tsx) para evitar divergências em chamadas futuras/API.
+// CTO-Log: Refinamento e Sincronização do Motor de Cálculo (Bloco 3 / FASE 3).
+// Status: Matematica e Recebimento de Payload expandido (Distância Dupla) validadas e seguras.
 // =========================================================
 
 import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
@@ -19,6 +19,8 @@ export interface FreightPayload {
   valor?: number;
   valorBruto?: number;
   distanciaTotalKm?: number;
+  distanciaTarifada?: number; // 🔥 Suporte injetado
+  distanciaRealKm?: number;   // 🔥 Suporte injetado
   pesoKg?: number;
   tipoCarga?: string;
   paradas?: any[];
