@@ -2,7 +2,7 @@
 // NOME DO ARQUIVO: src/state/tripStateMachine.ts
 // CTO-Log: Enterprise Operational Flow (LOTE 7)
 // Ajuste: Injeção de Transições Diretas e Permissão de Smart Pricing (Auto-Bid).
-// Status: Leis da física da Viagem (Frete) blindadas e flexibilizadas para o mercado.
+// Status: Leis da física da Viagem (Frete) blindadas e flexibilizadas para o mercado B2B/B2C. Homologado.
 // =========================================================
 
 export enum AppTripState {
