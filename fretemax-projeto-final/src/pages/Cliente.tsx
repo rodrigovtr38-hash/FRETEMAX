@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Injeção do Bloco 2 (Smart Pricing / Auto-Bid) e Correção de Crash.
+// CTO-Log: Fase 2 - Homologação Operacional.
+// Status: Bug dos 15km fixos ERRADICADO. Separação Estrita entre "Pricing Distance" (Tabela) e "Display Distance" (Física).
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -17,6 +18,8 @@ import { AppTripState as TripState } from '../state/tripStateMachine';
 import { mapsLoader } from '../services/mapsLoader'; 
 import { NotificationService } from '../services/notificationService'; 
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
+// 🔥 CTO INJECTION: Motor de distância infalível importado.
+import { locationService } from '../services/locationService';
 
 interface AddressData { cep: string; bairro: string; rua: string; num: string; lat?: number; lng?: number; }
 interface Coords { lat: number; lng: number; }
@@ -144,7 +147,7 @@ export default function Cliente() {
     }
   }, [loadingPayment, loadingRoute]);
 
-  const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? (5 * entregas.length) : distanciaReal, [distanciaReal, entregas.length]);
+  const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? 5 : distanciaReal, [distanciaReal]);
 
   const calculoFinanceiro = useMemo(() => {
     const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
@@ -154,6 +157,7 @@ export default function Cliente() {
 
     let valorMotoristaBase = 0;
 
+    // 🔥 CTO FIX: Tabela de Cobrança (Pricing Distance). Aqui o 15km é OBRIGATÓRIO comercialmente.
     switch (vehicle) {
       case 'moto': valorMotoristaBase = validDistancia <= 15 ? 30 : 30 + (validDistancia - 15) * 2; break;
       case 'carro_pequeno': valorMotoristaBase = validDistancia <= 15 ? 100 : 100 + (validDistancia - 15) * 4; break;
@@ -369,13 +373,17 @@ export default function Cliente() {
       
       setStep('preview');
     } catch {
-      showToast('Calculando rota por estimativa de CEP.', 'warning');
-      setDistanciaReal(15 * entregas.length); 
-
+      showToast('Calculando rota linear (estimativa) por indisponibilidade da rede.', 'warning');
+      
       const fallbackOrigem = getFallbackCoordsByCEP(coleta.cep);
       const fallbackDestino = getFallbackCoordsByCEP(entregas[entregas.length - 1].cep);
       setOrigemGPS(fallbackOrigem);
       setDestinoGPS(fallbackDestino);
+
+      // 🔥 CTO FIX: Bug do 15km fixo erradicado. Agora calcula por Haversine real.
+      const distHaversine = locationService.calcularDistanciaKm(fallbackOrigem, fallbackDestino);
+      const finalDist = distHaversine > 0 ? distHaversine : (5 * entregas.length); // Evita 0km absoluto
+      setDistanciaReal(finalDist);
 
       setStep('preview');
     } finally { setLoadingRoute(false); }
@@ -436,6 +444,7 @@ export default function Cliente() {
         clienteZap: whatsapp, 
         clienteDocumento: documentoLimpo,
         
+        // A distância matemática e física guardadas como Single Source of Truth
         distancia: validDistancia, 
         veiculo: vehicle, 
         categoria: vehicle, 
@@ -522,7 +531,6 @@ export default function Cliente() {
     } finally { setLoadingPayment(false); isProcessingPayment.current = false; }
   };
 
-  // 🔥 CTO FIX: Lógica de Smart Pricing (Auto-Bid)
   const handleSmartPricing = async (valorAdicional: number) => {
     if (!currentOrderId || !orderData) return;
     try {
@@ -544,10 +552,10 @@ export default function Cliente() {
         valorMotorista: Number(novoLiquido.toFixed(2)),
         valorLiquidoMotorista: Number(novoLiquido.toFixed(2)),
         lucroPlataforma: Number(novoLucro.toFixed(2)),
-        status: 'disponivel', // Volta pro radar
-        prioridade: true, // Tag de urgência ativada
+        status: 'disponivel',
+        prioridade: true,
         ofertaExpiraEm: Timestamp.fromDate(dataExpiracao),
-        createdAt: serverTimestamp() // Volta pro topo da lista
+        createdAt: serverTimestamp()
       });
       
       showToast(`Sucesso! Oferta aumentada em R$ ${valorAdicional}.`, 'success');
@@ -556,7 +564,6 @@ export default function Cliente() {
     }
   };
 
-  // 🔥 CTO FIX: Republicar sem alterar o valor
   const handleRepublicar = async () => {
     if (!currentOrderId) return;
     try {
@@ -906,7 +913,7 @@ export default function Cliente() {
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Clock3 size={18} className="text-amber-400 mb-1" />
                     <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância / ETA</p>
-                    <p className="text-sm font-bold text-white mt-1">{validDistancia.toFixed(0)} km</p>
+                    <p className="text-sm font-bold text-white mt-1">{validDistancia.toFixed(1)} km</p>
                  </div>
               </div>
         
@@ -1036,7 +1043,6 @@ export default function Cliente() {
 
               <div className="flex flex-col gap-6">
                 
-                {/* 🔥 CTO FIX: Passando as funções de negociação para a Torre de Controle */}
                 <ClientStatusCard 
                   orderData={orderData} 
                   onSmartPricing={handleSmartPricing}
