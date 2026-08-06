@@ -1,7 +1,8 @@
 // ============================================================================
 // ARQUIVO: src/core/ai/events/ia.events.ts
-// CTO-Log: Blindagem de Eventos Assíncronos.
-// Status: Try-catch injetado ao redor do NotificationService para garantir que falhas no WhatsApp não congelem a Máquina de Estados da carga.
+// CTO-Log: FASE 2 - Homologação Operacional
+// Status: Bug de Silêncio do Retorno (Noite) erradicado para retenção de mercado. 
+// Falha silenciosa no WhatsApp ativada.
 // ============================================================================
 
 import { NotificationService } from '../../../services/notificationService';
@@ -93,13 +94,20 @@ export class FTIEventDispatcher {
     
     try {
       const currentHour = new Date().getHours();
-      if (currentHour >= 6 && currentHour <= 17) {
-        NotificationService.enviarNotificacaoApp(
-          event.userId, 
-          'Retorno Inteligente', 
-          `Você descarregou em ${destino}. Ative o Modo Retorno no Radar para capturarmos cargas de volta para a sua base.`
-        );
+      let mensagem = `Você descarregou em ${destino}. Ative o Modo Retorno no Radar para capturarmos cargas de volta para a sua base.`;
+      let titulo = 'Retorno Inteligente';
+
+      // 🔥 CTO FIX: Não silenciar os alertas de noite. Apenas mudar o tom de voz para agendamento.
+      if (currentHour >= 18 || currentHour <= 5) {
+        mensagem = `Bom descanso. Você está em ${destino}. Quando for ligar o Radar, deixe o "Modo Retorno" ativado para não rodar vazio na volta.`;
+        titulo = 'Viagem Concluída com Sucesso';
       }
+
+      NotificationService.enviarNotificacaoApp(
+        event.userId, 
+        titulo, 
+        mensagem
+      );
     } catch (error) {
       console.error('[FTI Radar] Falha silenciosa ao notificar retorno do Motorista:', error);
     }
