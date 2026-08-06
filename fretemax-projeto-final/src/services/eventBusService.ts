@@ -73,11 +73,6 @@ class EventBusService {
 export const eventBusService = new EventBusService();
 
 export enum AppEvents {
-  /*
-  ===================================
-  DRIVER
-  ===================================
-  */
   DRIVER_STATUS_CHANGED = 'DRIVER_STATUS_CHANGED',
   DRIVER_ONLINE = 'DRIVER_ONLINE',
   DRIVER_OFFLINE = 'DRIVER_OFFLINE',
@@ -85,11 +80,6 @@ export enum AppEvents {
   DRIVER_ACCEPTED_TRIP = 'DRIVER_ACCEPTED_TRIP',
   DRIVER_REJECTED_TRIP = 'DRIVER_REJECTED_TRIP',
 
-  /*
-  ===================================
-  TRIP
-  ===================================
-  */
   TRIP_STATUS_CHANGED = 'TRIP_STATUS_CHANGED',
   NEW_TRIP_REQUEST = 'NEW_TRIP_REQUEST',
   TRIP_ACCEPTED = 'TRIP_ACCEPTED',
@@ -100,38 +90,21 @@ export enum AppEvents {
   TRIP_CANCELLED = 'TRIP_CANCELLED',
   TRIP_EXPIRED = 'TRIP_EXPIRED',
 
-  /*
-  ===================================
-  DISPATCH
-  ===================================
-  */
   DISPATCH_STARTED = 'DISPATCH_STARTED',
   DISPATCH_EXPANDED = 'DISPATCH_EXPANDED',
   DISPATCH_TIMEOUT = 'DISPATCH_TIMEOUT',
   REDISPATCH_STARTED = 'REDISPATCH_STARTED',
   QUEUE_FINISHED = 'QUEUE_FINISHED',
 
-  /*
-  ===================================
-  REALTIME
-  ===================================
-  */
   REALTIME_CONNECTED = 'REALTIME_CONNECTED',
   REALTIME_DISCONNECTED = 'REALTIME_DISCONNECTED',
   REALTIME_RECONNECTED = 'REALTIME_RECONNECTED',
   
-  // Gatilho essencial para o Orquestrador Central
   STATE_SYNCED = 'STATE_SYNCED', 
 
-  /*
-  ===================================
-  OPERATIONAL
-  ===================================
-  */
   SYSTEM_ERROR = 'SYSTEM_ERROR',
   PAYMENT_CONFIRMED = 'PAYMENT_CONFIRMED',
   
-  // Gatilhos essenciais para o fluxo financeiro e estorno
   PAYMENT_APPROVED = 'PAYMENT_APPROVED',
   PAYMENT_FAILED = 'PAYMENT_FAILED',
   PAYMENT_REFUNDED = 'PAYMENT_REFUNDED',
