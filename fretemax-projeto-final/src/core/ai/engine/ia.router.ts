@@ -1,7 +1,7 @@
 // ============================================================================
 // ARQUIVO: src/core/ai/engine/ia.router.ts
-// CTO-Log: Auditoria concluída.
-// Status: Roteamento de contexto B2B/B2C (Motorista/Empresa) homologado.
+// CTO-Log: FASE 2 - Homologação Operacional
+// Status: Roteamento de contexto B2B/B2C (Motorista/Empresa) atestado como "Single Source of Truth Contextual".
 // ============================================================================
 
 import { IAContext } from '../types/ia.context';
