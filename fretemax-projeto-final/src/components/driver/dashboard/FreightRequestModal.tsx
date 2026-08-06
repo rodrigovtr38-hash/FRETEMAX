@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/FreightRequestModal.tsx
 // CTO-Log: FASE 3 - Auditoria de Integração.
-// Status: "Vírus dos 15km" erradicado. Modal exibe distância física real, separada da tarifa.
+// Status: Conversão de distâncias < 1km para metros no Modal.
 // =========================================================
 
 import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info } from 'lucide-react';
@@ -24,6 +24,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   truck: 'Truck',
   carreta: 'Carreta',
   bitrem: 'Bitrem',
+};
+
+// 🔥 CTO FIX: Formatador de Metros para clareza em viagens curtas.
+const formatDistance = (km: number | undefined | null) => {
+  if (!km || isNaN(km)) return '0 km';
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(1)} km`;
 };
 
 export default function FreightRequestModal({
@@ -90,8 +97,7 @@ export default function FreightRequestModal({
               <div className="bg-slate-900/50 border border-white/5 rounded-xl px-4 py-2 flex items-center gap-2">
                 <Info size={14} className="text-cyan-400" />
                 <span className="text-[10px] font-bold text-slate-300 uppercase">
-                  {/* 🔥 CTO FIX: Lê a distância física real */}
-                  Percurso total: {(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0).toFixed(1)} km
+                  Percurso total: {formatDistance(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0)}
                 </span>
               </div>
             </div>
@@ -107,7 +113,7 @@ export default function FreightRequestModal({
               <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Ponto de Coleta</p>
               <h3 className="mt-1 text-base md:text-lg font-bold text-white leading-tight line-clamp-3">{freight.enderecoColetaTexto}</h3>
               <p className="mt-3 text-xs font-bold text-slate-400">
-                Distância até o local: <span className="text-cyan-400">{(freight.distanciaAteColeta || 0).toFixed(1)} km</span>
+                Distância até o local: <span className="text-cyan-400">{formatDistance(freight.distanciaAteColeta || 0)}</span>
               </p>
             </div>
 
@@ -119,7 +125,7 @@ export default function FreightRequestModal({
               <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Destino Final</p>
               <h3 className="mt-1 text-base md:text-lg font-bold text-white leading-tight line-clamp-3">{freight.enderecoEntregaTexto}</h3>
               <p className="mt-3 text-xs font-bold text-slate-400">
-                Rota até entrega: <span className="text-emerald-400">{(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0).toFixed(1)} km</span>
+                Rota até entrega: <span className="text-emerald-400">{formatDistance(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0)}</span>
               </p>
             </div>
           </div>
