@@ -1,12 +1,11 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverRadar.tsx
-// CTO-Log: Auditoria Concluída - BLOCO 15.
-// Status: Sincronização de Estado via 'driverStateService' ativada para garantir Modo Retorno seguro.
+// CTO-Log: FASE 3 - Homologação Operacional.
+// Status: Componente validado. Chamadas para 'driverStateService' confirmadas.
 // =========================================================
 
 import { useState } from 'react';
 import { RotateCcw, MapPin, CheckCircle2, MessageCircle, Power } from 'lucide-react';
-// 🔥 CTO FIX: Adicionado serviço oficial que nós mesmos construímos no Bloco 4
 import { driverStateService } from '../../services/driverStateService';
 
 interface DriverRadarProps {
@@ -30,7 +29,6 @@ export default function DriverRadar({ isOnline, setIsOnline, user, driver }: Dri
     setLoadingRetorno(true);
     try {
       if (user?.uid) {
-        // 🔥 CTO FIX: Usando o serviço blindado que atualiza ambas as coleções (Cadastro e Online)
         await driverStateService.ativarModoRetorno(destinoRetorno.trim());
         setIsRetornoModalOpen(false);
       }
@@ -45,7 +43,6 @@ export default function DriverRadar({ isOnline, setIsOnline, user, driver }: Dri
     setLoadingRetorno(true);
     try {
       if (user?.uid) {
-        // 🔥 CTO FIX: Usando o serviço blindado que atualiza ambas as coleções
         await driverStateService.desativarModoRetorno();
       }
     } catch (error) {
