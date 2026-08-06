@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/notificationService.ts
 // CTO-Log: Auditoria Concluída - IA e WhatsApp Integrados
-// Status: Válvulas de comunicação de máquina para humano operacionais.
+// Status: Válvulas de comunicação validadas e sincronizadas com a coleção 'motoristas_cadastros'.
 // =========================================================
 
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
@@ -32,10 +32,7 @@ export class NotificationService {
     }
   }
 
-  // 🔥 Nova Função: Enviar Notificação In-App (Toast ou Navegador)
   static enviarNotificacaoApp(userId: string, titulo: string, mensagem: string) {
-    // Se estivéssemos num backend, isso dispararia via Admin SDK.
-    // Como estamos no frontend, criamos a notificação nativa do aparelho.
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(titulo, {
         body: mensagem,
@@ -84,7 +81,6 @@ export class NotificationService {
     });
   }
 
-  // 📱 API WHATSAPP - APROVAÇÃO DE FROTA
   static enviarWhatsAppAprovacao(telefone: string, nome: string, status: 'aprovado' | 'rejeitado') {
     const telefoneLimpo = telefone.replace(/\D/g, '');
     if (!telefoneLimpo) return;
@@ -96,7 +92,6 @@ export class NotificationService {
     window.open(`https://wa.me/55${telefoneLimpo}?text=${encodeURIComponent(mensagem)}`, '_blank');
   }
 
-  // 📱 API WHATSAPP - NOTIFICAR CLIENTE (NOVA CARGA)
   static notificarClienteFretePostado(telefone: string, nome: string, idFrete: string) {
     const telefoneLimpo = telefone.replace(/\D/g, '');
     if (!telefoneLimpo) return;
@@ -105,7 +100,6 @@ export class NotificationService {
     window.open(`https://wa.me/55${telefoneLimpo}?text=${encodeURIComponent(mensagem)}`, '_blank');
   }
 
-  // 📱 API WHATSAPP - NOTIFICAR CLIENTE (MOTORISTA ABORTOU)
   static notificarClienteMotoristaCancelou(telefone: string, nome: string, idFrete: string, motivo: string) {
     const telefoneLimpo = telefone.replace(/\D/g, '');
     if (!telefoneLimpo) return;
