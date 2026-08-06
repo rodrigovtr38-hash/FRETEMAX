@@ -1,14 +1,13 @@
 // ============================================================================
-// ARQUIVO: FTIWidget.tsx
-// PASTA: src/core/ai/components/
-// OBJETIVO: Widget Flutuante de Status da IA (Ponto de Contato Passivo)
+// ARQUIVO: src/core/ai/components/FTIWidget.tsx
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: Componente Visual validado. Tratativa de Fallback passivo segura.
 // ============================================================================
 
 import React from 'react';
 import { useFTI } from '../hooks/useFTI';
-import { IAContext } from '../prompts/ia.prompts';
+import { IAContext } from '../types/ia.context'; // Caminho realinhado.
 
-// Propriedades agora são opcionais para não quebrar a injeção global no App.tsx
 interface FTIWidgetProps {
   context?: IAContext;
   onClick?: () => void;
@@ -18,9 +17,15 @@ const FTIWidget: React.FC<FTIWidgetProps> = ({ context, onClick }) => {
   // Fallback de segurança: Se o componente for chamado sem contexto (ex: usuário deslogado),
   // assumimos o perfil de visitante genérico para a IA não falhar.
   const fallbackContext: IAContext = context || {
-    userId: 'guest-user',
-    role: 'empresa',
-    name: 'Visitante'
+    user: {
+      uid: 'guest-user',
+      role: 'empresa',
+      name: 'Visitante'
+    },
+    appState: {
+      currentRoute: 'home',
+      activeFreight: null
+    }
   };
 
   // Conecta ao nosso motor neural para saber se a IA está "pensando"
@@ -54,5 +59,4 @@ const FTIWidget: React.FC<FTIWidgetProps> = ({ context, onClick }) => {
   );
 };
 
-// EXPORT DEFAULT ADICIONADO PARA RESOLVER O ERRO DE BUILD
 export default FTIWidget;
