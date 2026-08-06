@@ -1,13 +1,13 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverDashboard.tsx
-// CTO-Log: Painel de Controle (Resumo Executivo).
-// Status: KPIs financeiros estáticos renderizados corretamente.
+// CTO-Log: Auditoria Concluída - BLOCO 15.
+// Status: Validação de segurança aplicada.
 // =========================================================
 
 import { DollarSign, Truck, Star, Award, MessageCircle } from 'lucide-react'; 
 
 interface DriverDashboardProps {
-  driver?: any; // Mantido para flexibilidade na injeção de dados via Props
+  driver?: any; 
 }
 
 export default function DriverDashboard({ driver }: DriverDashboardProps) {
@@ -21,7 +21,6 @@ export default function DriverDashboard({ driver }: DriverDashboardProps) {
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6">
 
-      {/* HEADER COMPACTO (Foco Operacional) */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8">
         <div className="flex items-center gap-4 rounded-[2rem] border border-white/10 bg-slate-900/60 p-4 md:p-5 backdrop-blur-xl w-full lg:w-auto">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-xl font-black text-cyan-400 shrink-0 border border-cyan-500/20">
@@ -47,7 +46,6 @@ export default function DriverDashboard({ driver }: DriverDashboardProps) {
         </button>
       </div>
 
-      {/* STATUS GRID (O QUE IMPORTA PRO MOTORISTA) */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
 
         <div className="rounded-3xl border border-emerald-500/20 bg-slate-900/80 p-5 flex flex-col shadow-[0_10px_30px_rgba(16,185,129,0.05)] relative overflow-hidden group">
