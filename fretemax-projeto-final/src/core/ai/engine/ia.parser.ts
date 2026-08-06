@@ -1,7 +1,7 @@
 // ============================================================================
 // ARQUIVO: src/core/ai/engine/ia.parser.ts
-// CTO-Log: Auditoria concluída.
-// Status: Validação de Segurança e Fallback homologados. Nenhuma alteração lógica necessária.
+// CTO-Log: FASE 2 - Homologação Operacional
+// Status: Regex e Fallback homologados para segurança anti-crash do App.
 // ============================================================================
 
 import { IAResponse } from '../types/ia.responses';
