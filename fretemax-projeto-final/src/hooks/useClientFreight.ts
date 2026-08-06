@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/hooks/useClientFreight.ts
-// CTO-Log: Refinamento de Hook (Bloco 3).
+// CTO-Log: Refinamento de Hook (Bloco 3 / FASE 3).
+// Status: Importações e Lock Actions 100% seguros e validados.
 // =========================================================
 
 import { useCallback, useRef, useState } from 'react';
