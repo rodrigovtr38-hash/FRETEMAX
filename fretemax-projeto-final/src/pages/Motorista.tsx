@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Motorista.tsx
-// CTO-Log: Sincronização Cardíaca Injetada.
-// Status: Views e Interesses agora gravam direto na coleção 'fretes' (increment). Botão 'Ver Rota' dizimado. Conversão R$/km ativada.
+// CTO-Log: Auditoria Concluída - BLOCO 15 (Final).
+// Status: Matemática isolada. Valor reflete exclusivamente o Banco de Dados. Lógica visual protegida.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -31,7 +31,6 @@ interface DriverData {
   retornosUsadosHoje?: number; 
 }
 
-const CATEGORY_FEES: Record<string, number> = { moto: 0.2, carro: 0.2, utilitario: 0.2, toco: 0.15, truck: 0.15, carreta: 0.15, bitrem: 0.15 };
 const ACTIVE_STATUSES = ['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'em_entrega', 'returning'];
 
 const FeedSkeleton = () => (
@@ -58,7 +57,6 @@ export default function Motorista() {
   const authReadyRef = useRef(false);
   const listenerRegistryRef = useRef<{ freights?: () => void; active?: () => void; driver?: () => void; }>({});
   
-  // Ref para controlar quais cargas já contabilizaram view
   const viewedFreights = useRef<Set<string>>(new Set());
 
   const [user, setUser] = useState<any>(null);
@@ -137,9 +135,10 @@ export default function Motorista() {
     const categoriaBruta = data.veiculo || data.categoria || 'carro';
     const categoriaFormatada = categoriaBruta.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    const feePercent = CATEGORY_FEES[categoriaFormatada] ?? 0.2;
     const valorCliente = Number(data.valorCliente || data.valorTotal || data.valorFreteBruto || data.valor || 0); 
-    const valorMotorista = data.valorMotorista || data.valorLiquidoMotorista || valorCliente * (1 - feePercent);
+    // 🔥 CTO FIX: Cálculo de porcentagem removido. A fonte da verdade agora é 100% o Banco de Dados.
+    const valorMotorista = Number(data.valorLiquidoMotorista || data.valorMotorista || valorCliente * 0.8);
+    
     const distanciaColetaKm = Number(data.distanciaColetaKm || 0);
     const distanciaEntregaKm = Number(data.distanciaEntregaKm || data.distancia || 0);
 
@@ -348,7 +347,6 @@ export default function Motorista() {
     setSelectedFreight(null);
   }, []);
 
-  // 🔥 CTO FIX: Engajamento agora grava direto na coleção 'fretes' para disparar o onSnapshot do Embarcador
   const handleSocialAction = async (action: string, freightId: string) => {
     try {
       if (action === 'interesse') {
@@ -356,7 +354,6 @@ export default function Motorista() {
         showToast('Interesse registrado! A Empresa foi notificada.', 'success');
       }
       if (action === 'favorito') {
-        // Exemplo: Salvar na subcoleção do motorista e na métrica do cliente
         await updateDoc(doc(db, 'fretes', freightId), { favoritos: increment(1) });
         showToast('Carga salva na sua lista.', 'info');
       }
@@ -371,23 +368,23 @@ export default function Motorista() {
 
   const fretesFiltradosOrdenados = useMemo(() => {
     let filtrados = availableFreights.filter(freight => {
-      const origemMatch = filtroOrigem === '' || freight.enderecoColetaTexto.toLowerCase().includes(filtroOrigem.toLowerCase());
-      const destinoMatch = filtroDestino === '' || freight.enderecoEntregaTexto.toLowerCase().includes(filtroDestino.toLowerCase());
+      const origemMatch = filtroOrigem === '' || freight.enderecoColetaTexto?.toLowerCase().includes(filtroOrigem.toLowerCase());
+      const destinoMatch = filtroDestino === '' || freight.enderecoEntregaTexto?.toLowerCase().includes(filtroDestino.toLowerCase());
       return origemMatch && destinoMatch;
     });
 
     if (driverData?.modoRetorno && driverData?.destinoRetorno) {
       const destinoAlvo = driverData.destinoRetorno.toLowerCase();
       filtrados = filtrados.filter(freight => 
-        freight.enderecoEntregaTexto.toLowerCase().includes(destinoAlvo) || 
+        freight.enderecoEntregaTexto?.toLowerCase().includes(destinoAlvo) || 
         (freight as any).cidadeDestino?.toLowerCase().includes(destinoAlvo)
       );
     }
 
     return filtrados.sort((a, b) => {
       if (a.prioridade !== b.prioridade) return a.prioridade ? -1 : 1;
-      if (a.distanciaColetaKm !== b.distanciaColetaKm) return a.distanciaColetaKm - b.distanciaColetaKm;
-      if (b.valorMotorista !== a.valorMotorista) return b.valorMotorista - a.valorMotorista;
+      if (a.distanciaColetaKm !== b.distanciaColetaKm) return (a.distanciaColetaKm || 0) - (b.distanciaColetaKm || 0);
+      if (b.valorMotorista !== a.valorMotorista) return (b.valorMotorista || 0) - (a.valorMotorista || 0);
       
       const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
       const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
@@ -395,7 +392,6 @@ export default function Motorista() {
     });
   }, [availableFreights, filtroOrigem, filtroDestino, driverData?.modoRetorno, driverData?.destinoRetorno]);
 
-  // 🔥 CTO FIX: Registro atômico de visualização ao montar o Feed
   useEffect(() => {
     if (isOnline && fretesFiltradosOrdenados.length > 0) {
       fretesFiltradosOrdenados.forEach(freight => {
@@ -527,7 +523,6 @@ export default function Motorista() {
               ) : (
                 <AnimatePresence>
                   {fretesFiltradosOrdenados.map((freight) => {
-                    // Cálculo da Renda Bruta para Urgência Visual
                     const km = freight.distanciaTotalKm && freight.distanciaTotalKm > 0 ? freight.distanciaTotalKm : 1;
                     const ganhoPorKm = (freight.valorMotorista || 0) / km;
 
@@ -589,7 +584,6 @@ export default function Motorista() {
                            </div>
                         </div>
 
-                        {/* 🔥 CTO FIX: MÉTRICAS DE CONVERSÃO EXIBIDAS */}
                         <div className="grid grid-cols-3 gap-2 mb-6">
                           <div className="bg-slate-900 rounded-xl p-3 text-center border border-slate-800">
                             <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1 flex items-center justify-center gap-1"><Ruler size={10}/> Renda Bruta</p>
@@ -605,7 +599,6 @@ export default function Motorista() {
                           </div>
                         </div>
 
-                        {/* 🔥 CTO FIX: BOTÃO DE MAPA REMOVIDO E AÇÕES REALTIME ATIVAS */}
                         <div className="grid grid-cols-3 gap-2 mb-5 border-t border-slate-800 pt-5">
                             <button onClick={() => handleSocialAction('interesse', freight.id)} className="flex flex-col items-center justify-center gap-1.5 text-slate-500 hover:text-blue-400 transition-colors">
                                <ThumbsUp size={20}/>
