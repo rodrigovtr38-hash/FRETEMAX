@@ -1,7 +1,8 @@
 // ============================================================================
 // ARQUIVO: ia.validator.ts
 // PASTA: src/core/ai/utils/
-// OBJETIVO: Escudo de Validação JSON e Sanitização de Dados (Anti-Crash)
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: Sanitização de Markdown JSON homologada. Escudo ativo.
 // ============================================================================
 
 export interface IAResponseFallback {
