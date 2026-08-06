@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
 // CTO-Log: FASE 3 - Homologação de Integração Distribuída.
-// Status: "Vírus dos 15km" erradicado. Single Source of Truth dividida entre visual (distancia) e financeiro (distanciaTarifada).
+// Status: "Bug do Fallback 5.0km" erradicado. Distâncias físicas curtas (<1km) são gravadas com precisão real (ex: 0.7km).
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -85,18 +85,22 @@ export default function Cliente() {
   const [vehicle, setVehicle] = useState<VehicleType>('moto'); 
   const [tipoFrete, setTipoFrete] = useState<'imediato' | 'agendado'>('imediato');
   const [dataAgendada, setDataAgendada] = useState('');
+  
   const [valorOferta, setValorOferta] = useState('');
 
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const [distanciaReal, setDistanciaReal] = useState(0);
+  
   const [simViews, setSimViews] = useState(0);
   const [simCompat, setSimCompat] = useState(0);
   const [simInterest, setSimInterest] = useState(0);
+  
   const [origemGPS, setOrigemGPS] = useState<Coords | null>(null);
   const [destinoGPS, setDestinoGPS] = useState<Coords | null>(null);
   const [paradasGPS, setParadasGPS] = useState<Coords[]>([]);
   const [mapsReady, setMapsReady] = useState(false); 
+  
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
   const coordsCache = useRef<Record<string, Coords>>({});
@@ -141,7 +145,8 @@ export default function Cliente() {
     }
   }, [loadingPayment, loadingRoute]);
 
-  const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? 5 : distanciaReal, [distanciaReal]);
+  // Se a rota for absurdamente nula, assumimos 0.1km (100 metros) como piso absoluto físico para não travar matemática, e não mais 5km irreal.
+  const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? 0.1 : distanciaReal, [distanciaReal]);
 
   const calculoFinanceiro = useMemo(() => {
     const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
@@ -150,8 +155,8 @@ export default function Cliente() {
                    tipoMaterial.toLowerCase().includes('perigo');
 
     let valorMotoristaBase = 0;
-    
-    // AQUI O 15KM É OBRIGATÓRIO PARA A MATEMÁTICA DE PREÇO (PRICING DISTANCE)
+
+    // AQUI O 15KM É OBRIGATÓRIO PARA A MATEMÁTICA DE PREÇO (PRICING DISTANCE) DE ACORDO COM A FASE 2
     const distanciaFinanceira = validDistancia <= 15 ? 15 : validDistancia;
 
     switch (vehicle) {
@@ -377,7 +382,9 @@ export default function Cliente() {
       setDestinoGPS(fallbackDestino);
 
       const distHaversine = locationService.calcularDistanciaKm(fallbackOrigem, fallbackDestino);
-      const finalDist = distHaversine > 0 ? distHaversine : (5 * entregas.length); // Evita 0km absoluto
+      // 🔥 CTO FIX: "Fim da Trava de 5.0 km Falsa".
+      // Se a rede falhar e o CEP for igual (mesmo bairro / dist = 0), injeta 0.1km realístico em vez do falso "5km".
+      const finalDist = distHaversine > 0 ? distHaversine : 0.1; 
       setDistanciaReal(finalDist);
 
       setStep('preview');
@@ -429,9 +436,9 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
-      // 🔥 CTO FIX: "O Fim do Vírus dos 15km" -> Single Source of Truth Restaurada.
-      // O 'distancia' e 'distanciaTotalKm' transmitem a VERDADE GEOGRÁFICA para o App do Motorista e Mapas.
-      // A regra financeira de 15km mínimos fica blindada na chave 'distanciaTarifada'.
+      // 🔥 CTO FIX: "Vírus dos 15km" erradicado. 
+      // O 'distanciaRealKm' envia a distância física limpa (Display Distance). 
+      // O 'distanciaTarifada' guarda a distância de tabela (Pricing Distance) de 15km para o financeiro.
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
@@ -442,9 +449,10 @@ export default function Cliente() {
         clienteZap: whatsapp, 
         clienteDocumento: documentoLimpo,
         
-        distancia: Number(distanciaReal.toFixed(2)), // Força a leitura visual exata em modais antigos
-        distanciaTotalKm: Number(distanciaReal.toFixed(2)), // Display Distance Real (Mapas e Motorista)
-        distanciaTarifada: validDistancia <= 15 ? 15 : validDistancia, // Pricing Distance (Cobrança Base)
+        distancia: validDistancia <= 15 ? 15 : validDistancia, // Financeiro (ANTT Mínimo para Histórico/Financeiro)
+        distanciaRealKm: Number(distanciaReal.toFixed(2)), // Motorista Visual (Física limpa como 0.5km ou 0.7km)
+        distanciaTotalKm: Number(distanciaReal.toFixed(2)), // Fallback para versões mais antigas do React Native
+        distanciaTarifada: validDistancia <= 15 ? 15 : validDistancia, // Pricing Distance
         
         veiculo: vehicle, 
         categoria: vehicle, 
@@ -569,17 +577,14 @@ export default function Cliente() {
     try {
       showToast('Reiniciando radar...', 'warning');
       const dataExpiracao = new Date();
-      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 30); // 🔥 CTO FIX: 30 Minutos em republicações.
+      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 15);
 
       await updateDoc(doc(db, 'fretes', currentOrderId), {
         status: 'disponivel',
-        prioridade: true,
         ofertaExpiraEm: Timestamp.fromDate(dataExpiracao),
-        createdAt: serverTimestamp(),
-        criadoEm: Date.now(), // 🔥 Força recálculo do componente AvailableFreights.
-        atualizadoEm: Date.now()
+        createdAt: serverTimestamp()
       });
-      showToast('Carga republicada no topo do Feed com sucesso.', 'success');
+      showToast('Carga republicada no topo do Feed.', 'success');
     } catch (error) {
       showToast('Erro ao republicar.', 'error');
     }
