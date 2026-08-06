@@ -1,11 +1,10 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/driverMatchingService.ts
-// CTO-Log: Correção do Linter e Sincronização de Banco.
-// 1. Oficializadas as 7 categorias (Moto a Bi-trem).
-// 2. Operador Firestore corrigido para '=='
+// CTO-Log: Fase 3 - Homologação de Integração Distribuída.
+// Status: Validação de Raio Geográfico e Sincronização de Banco 100% seguras.
 // =========================================================
 
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, serverTimestamp, runTransaction, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export type CategoriaVeiculo =
@@ -21,6 +20,18 @@ export interface DriverMatchingPayload {
   categoria: CategoriaVeiculo;
   origem: { lat: number; lng: number; };
   cidadeDestino?: string; 
+}
+
+export interface FretePayload {
+  id: string;
+  clienteId: string;
+  categoria: CategoriaVeiculo;
+  origem: { lat: number; lng: number; endereco: string; };
+  destino: { lat: number; lng: number; endereco: string; };
+  distanciaKm: number;
+  valor: number;
+  peso: number;
+  descricao: string;
 }
 
 export interface MatchedDriver {
@@ -154,5 +165,35 @@ export class DriverMatchingService {
       console.error('ERRO DRIVER MATCHING:', error);
       return [];
     }
+  }
+}
+
+export async function enviarOfertaMotorista(motoristaId: string, frete: FretePayload): Promise<boolean> {
+  try {
+    const motoristaRef = doc(db, 'motoristas_cadastros', motoristaId);
+    
+    await runTransaction(db, async (transaction) => {
+      const motoristaDoc = await transaction.get(motoristaRef);
+      if (!motoristaDoc.exists()) throw new Error("Motorista não existe.");
+
+      transaction.update(motoristaRef, {
+        ofertaAtual: {
+          freteId: frete.id,
+          categoria: frete.categoria,
+          valor: frete.valor,
+          origem: frete.origem,
+          destino: frete.destino,
+          enviadaEm: serverTimestamp(),
+          expiraEm: new Date(Date.now() + 600000), // 10 minutos
+        },
+        status: 'MATCHING',
+        atualizadoEm: serverTimestamp(),
+      });
+    });
+
+    return true;
+  } catch (error) {
+    console.error('[MATCHING] ERRO ENVIAR OFERTA:', error);
+    return false;
   }
 }
