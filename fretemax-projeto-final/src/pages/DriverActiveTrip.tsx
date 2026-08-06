@@ -1,12 +1,12 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Refinamento de Tipagem e Preservação de Lógica (Bloco 4).
-// Status: Validado e Sincronizado com a State Machine e o fluxo de Escrow (PIN).
+// CTO-Log: FASE 3 - Homologação Operacional Distribuída.
+// Status: Delegação de Recusa homologada. A recusa pelo motorista não apaga a carga, mas a joga pro despachante e zera o TTL.
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db } from '../firebase';
+import { db, auth } from '../firebase'; // Import auth para pegar o ID do motorista
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
 import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
@@ -15,7 +15,6 @@ import { AppTripState } from '../state/tripStateMachine';
 
 interface DriverActiveTripProps { freteId?: string; }
 
-// Tipagem básica injetada para remover o "any" e proteger o runtime
 interface ActiveFreightData extends DocumentData {
   id: string;
   status: AppTripState;
@@ -99,14 +98,21 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     } catch (e) { setPinError('Erro. Tente novamente.'); } finally { setActionLoading(false); }
   };
 
+  // 🔥 CTO FIX: Delegação Atômica Resolvida
+  // Agora o botão chama o Batch atômico do RealtimeService que cuida da Urgência e limpa o Radar.
   const handleInsucesso = async () => {
-    if (!window.confirm("ATENÇÃO: Deseja reportar insucesso? O cliente será notificado.")) return;
+    if (!window.confirm("ATENÇÃO: Deseja reportar problema no local? O frete voltará para o Radar e você será desconectado.")) return;
     setActionLoading(true);
     try {
-      if (frete.status === AppTripState.COLETANDO) {
-        await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
-          status: AppTripState.CANCELADO_MOTORISTA, motivoCancelamento: 'Falha na coleta', alertaInsucesso: true 
-        });
+      if (frete.status === AppTripState.COLETANDO || frete.status === AppTripState.CHEGOU_COLETA || frete.status === AppTripState.INDO_COLETA || frete.status === AppTripState.ACEITO) {
+        
+        // Chamada direta para o Serviço que possui o Batch do Firestore
+        await dispatchRealtimeService.cancelarViagemMotorista(
+          auth.currentUser?.uid || 'unknown',
+          frete.id,
+          'Problema no local da coleta ou na documentação.'
+        );
+
       } else {
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1, paradasComInsucesso: arrayUnion(paradaAtualIndex), alertaInsucesso: true });
