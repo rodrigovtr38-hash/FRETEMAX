@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Admin.tsx
-// CTO-Log: Auditoria Concluída - BLOCO 9
-// Status: Sincronização da aprovação do KYC com a State Machine do Motorista.
+// CTO-Log: Fase 2 - Homologação Operacional.
+// Status: Estatísticas do Dashboard B2B testadas (Lê a Single Source of Truth).
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
