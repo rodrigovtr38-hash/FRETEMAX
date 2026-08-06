@@ -1,13 +1,14 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/FreightRequestModal.tsx
-// CTO-Log: Contrato Visual Otimizado. Redução de atrito para aceite de viagem.
+// CTO-Log: FASE 3 - Auditoria de Integração.
+// Status: "Vírus dos 15km" erradicado. Modal exibe distância física real, separada da tarifa.
 // =========================================================
 
 import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info } from 'lucide-react';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
 interface FreightRequestModalProps {
-  freight?: OperationalFreight | null;
+  freight?: OperationalFreight | any | null;
   visible?: boolean;
   processing?: boolean;
   onClose: () => void;
@@ -66,7 +67,7 @@ export default function FreightRequestModal({
           </button>
         </div>
 
-        {/* CORPO DO MODAL (SCROLLÁVEL SE NECESSÁRIO) */}
+        {/* CORPO DO MODAL */}
         <div className="space-y-5 p-6 overflow-y-auto custom-scrollbar">
           
           {/* URGÊNCIA & TEMPO */}
@@ -88,7 +89,10 @@ export default function FreightRequestModal({
               </div>
               <div className="bg-slate-900/50 border border-white/5 rounded-xl px-4 py-2 flex items-center gap-2">
                 <Info size={14} className="text-cyan-400" />
-                <span className="text-[10px] font-bold text-slate-300 uppercase">Percurso total: {(freight.distanciaTotalKm || 0).toFixed(1)} km</span>
+                <span className="text-[10px] font-bold text-slate-300 uppercase">
+                  {/* 🔥 CTO FIX: Lê a distância física real */}
+                  Percurso total: {(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0).toFixed(1)} km
+                </span>
               </div>
             </div>
           </div>
@@ -102,7 +106,9 @@ export default function FreightRequestModal({
               <MapPinned size={22} className="text-cyan-400" />
               <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Ponto de Coleta</p>
               <h3 className="mt-1 text-base md:text-lg font-bold text-white leading-tight line-clamp-3">{freight.enderecoColetaTexto}</h3>
-              <p className="mt-3 text-xs font-bold text-slate-400">Distância: <span className="text-cyan-400">{(freight.distanciaColetaKm || 0).toFixed(1)} km</span></p>
+              <p className="mt-3 text-xs font-bold text-slate-400">
+                Distância até o local: <span className="text-cyan-400">{(freight.distanciaAteColeta || 0).toFixed(1)} km</span>
+              </p>
             </div>
 
             <div className="rounded-3xl border border-emerald-500/20 bg-slate-900/60 p-5 relative overflow-hidden">
@@ -112,7 +118,9 @@ export default function FreightRequestModal({
               <Package size={22} className="text-emerald-400" />
               <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Destino Final</p>
               <h3 className="mt-1 text-base md:text-lg font-bold text-white leading-tight line-clamp-3">{freight.enderecoEntregaTexto}</h3>
-              <p className="mt-3 text-xs font-bold text-slate-400">Rota até entrega: <span className="text-emerald-400">{(freight.distanciaEntregaKm || 0).toFixed(1)} km</span></p>
+              <p className="mt-3 text-xs font-bold text-slate-400">
+                Rota até entrega: <span className="text-emerald-400">{(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0).toFixed(1)} km</span>
+              </p>
             </div>
           </div>
 
@@ -126,18 +134,18 @@ export default function FreightRequestModal({
             <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center">
               <Scale size={18} className="mx-auto text-slate-400 mb-2" />
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Peso Bruto</p>
-              <h4 className="mt-1 text-sm font-bold text-white">{(freight.pesoKg || 0).toFixed(0)} kg</h4>
+              <h4 className="mt-1 text-sm font-bold text-white">{(freight.pesoKg || freight.peso || 0)} kg</h4>
             </div>
             <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center">
               <Package size={18} className="mx-auto text-slate-400 mb-2" />
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Volumes</p>
-              <h4 className="mt-1 text-sm font-bold text-white">{freight.volumes || 1} un</h4>
+              <h4 className="mt-1 text-sm font-bold text-white">{freight.volumes || freight.qtdVolumes || 1} un</h4>
             </div>
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-4 text-center shadow-inner relative overflow-hidden">
               <div className="absolute inset-0 bg-emerald-500/5 animate-pulse"></div>
               <Zap size={18} className="mx-auto text-emerald-400 mb-2 relative z-10" />
               <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 relative z-10">Valor Limpo</p>
-              <h4 className="mt-1 text-sm font-black text-emerald-400 relative z-10">R$ {(freight.valorMotorista || 0).toFixed(2).replace('.', ',')}</h4>
+              <h4 className="mt-1 text-sm font-black text-emerald-400 relative z-10">R$ {(freight.valorLiquidoMotorista || freight.valorMotorista || 0).toFixed(2).replace('.', ',')}</h4>
             </div>
           </div>
         </div>
