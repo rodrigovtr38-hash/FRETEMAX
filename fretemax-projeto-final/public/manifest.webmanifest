@@ -1,4 +1,8 @@
 {
+  "_comment_cto_log": "=========================================================",
+  "_comment_name": "NOME DO ARQUIVO: public/manifest.webmanifest",
+  "_comment_status": "Status: Manifesto PWA Oficial (Bloco 11). Parametrizado para evitar tela branca em offline.",
+  "_comment_footer": "=========================================================",
   "id": "fretogo-app",
   "name": "FRETOGO — Ecossistema Logístico Realtime",
   "short_name": "FRETOGO",
