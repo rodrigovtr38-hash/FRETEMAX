@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/driverStateService.ts
-// CTO-Log: Correção Crítica de Nomenclatura (status -> state) - LOTE 4
-// Status: Certificado. Trava do Modo Retorno (Anti-Concorrência e Limite Diário) garantida.
+// CTO-Log: Correção Crítica de Consistência de Dados (Bloco 4).
+// Status: Coleção unificada (motoristas -> motoristas_cadastros). Elimina o bug do Modo Retorno não aplicar filtros no Radar do Embarcador.
 // =========================================================
 
 import { doc, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
@@ -10,9 +10,9 @@ import { DriverState, canDriverTransition } from '../state/driverStateMachine';
 
 class DriverStateService {
   
-  // Mantém o controle básico de transição de status do motorista (Guarda de Trânsito)
   async changeState(uid: string, nextState: DriverState): Promise<boolean> {
-    const ref = doc(db, 'motoristas', uid);
+    // 🔥 CTO FIX: Unificando a coleção para 'motoristas_cadastros' (Fonte única da verdade)
+    const ref = doc(db, 'motoristas_cadastros', uid);
     const onlineRef = doc(db, 'motoristas_online', uid);
 
     try {
@@ -20,18 +20,15 @@ class DriverStateService {
         const snap = await t.get(ref);
         if (!snap.exists()) throw new Error("Motorista não encontrado");
         
-        // CTO FIX: Acomoda projetos legados ('status') migrando forçosamente para o padrão ('state')
         const currentState = snap.data().state || snap.data().status || DriverState.OFFLINE;
         
         if (!canDriverTransition(currentState, nextState)) {
            throw new Error(`Transição inválida de ${currentState} para ${nextState}`);
         }
 
-        // CTO FIX: Padronizado para 'state' conforme a State Machine e Listeners
         const payload = { state: nextState, atualizadoEm: serverTimestamp() };
         t.update(ref, payload);
         
-        // Se ficar offline, remove do radar. Se online, atualiza.
         if (nextState === DriverState.OFFLINE) {
            t.delete(onlineRef);
         } else {
@@ -45,13 +42,13 @@ class DriverStateService {
     }
   }
 
-  // A Catraca do Modo Retorno (Trava de 2x/dia e Anti-Concorrência)
   async ativarModoRetorno(destinoRetorno: string): Promise<{ success: boolean; error?: string }> {
     try {
       const user = auth.currentUser;
       if (!user) return { success: false, error: 'Sessão expirada' };
 
-      const motoristaRef = doc(db, 'motoristas', user.uid);
+      // 🔥 CTO FIX: Sincronia de coleção
+      const motoristaRef = doc(db, 'motoristas_cadastros', user.uid);
       const motoristaOnlineRef = doc(db, 'motoristas_online', user.uid);
 
       await runTransaction(db, async (t) => {
@@ -61,7 +58,6 @@ class DriverStateService {
         const data = snap.data();
         const usadosHoje = data.retornosUsadosHoje || 0;
 
-        // Trava diária (Regra de Negócio: Máximo 2 por dia)
         if (usadosHoje >= 2) {
           throw new Error("LIMITE_RETORNO_DIARIO_ATINGIDO");
         }
@@ -71,14 +67,12 @@ class DriverStateService {
           modoRetorno: true,
           destinoRetorno: destinoRetorno.trim().toLowerCase(),
           retornosUsadosHoje: novosUsados,
-          dataUltimoReset: data.dataUltimoReset || serverTimestamp(), // Necessário para o CronJob auditar
+          dataUltimoReset: data.dataUltimoReset || serverTimestamp(), 
           atualizadoEm: serverTimestamp()
         };
 
-        // Atualiza atomicamente o perfil do motorista
         t.update(motoristaRef, payload);
         
-        // Se ele estiver online, já joga a trava pro Radar imediatamente
         const snapOnline = await t.get(motoristaOnlineRef);
         if (snapOnline.exists()) {
            t.update(motoristaOnlineRef, payload);
@@ -92,7 +86,6 @@ class DriverStateService {
     }
   }
 
-  // Desativar manualmente caso o motorista chegue no destino ou desista
   async desativarModoRetorno(): Promise<boolean> {
     try {
       const user = auth.currentUser;
@@ -104,9 +97,8 @@ class DriverStateService {
         atualizadoEm: serverTimestamp()
       };
 
-      await updateDoc(doc(db, 'motoristas', user.uid), payload);
-      
-      // Tenta atualizar no radar online (falha silenciosamente se ele estiver offline, o que é o correto)
+      // 🔥 CTO FIX: Sincronia de coleção
+      await updateDoc(doc(db, 'motoristas_cadastros', user.uid), payload);
       await updateDoc(doc(db, 'motoristas_online', user.uid), payload).catch(() => {}); 
       
       return true;
