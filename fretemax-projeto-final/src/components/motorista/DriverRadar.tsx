@@ -1,12 +1,13 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverRadar.tsx
-// CTO-Log: Auditoria finalizada. Código intacto e higienizado para manter estabilidade.
+// CTO-Log: Auditoria Concluída - BLOCO 15.
+// Status: Sincronização de Estado via 'driverStateService' ativada para garantir Modo Retorno seguro.
 // =========================================================
 
 import { useState } from 'react';
-import { db } from '../../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
-import { RotateCcw, MapPin, CheckCircle2, MessageCircle, Clock, Zap, Truck, Power } from 'lucide-react';
+import { RotateCcw, MapPin, CheckCircle2, MessageCircle, Power } from 'lucide-react';
+// 🔥 CTO FIX: Adicionado serviço oficial que nós mesmos construímos no Bloco 4
+import { driverStateService } from '../../services/driverStateService';
 
 interface DriverRadarProps {
   isOnline: boolean;
@@ -29,11 +30,8 @@ export default function DriverRadar({ isOnline, setIsOnline, user, driver }: Dri
     setLoadingRetorno(true);
     try {
       if (user?.uid) {
-        await updateDoc(doc(db, 'motoristas_cadastros', user.uid), {
-          modoRetorno: true,
-          destinoRetorno: destinoRetorno.trim().toLowerCase(),
-          retornosUsadosHoje: retornosUsadosHoje + 1,
-        });
+        // 🔥 CTO FIX: Usando o serviço blindado que atualiza ambas as coleções (Cadastro e Online)
+        await driverStateService.ativarModoRetorno(destinoRetorno.trim());
         setIsRetornoModalOpen(false);
       }
     } catch (error) {
@@ -47,10 +45,8 @@ export default function DriverRadar({ isOnline, setIsOnline, user, driver }: Dri
     setLoadingRetorno(true);
     try {
       if (user?.uid) {
-        await updateDoc(doc(db, 'motoristas_cadastros', user.uid), {
-          modoRetorno: false,
-          destinoRetorno: null,
-        });
+        // 🔥 CTO FIX: Usando o serviço blindado que atualiza ambas as coleções
+        await driverStateService.desativarModoRetorno();
       }
     } catch (error) {
       console.error("Erro ao desativar retorno", error);
@@ -154,35 +150,10 @@ export default function DriverRadar({ isOnline, setIsOnline, user, driver }: Dri
           </div>
           
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-2xl border border-white/5 bg-slate-900/50 p-5 group hover:border-emerald-500/30 transition-colors">
-              <div className="mb-3 inline-flex rounded-lg bg-emerald-500/10 p-2 text-emerald-400">
-                <Clock size={20} />
-              </div>
-              <h3 className="text-sm font-black text-white uppercase tracking-tight">Pagamento em 24h</h3>
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                Finalizou com o PIN? O valor cai na sua conta em até 1 dia útil. Sem burocracia.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/5 bg-slate-900/50 p-5 group hover:border-blue-500/30 transition-colors">
-              <div className="mb-3 inline-flex rounded-lg bg-blue-500/10 p-2 text-blue-400">
-                <Zap size={20} />
-              </div>
-              <h3 className="text-sm font-black text-white uppercase tracking-tight">Zero Mensalidade</h3>
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                Não cobramos taxas fixas. Somos parceiros do seu lucro em cada operação.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/5 bg-slate-900/50 p-5 group hover:border-amber-500/30 transition-colors sm:col-span-2 lg:col-span-1">
-              <div className="mb-3 inline-flex rounded-lg bg-amber-500/10 p-2 text-amber-400">
-                <Truck size={20} />
-              </div>
-              <h3 className="text-sm font-black text-white uppercase tracking-tight">Cargas Diretas</h3>
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                Conectamos você direto com frotistas e fabricantes que precisam de agilidade.
-              </p>
-            </div>
+             <div className="rounded-2xl border border-white/5 bg-slate-900/50 p-5">
+               <h3 className="text-sm font-black text-white uppercase tracking-tight">Cargas Validadas</h3>
+               <p className="mt-2 text-[11px] leading-relaxed text-slate-500">Conectamos você direto com Embarcadores reais.</p>
+             </div>
           </div>
         </div>
       )}
