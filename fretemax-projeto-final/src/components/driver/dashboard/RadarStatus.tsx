@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/RadarStatus.tsx
-// CTO-Log: Product Polish - UX Comportamental (Sunk Cost Fallacy).
-// O cronômetro gera um sentimento de perda caso o usuário desligue o app.
+// CTO-Log: FASE 3 - Homologação Operacional
+// Status: Componente intacto e validado.
 // =========================================================
 
 import { useEffect, useState } from 'react';
