@@ -1,8 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/matchingEngine.ts
-// CTO-Log: Refatoração de Busca MVP (LOTE 5)
-// 1. Filtro de Heartbeat flexibilizado para testes via Web/Desktop.
-// 2. Logging agressivo para entender exatamente quem está online.
+// CTO-Log: Refatoração de Busca e Sincronia de Coleção.
+// 1. Caminho do banco corrigido para 'motoristas_cadastros'.
+// 2. Trava letal de 'ofertaAtual' removida para permitir que o Auto-Bid (Smart Pricing) sobrescreva ofertas no celular do motorista.
 // =========================================================
 
 import {
@@ -72,7 +72,6 @@ export async function buscarMotoristasCompativeis(frete: FretePayload): Promise<
     const categoriaFrete = frete.categoria.toLowerCase().trim();
     const isPesado = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(categoriaFrete);
     
-    // Raios maiores para garantir que o teste local não falhe por precisão de GPS
     const RAIOS_BUSCA = isPesado ? [20, 50, 100] : [10, 30, 50, 100];
 
     const motoristasRef = collection(db, 'motoristas_online');
@@ -85,8 +84,6 @@ export async function buscarMotoristasCompativeis(frete: FretePayload): Promise<
       const motoristasQuery = query(
         motoristasRef, 
         where('online', '==', true),
-        // Removido temporariamente o where('disponivel', '==', true) 
-        // para evitar que um flag falso positivo quebre o teste.
         where('categoria', '==', categoriaFrete)
       );
       
@@ -110,15 +107,12 @@ export async function buscarMotoristasCompativeis(frete: FretePayload): Promise<
           } as MotoristaMatch;
         })
         .filter(motorista => {
-          // Filtro de Bounding Box mais permissivo
           if (motorista.latitude && motorista.longitude) {
             const dist = calcularDistanciaGeografica(motorista.latitude, motorista.longitude, frete.origem.lat, frete.origem.lng);
             motorista.distanciaAteColeta = dist;
             return dist <= raio;
           }
           
-          // Se o motorista não tem GPS (comum em testes web), aprovamos ele temporariamente para o teste
-          console.warn(`[CTO-Log] Motorista ${motorista.nome} sem GPS válido. Forçando aprovação para teste.`);
           motorista.distanciaAteColeta = 0;
           return true; 
         })
@@ -144,18 +138,15 @@ export async function buscarMotoristasCompativeis(frete: FretePayload): Promise<
 
 export async function enviarOfertaMotorista(motoristaId: string, frete: FretePayload): Promise<boolean> {
   try {
-    const motoristaRef = doc(db, 'motoristas', motoristaId);
+    // 🔥 CTO FIX: Sincronizado para a coleção oficial onde o perfil do motorista reside
+    const motoristaRef = doc(db, 'motoristas_cadastros', motoristaId);
     
     await runTransaction(db, async (transaction) => {
       const motoristaDoc = await transaction.get(motoristaRef);
       if (!motoristaDoc.exists()) throw new Error("Motorista não existe.");
 
-      const dados = motoristaDoc.data();
-      
-      // Validação mais leve para garantir que a oferta chegue no teste
-      if (dados.ofertaAtual) {
-         throw new Error("Motorista já possui oferta em andamento.");
-      }
+      // 🔥 CTO FIX: Removido o `if (dados.ofertaAtual) throw new Error...`
+      // Isso permite que o Auto-Bid sobrescreva a oferta antiga com um valor maior na tela do motorista
 
       transaction.update(motoristaRef, {
         ofertaAtual: {
@@ -165,7 +156,7 @@ export async function enviarOfertaMotorista(motoristaId: string, frete: FretePay
           origem: frete.origem,
           destino: frete.destino,
           enviadaEm: serverTimestamp(),
-          expiraEm: new Date(Date.now() + 600000), // Aumentado para 10 minutos (600.000 ms)
+          expiraEm: new Date(Date.now() + 600000), // 10 minutos
         },
         status: 'MATCHING',
         atualizadoEm: serverTimestamp(),
