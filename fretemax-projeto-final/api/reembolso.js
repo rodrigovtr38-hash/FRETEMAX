@@ -1,7 +1,7 @@
 // api/reembolso.js
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore'; // // AJUSTE CTO: Adicionado FieldValue para auditoria temporal precisa do servidor.
-import crypto from 'crypto'; // // AJUSTE CTO: Adicionado crypto para gerar a assinatura hash de idempotência.
+import { getFirestore, FieldValue } from 'firebase-admin/firestore'; // AJUSTE CTO: Adicionado FieldValue para auditoria temporal precisa do servidor.
+import crypto from 'crypto'; // AJUSTE CTO: Adicionado crypto para gerar a assinatura hash de idempotência.
 
 // 🔐 Inicialização segura do Firebase Admin
 if (!getApps().length) {
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     return res.status(405).send('Método não permitido');
   }
 
-  // // AJUSTE CTO: Proteção rigorosa das credenciais do Mercado Pago
+  // AJUSTE CTO: Proteção rigorosa das credenciais do Mercado Pago
   if (!process.env.MERCADO_PAGO_ACCESS_TOKEN) {
     console.error("[ALERTA ADMIN] Token do Mercado Pago não encontrado no Vercel Env.");
     return res.status(500).json({ error: 'Configuração financeira do servidor ausente.' });
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     const freteRef = db.collection('fretes').doc(idPedido);
     let mpData = null;
 
-    // // AJUSTE CTO: Transação de Segurança Avançada contra Double-Spend e Corrida de Status Operacional.
+    // AJUSTE CTO: Transação de Segurança Avançada contra Double-Spend e Corrida de Status Operacional.
     await db.runTransaction(async (t) => {
       const freteSnap = await t.get(freteRef);
 
@@ -51,12 +51,12 @@ export default async function handler(req, res) {
          throw new Error('Nenhum pagamento confirmado atrelado a este frete.');
       }
 
-      // // AJUSTE CTO: Trava 1 (Idempotência Interna) -> Bloqueia cliques duplos simultâneos
+      // AJUSTE CTO: Trava 1 (Idempotência Interna) -> Bloqueia cliques duplos simultâneos
       if (freteData.reembolsado || freteData.statusReembolso === 'processing') {
          throw new Error('Este pedido já foi reembolsado ou está em processamento.');
       }
 
-      // // AJUSTE CTO: Trava 2 (Segurança de Operação) -> Se o motorista já aceitou ou saiu, o estorno automático é proibido.
+      // AJUSTE CTO: Trava 2 (Segurança de Operação) -> Se o motorista já aceitou ou saiu, o estorno automático é proibido.
       // O frete só pode ser estornado se o status for 'disponivel', 'aguardando_pagamento' ou 'buscando_motorista'.
       const statusBloqueados = ['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'finalizando', 'entregue', 'finalizado'];
       if (statusBloqueados.includes(freteData.status)) {
@@ -66,10 +66,10 @@ export default async function handler(req, res) {
       // Trava Otimista: Marca como "processing" no banco antes de fazer a chamada de rede externa
       t.update(freteRef, { statusReembolso: 'processing' });
 
-      // // AJUSTE CTO: Geração de chave de Idempotência Criptográfica Única para blindar a API do Mercado Pago
+      // AJUSTE CTO: Geração de chave de Idempotência Criptográfica Única para blindar a API do Mercado Pago
       const idempotencyKey = crypto.createHash('sha256').update(idPedido + pagamentoId).digest('hex');
 
-      // // AJUSTE CTO: AbortController para forçar o Timeout em 10s e impedir que a Vercel mate a thread no meio do processo
+      // AJUSTE CTO: AbortController para forçar o Timeout em 10s e impedir que a Vercel mate a thread no meio do processo
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
        // Ignora erro de rede no fallback
     }
 
-    // // AJUSTE CTO: Define o Status Code condicional. 409 para conflitos de regra de negócio, 500 para falhas internas severas.
+    // AJUSTE CTO: Define o Status Code condicional. 409 para conflitos de regra de negócio, 500 para falhas internas severas.
     const statusCode = error.message.includes('ESTORNO_BLOQUEADO') ? 409 : 500;
 
     return res.status(statusCode).json({ 
