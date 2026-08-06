@@ -2,12 +2,13 @@
 // NOME DO ARQUIVO: src/components/motorista/DriverStats.tsx
 // CTO-Log: FASE 2 - Homologação Operacional.
 // Status: KPIs Gamificados sincronizados diretamente com a Fonte de Verdade Financeira (Coleção 'fretes').
+// Correção aplicada: Caminho de importação do Firebase ajustado para 4 níveis (../../../) resolvendo o erro de build da Vercel.
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { DollarSign, Truck, Star, Award } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../../firebase'; // 🔥 Injetado para leitura direta
+import { db } from '../../../firebase'; // 🔥 CTO FIX: Caminho absoluto corrigido para a raiz src/
 
 interface DriverDashboardProps {
   driver?: any;
@@ -16,7 +17,7 @@ interface DriverDashboardProps {
 export default function DriverStats({ driver }: DriverDashboardProps) {
   const isPremium = (driver?.score && Number(driver.score) >= 4.8) || driver?.categoria?.includes('carreta');
   
-  // 🔥 CTO FIX: Estados para as métricas financeiras reais
+  // Estados para as métricas financeiras reais
   const [ganhosHoje, setGanhosHoje] = useState(0);
   const [entregasHoje, setEntregasHoje] = useState(0);
 
