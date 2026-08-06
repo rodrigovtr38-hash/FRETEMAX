@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/firebase.ts
-// CTO-Log: Infraestrutura validada. Código compactado para eficiência de tokens da IA.
+// CTO-Log: Infraestrutura validada. Código compactado para eficiência.
+// Status: Padrões de Singleton de inicialização atestados.
 // =========================================================
 
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
