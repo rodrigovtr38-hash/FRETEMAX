@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverCadastro.tsx
-// CTO-Log: Auditoria de Segurança de Banco de Dados.
-// Status: Máscaras de CPF/Telefone mantêm o DB higienizado. Compressão de imagem nativa ativa.
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: Payload Firestore alinhado para bater 100% com a chave 'veiculo' lida pelo Radar e Admin. Compressão mantida.
 // =========================================================
 
 import { useState } from 'react';
@@ -155,12 +155,13 @@ export default function DriverCadastro({ onFinish }: DriverCadastroProps) {
       const telefoneLimpo = formData.telefone.replace(/\D/g, '');
       const cpfLimpo = formData.cpf.replace(/\D/g, '');
 
+      // 🔥 CTO FIX: A chave gravada agora é 'veiculo' para casar com a matriz de filtragem da plataforma inteira.
       await setDoc(doc(db, 'motoristas_cadastros', user.uid), {
         nome: formData.nome,
         whatsapp: telefoneLimpo,
         cpf: cpfLimpo,
         placa: formData.placa,
-        modeloVeiculo: formData.veiculo,
+        veiculo: formData.veiculo, 
         categoria: formData.categoria,
         fotoCnh: cnhUrl,
         fotoDocumento: docUrl,
