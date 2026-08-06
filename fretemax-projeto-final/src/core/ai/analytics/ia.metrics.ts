@@ -1,8 +1,12 @@
 // ============================================================================
 // ARQUIVO: ia.metrics.ts
 // PASTA: src/core/ai/analytics/
-// OBJETIVO: Motor de Telemetria FTI - Auditoria de Custos e Inteligência de Tráfego
+// CTO-Log: FASE 2 - Homologação Operacional.
+// Status: Sink Buraco-Negro corrigido. Dados de telemetria agora são gravados no Firestore via Batch.
 // ============================================================================
+
+import { writeBatch, doc, collection } from 'firebase/firestore';
+import { db } from '../../../firebase';
 
 // Categorização brutal das intenções para retroalimentar o Meta Ads e Google Ads
 export type DriverIntent = 'FREIGHT_SEARCH' | 'SUPPORT' | 'FINANCIAL' | 'GENERAL_CHAT';
@@ -43,16 +47,29 @@ class FTIAnalyticsEngine {
   }
 
   /**
-   * Descarrega os dados.
-   * No futuro, este método enviará o JSON direto para o nosso sistema de BI.
+   * Descarrega os dados no Firestore garantindo a Single Source of Truth para Auditoria Financeira.
    */
-  private flushMetrics(): void {
+  public async flushMetrics(): Promise<void> {
     if (this.metricsBuffer.length === 0) return;
 
-    console.log(`[FTI Data Lake] Sincronizando ${this.metricsBuffer.length} pacotes de dados logísticos...`);
+    console.log(`[FTI Data Lake] Sincronizando ${this.metricsBuffer.length} pacotes de telemetria...`);
     
-    // Limpa a memória RAM após o envio
-    this.metricsBuffer = [];
+    try {
+      const batch = writeBatch(db);
+      
+      this.metricsBuffer.forEach(metric => {
+        const docRef = doc(collection(db, 'analytics_ia_logs'));
+        batch.set(docRef, metric);
+      });
+
+      await batch.commit();
+      console.log(`[FTI Data Lake] Telemetria salva no Banco de Dados com sucesso.`);
+    } catch (error) {
+      console.error(`[FTI Data Lake] Erro crítico ao salvar telemetria da IA:`, error);
+    } finally {
+      // Limpa a memória RAM de forma segura
+      this.metricsBuffer = [];
+    }
   }
 }
 
