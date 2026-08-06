@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/MapaCliente.tsx
-// CTO-Log: Injeção do Bloco 2 (Rastreio Inteligente PWA).
-// Status: Matriz SVG dinâmica injetada com tipos corretos de veículos e HUD de velocidade.
+// CTO-Log: Auditoria Final - Bloco 3
+// Status: Validação gráfica concluída. Isolamento mantido.
 // =========================================================
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
@@ -49,7 +49,6 @@ function MapaCliente({
 
   const mapRef = useRef<google.maps.Map | null>(null);
   const [simulatedDrivers, setSimulatedDrivers] = useState<number>(0);
-  // Velocidade mockada para dar sensação de tempo real
   const speed = useMemo(() => Math.floor(Math.random() * (60 - 30 + 1) + 30), [motoristaPos]);
 
   useEffect(() => {
@@ -80,7 +79,6 @@ function MapaCliente({
 
   }, [isLoaded, routePath]);
 
-  // 🔥 CTO FIX: Sistema de Ícones Vivos expandido
   const getVehicleIcon = (category: string) => {
     if (!isLoaded || !window.google) return null;
     
@@ -90,22 +88,22 @@ function MapaCliente({
     const svgMoto = "M19 14.5c0 1.93-1.57 3.5-3.5 3.5s-3.5-1.57-3.5-3.5c0-.47.1-.91.27-1.32l-1.92-1.92c-.24.08-.5.14-.75.14-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5c.34 0 .67.07.96.2l3.41-3.4c-.16-.39-.27-.8-.27-1.24C13.7 1.28 15.28 0 17.5 0S21 1.57 21 3.5c0 .48-.1.93-.28 1.34l-3.39 3.4c.12.28.17.58.17.88 0 1.05-.65 1.95-1.58 2.33l1.83 1.83c.41-.17.85-.28 1.32-.28 1.93 0 3.5 1.57 3.5 3.5zm-3.5-1.5c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM5 14.5c0 1.93 1.57 3.5 3.5 3.5s3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5-3.5 1.57-3.5 3.5zm3.5-1.5c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z";
 
     let path = svgCar;
-    let color = "#22d3ee"; // Ciano Padrão
+    let color = "#22d3ee"; 
     let objScale = 1.2;
 
     const lowerCategory = category.toLowerCase();
 
     if (lowerCategory.includes('toco') || lowerCategory.includes('truck') || lowerCategory.includes('carreta') || lowerCategory.includes('trem') || lowerCategory.includes('cegonha')) {
       path = svgTruck;
-      color = "#f59e0b"; // Caminhões: Âmbar
+      color = "#f59e0b"; 
       objScale = 1.4;
     } else if (lowerCategory.includes('moto')) {
       path = svgMoto;
-      color = "#10b981"; // Moto: Esmeralda
+      color = "#10b981"; 
       objScale = 1.2;
     } else if (lowerCategory.includes('utilitario') || lowerCategory.includes('van')) {
       path = svgFiorino;
-      color = "#3b82f6"; // Utilitários: Azul
+      color = "#3b82f6"; 
       objScale = 1.3;
     }
 
@@ -138,7 +136,6 @@ function MapaCliente({
     <div className="relative overflow-hidden rounded-[1.5rem] w-full h-full min-h-[420px] border border-white/10 bg-slate-900 shadow-xl">
       <div className="absolute right-4 top-4 z-20 flex flex-col gap-3 items-end pointer-events-none">
         
-        {/* Painel HUD sobre o mapa quando motorista está a caminho */}
         {motoristaId ? (
           <div className="rounded-[1rem] border border-blue-500/20 bg-slate-950/90 px-4 py-3 backdrop-blur-md shadow-lg flex flex-col gap-2 pointer-events-auto">
             <div className="flex items-center gap-2">
@@ -168,15 +165,12 @@ function MapaCliente({
       <GoogleMap mapContainerStyle={containerStyle} center={origem || defaultCenter} zoom={13} onLoad={(map) => { mapRef.current = map; }} options={mapOptions}>
         {routePath.length >= 2 && <Polyline path={routePath} options={polylineOptions} />}
         
-        {/* Ponto de Origem */}
         {origem && <Marker position={origem} icon={{ path: window.google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: "#10b981", fillOpacity: 1, strokeWeight: 3, strokeColor: "#ffffff" }} />}
         
-        {/* Posição do Motorista (Ícone Dinâmico V2) */}
         {motoristaPos && motoristaId && (
           <Marker position={motoristaPos} icon={getVehicleIcon(vehicleType) as any} zIndex={999} />
         )}
 
-        {/* Paradas Multi-drop ou Destino Final */}
         {paradasExtras && paradasExtras.length > 0 ? (
            paradasExtras.map((parada, idx) => (
              <Marker key={idx} position={parada} label={{ text: `${idx + 1}`, color: '#ffffff', fontSize: '10px', fontWeight: 'bold' }} icon={{ path: window.google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: "#22d3ee", fillOpacity: 1, strokeWeight: 2, strokeColor: "#020617" }} />
