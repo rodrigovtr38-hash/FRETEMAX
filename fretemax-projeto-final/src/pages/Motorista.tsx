@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Motorista.tsx
-// CTO-Log: Auditoria Concluída - BLOCO 15 (Final).
-// Status: Matemática isolada. Valor reflete exclusivamente o Banco de Dados. Lógica visual protegida.
+// CTO-Log: Auditoria Concluída - FASE 3 (Integração).
+// Status: "Vírus dos 15km" e "Buraco Negro da Recusa" erradicados pela raiz da leitura do Firestore.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -136,14 +136,15 @@ export default function Motorista() {
     const categoriaFormatada = categoriaBruta.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
     const valorCliente = Number(data.valorCliente || data.valorTotal || data.valorFreteBruto || data.valor || 0); 
-    // 🔥 CTO FIX: Cálculo de porcentagem removido. A fonte da verdade agora é 100% o Banco de Dados.
     const valorMotorista = Number(data.valorLiquidoMotorista || data.valorMotorista || valorCliente * 0.8);
     
+    // 🔥 CTO FIX: "O Fim do Vírus dos 15km" -> Leitura da "Single Source of Truth" (distanciaRealKm).
     const distanciaColetaKm = Number(data.distanciaColetaKm || 0);
-    const distanciaEntregaKm = Number(data.distanciaEntregaKm || data.distancia || 0);
+    const distanciaTotalLimpa = Number(data.distanciaRealKm || data.distanciaTotalKm || data.distancia || 0);
 
     const now = Date.now();
-    const createdTime = data.createdAt?.toMillis ? data.createdAt.toMillis() : now;
+    // 🔥 CTO FIX: "Buraco Negro da Recusa Resolvido" -> Leitura do 'criadoEm' sobreposto no Dispatch Service.
+    const createdTime = data.criadoEm || (data.createdAt?.toMillis ? data.createdAt.toMillis() : now);
     const horasParada = (now - createdTime) / (1000 * 60 * 60);
     const prioridadeMural = horasParada >= 24 || Boolean(data.prioridade);
 
@@ -156,8 +157,8 @@ export default function Motorista() {
       enderecoColetaTexto: data.enderecoColetaTexto || data.origem?.endereco || 'Coleta não informada',
       enderecoEntregaTexto: data.enderecoEntregaTexto || data.destino?.endereco || 'Entrega não informada',
       distanciaColetaKm,
-      distanciaEntregaKm,
-      distanciaTotalKm: distanciaColetaKm + distanciaEntregaKm || data.distanciaTotalKm || 0,
+      distanciaEntregaKm: distanciaTotalLimpa, // Mapeado para o novo modelo limpo
+      distanciaTotalKm: distanciaTotalLimpa,
       valorCliente, 
       valorMotorista,
       pesoKg: Number(data.pesoKg || data.peso || 0), 
@@ -258,13 +259,16 @@ export default function Motorista() {
       if (!mountedRef.current) return;
 
       const now = Date.now();
-      const MAX_TTL_MS = 45 * 60 * 1000;
+      // 🔥 CTO FIX: Expandindo a "Janela de Respiração" do Feed do Motorista para 35 minutos. 
+      // Se a empresa colocou tempo limite de 30min no painel, a carga some suavemente.
+      const MAX_TTL_MS = 35 * 60 * 1000;
 
       let next = snapshot.docs.map(document => normalizeFreight(document.id, document.data()));
       
       next = next.filter(freight => {
         if (freight.agendado) return true;
-        const createdTime = freight.createdAt?.toMillis ? freight.createdAt.toMillis() : now;
+        // Lê do criadoEm (que ganha prioridade) ou createdAt (Data original)
+        const createdTime = (freight as any).criadoEm || (freight.createdAt?.toMillis ? freight.createdAt.toMillis() : now);
         return (now - createdTime) <= MAX_TTL_MS;
       });
 
@@ -301,7 +305,7 @@ export default function Motorista() {
     if (!user?.uid) return;
     try {
       if (next) await dispatchRealtimeService.setDriverOnline(user.uid);
-      else await dispatchRealtimeService.setOffline(user.uid);
+      else await dispatchRealtimeService.setDriverOffline(user.uid);
     } catch (error) { console.error('ONLINE TOGGLE ERROR:', error); }
   }, [user]);
 
@@ -622,7 +626,7 @@ export default function Motorista() {
                               <Power size={18} /> Ficar Online para Aceitar
                           </button>
                         ) : (
-                          <button onClick={() => handleAcceptFreight(freight)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl shadow-lg shadow-emerald-900/50 transition-all active:scale-95 flex items-center justify-center gap-2 border border-emerald-500">
+                          <button onClick={() => handleSelectFreight(freight)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl shadow-lg shadow-emerald-900/50 transition-all active:scale-95 flex items-center justify-center gap-2 border border-emerald-500">
                               <Truck size={18} /> Aceitar e Viajar
                           </button>
                         )}
