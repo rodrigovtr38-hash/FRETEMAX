@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/paymentService.ts
-// CTO-Log: Auditoria Etapa Financeira.
-// - Tolerância dinâmica implementada no Escrow para permitir o Smart Pricing (Auto-Bid).
+// CTO-Log: Fase 3 - Homologação Operacional Distribuída.
+// Status: Trava anti-fraude dinâmica homologada e segura para transações com Mercado Pago.
 // =========================================================
 
 import {
@@ -115,7 +115,7 @@ class PaymentService {
         });
       });
 
-      console.log(`[CTO-Log] Pagamento ${transactionId} confirmado. Iniciando busca de motoristas...`);
+      console.log(`[CTO-Log] Pagamento ${transactionId} confirmedo. Iniciando busca de motoristas...`);
 
       await firebaseRealtimeService.updateTripRealtime(freteId, {
         pagamentoStatus: 'confirmado',
