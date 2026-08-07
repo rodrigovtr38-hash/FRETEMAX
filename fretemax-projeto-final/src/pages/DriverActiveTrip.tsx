@@ -1,14 +1,14 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
 // CTO-Log: Auditoria Final - Bloco 3
-// Status: Componente validado. O fluxo do PIN e o evento de recusa (DISPONIVEL) agora respeitam a State Machine.
+// Status: Restauração dos botões de Navegação Externa (Waze/Maps).
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from '../firebase'; 
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
-import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio } from 'lucide-react';
+import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import { AppTripState } from '../state/tripStateMachine';
@@ -143,9 +143,27 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           </h2>
         </div>
 
-        <div className="h-[250px] w-full mb-6 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 relative shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+        <div className="h-[250px] w-full mb-4 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 relative shadow-[0_0_20px_rgba(6,182,212,0.1)]">
           <MapaCliente origem={mapOriginGPS} destino={mapDestinoGPS} operationalMessage="Navegando..." />
         </div>
+
+        {/* 🔥 CTO FIX: Restauração dos Botões de Navegação GPS Externos */}
+        {mapDestinoGPS && (
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <button 
+              onClick={() => window.open(`https://waze.com/ul?ll=${mapDestinoGPS.lat},${mapDestinoGPS.lng}&navigate=yes`, '_blank')}
+              className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors"
+            >
+              <Navigation size={14} className="text-cyan-400" /> Abrir no Waze
+            </button>
+            <button 
+              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${mapDestinoGPS.lat},${mapDestinoGPS.lng}`, '_blank')}
+              className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors"
+            >
+              <MapPin size={14} className="text-emerald-400" /> Google Maps
+            </button>
+          </div>
+        )}
         
         <div className="mb-6 flex items-start gap-3 bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
           <div className="mt-1 shrink-0"><MapPin size={18} className="text-cyan-400" /></div>
