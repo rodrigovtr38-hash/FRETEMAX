@@ -1,7 +1,7 @@
 // ============================================================================
-// ARQUIVO: useFTI.ts
-// PASTA: src/core/ai/hooks/
-// OBJETIVO: Hook React de Orquestração da Inteligência Artificial no Front-End
+// ARQUIVO: src/core/ai/hooks/useFTI.ts
+// CTO-Log: FASE 3 - Inteligência Viva
+// Status: Validação atestada. Componente conversa nativamente com a engine restaurada.
 // ============================================================================
 
 import { useState, useCallback } from 'react';
@@ -15,7 +15,7 @@ export const useFTI = (context: IAContext) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   /**
-   * Função principal que a interface (UI) chama quando o motorista digita algo.
+   * Função principal que a interface (UI) chama quando o usuário/motorista digita algo.
    */
   const interactWithAI = useCallback(async (userMessage: string) => {
     if (!userMessage.trim()) return null;
@@ -29,7 +29,7 @@ export const useFTI = (context: IAContext) => {
       // 2. Monta as diretrizes absolutas e injeta quem é o usuário atual
       const systemContext = buildBaseSystemInstruction() + '\n' + buildUserContext(context, userMessage);
 
-      // 3. Dispara a requisição para o motor neural (Gemini) na pasta services
+      // 3. Dispara a requisição para o motor neural vivo (Gemini)
       const rawResponse = await callGeminiAPI(
          userMessage,
          systemContext
@@ -41,7 +41,7 @@ export const useFTI = (context: IAContext) => {
       // 5. Salva a resposta limpa e validada na memória da IA
       ftiMemory.addMessage(context.userId, 'model', safeData.content);
 
-      // 6. Devolve o JSON perfeito para o Front-End renderizar
+      // 6. Devolve o JSON perfeito para o Front-End renderizar no Chat
       return safeData;
 
     } catch (error) {
@@ -51,7 +51,7 @@ export const useFTI = (context: IAContext) => {
       return {
         status: 'error',
         type: 'support',
-        content: 'Falha momentânea de comunicação com a base de operações. Tente novamente em instantes.',
+        content: 'Estou recebendo um volume altíssimo de tráfego na Torre de Controle neste segundo. Tente enviar novamente.',
         actionRequired: false
       };
     } finally {
