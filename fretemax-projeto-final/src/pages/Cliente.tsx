@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Auditoria Final (Fluxo de Publicação).
-// Status: "Bug do Fallback 5.0km" erradicado. Distâncias locais processadas pelo Haversine puro do dispositivo para impedir distorções de Cloud Function.
+// CTO-Log: Homologação Funcional - Produção
+// Status: Remoção total de fallbacks e mocks. Distância, Tempo e Coordenadas dependem 100% da API real do Google Cloud Functions.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -35,16 +35,6 @@ const VEHICLE_CONFIG: Record<VehicleType, { nome: string; fator: number }> = {
   bi_trem_cegonha: { nome: 'Bi-trem / Cegonha', fator: 7.2 },
 };
 const LIMITES_PESO: Record<VehicleType, number> = { moto: 30, carro_pequeno: 250, utilitario: 800, toco: 4000, truck: 12000, carreta_ls: 30000, bi_trem_cegonha: 45000 };
-
-const getFallbackCoordsByCEP = (cep: string): Coords => {
-  const prefix = parseInt(cep.replace(/\D/g, '').substring(0, 1) || '0', 10);
-  const regions: Record<number, Coords> = {
-    0: { lat: -23.5505, lng: -46.6333 }, 1: { lat: -22.9056, lng: -47.0608 }, 2: { lat: -22.9068, lng: -43.1729 },
-    3: { lat: -19.9167, lng: -43.9345 }, 4: { lat: -12.9714, lng: -38.5014 }, 5: { lat: -8.0476, lng: -34.877 },
-    6: { lat: -3.7319, lng: -38.5267 }, 7: { lat: -15.7975, lng: -47.8919 }, 8: { lat: -25.4284, lng: -49.2733 }, 9: { lat: -30.0346, lng: -51.2177 },
-  };
-  return regions[prefix] || regions[0];
-};
 
 const callWithRetryAndTimeout = async <T,>(callableName: string, payload: unknown, maxRetries = 2, timeoutMs = 8000): Promise<T> => {
   const functions = getFunctions();
@@ -144,7 +134,7 @@ export default function Cliente() {
     }
   }, [loadingPayment, loadingRoute]);
 
-  const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? 0.5 : distanciaReal, [distanciaReal]);
+  const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? 0.1 : distanciaReal, [distanciaReal]);
 
   const calculoFinanceiro = useMemo(() => {
     const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
@@ -328,13 +318,21 @@ export default function Cliente() {
     return () => unsubscribe();
   }, []);
 
-  const getValidCoords = async (addressStr: string, cepFallback: string): Promise<Coords> => {
+  // 🔥 CTO FIX: Blindagem Operacional. Falso Geocoding foi erradicado. 
+  // O sistema só avança se a API oficial devolver as coordenadas estritas.
+  const getValidCoords = async (addressStr: string): Promise<Coords> => {
     if (coordsCache.current[addressStr]) return coordsCache.current[addressStr];
+    
     try {
       const coords = await callWithRetryAndTimeout<Coords>('getCoords', { address: addressStr });
-      if (coords && typeof coords.lat === 'number') { coordsCache.current[addressStr] = coords; return coords; }
-      throw new Error('INVALID');
-    } catch { return getFallbackCoordsByCEP(cepFallback); }
+      if (coords && typeof coords.lat === 'number') { 
+        coordsCache.current[addressStr] = coords; 
+        return coords; 
+      }
+      throw new Error('A API retornou coordenadas vazias.');
+    } catch (error) {
+      throw new Error(`Endereço não localizado pelo servidor: ${addressStr}`);
+    }
   };
 
   const calcularDistanciaReal = async () => {
@@ -346,7 +344,7 @@ export default function Cliente() {
     
     try {
       const origStr = `${coleta.rua}, ${coleta.num}, ${coleta.bairro}, Brazil`;
-      const origCoords = await getValidCoords(origStr, coleta.cep);
+      const origCoords = await getValidCoords(origStr);
       setOrigemGPS(origCoords);
 
       const pGPS: Coords[] = [];
@@ -355,17 +353,16 @@ export default function Cliente() {
 
       for (const stop of entregas) {
         const destStr = `${stop.rua}, ${stop.num}, ${stop.bairro}, Brazil`;
-        const destCoords = await getValidCoords(destStr, stop.cep);
+        const destCoords = await getValidCoords(destStr);
         pGPS.push(destCoords);
 
-        // 🔥 CTO FIX: Proteção dupla contra o "Vírus do 5km" devolvido pela Cloud Function do Google
-        const distanceResult = await callWithRetryAndTimeout<number | string>('getDistance', { origin: lastOrigin, destination: destStr });
-        let km = Number(distanceResult);
+        // 🔥 CTO FIX: Falso Roteamento erradicado. 
+        // Chama a Cloud Function oficial e lança erro real se a rota for nula.
+        const distanceResult = await callWithRetryAndTimeout<number>('getDistance', { origin: lastOrigin, destination: destStr });
+        const km = Number(distanceResult);
         
-        // Compara com o Haversine (Matemática Pura). Se a Cloud Function forçar 5km (ou falhar) em rota curta, nós ignoramos e usamos o Haversine + 30% desvio de rua.
-        const distHaversine = locationService.calcularDistanciaKm(origCoords, destCoords);
-        if (Number.isNaN(km) || km <= 0 || (km === 5 && distHaversine < 2)) {
-           km = distHaversine > 0 ? distHaversine * 1.3 : 0.5; // Limite de 500m
+        if (Number.isNaN(km) || km <= 0) {
+           throw new Error(`Rota impossível entre ${lastOrigin} e ${destStr}.`);
         }
 
         totalKm += km;
@@ -374,23 +371,15 @@ export default function Cliente() {
       
       setParadasGPS(pGPS);
       setDestinoGPS(pGPS[pGPS.length - 1]);
-      if(totalKm > 0) setDistanciaReal(totalKm);
+      setDistanciaReal(totalKm);
       
       setStep('preview');
-    } catch {
-      showToast('Calculando rota linear (estimativa) por indisponibilidade da rede.', 'warning');
-      
-      const fallbackOrigem = getFallbackCoordsByCEP(coleta.cep);
-      const fallbackDestino = getFallbackCoordsByCEP(entregas[entregas.length - 1].cep);
-      setOrigemGPS(fallbackOrigem);
-      setDestinoGPS(fallbackDestino);
-
-      const distHaversine = locationService.calcularDistanciaKm(fallbackOrigem, fallbackDestino);
-      const finalDist = distHaversine > 0 ? distHaversine : (0.5 * entregas.length); 
-      setDistanciaReal(finalDist);
-
-      setStep('preview');
-    } finally { setLoadingRoute(false); }
+    } catch (error: any) {
+      console.error("[CÁLCULO ROTA ERROR]:", error);
+      showToast(error.message || 'Erro de comunicação com os servidores do Google Maps. Tente novamente.', 'error');
+    } finally { 
+      setLoadingRoute(false); 
+    }
   };
 
   const handleContratar = async () => {
@@ -413,11 +402,11 @@ export default function Cliente() {
     }
 
     try {
-      const c1 = await getValidCoords(`${coleta.rua}, ${coleta.num}, ${coleta.bairro}, Brazil`, coleta.cep);
+      const c1 = await getValidCoords(`${coleta.rua}, ${coleta.num}, ${coleta.bairro}, Brazil`);
       
       const coordsEntregas = [];
       for (const e of entregas) {
-         const c = await getValidCoords(`${e.rua}, ${e.num}, ${e.bairro}, Brazil`, e.cep);
+         const c = await getValidCoords(`${e.rua}, ${e.num}, ${e.bairro}, Brazil`);
          coordsEntregas.push({ ...e, lat: c.lat, lng: c.lng });
       }
       const destinoFinal = coordsEntregas[coordsEntregas.length - 1];
@@ -438,7 +427,6 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
-      // 🔥 CTO FIX: Salva 'validDistancia' para nunca salvar Zero ou Null que ativa Fallback falso de JS
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
