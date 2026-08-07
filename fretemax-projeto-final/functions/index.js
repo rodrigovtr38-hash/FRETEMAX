@@ -3,8 +3,9 @@
 // CTO-Log: Auditoria Backend - Motor de Despacho (Ponte)
 // Melhorias Implementadas:
 // 1. Arquitetura "Mural/Feed": Cargas permanecem visíveis por 15 minutos reais.
-// 2. Haversine Formula: Cálculo de distância nativo preciso (não gasta cota da API do Google Maps).
-// 3. Centralização das Coleções Oficiais (motoristas_cadastros / motoristas_online).
+// 2. Haversine Formula: Cálculo de distância nativo preciso.
+// 3. Centralização das Coleções Oficiais.
+// 4. 🔥 CTO FIX: Injeção da Cloud Function "getDistance" (Google Distance Matrix API).
 // =========================================================
 
 const functions = require('firebase-functions');
@@ -14,18 +15,15 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
-// 🛡 TRAVAS DE NUVEM (Evita contas surpresas no Google Cloud)
+// 🛡 TRAVAS DE NUVEM
 const runtimeOpts = {
   timeoutSeconds: 30, 
   memory: '256MB',    
   maxInstances: 50    
 };
 
-// ========================================================
-// FUNÇÃO UTILITÁRIA: FÓRMULA DE HAVERSINE (Distância Precisa)
-// ========================================================
 function calcularDistanciaExata(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Raio da Terra em km
+  const R = 6371; 
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = 
@@ -33,12 +31,9 @@ function calcularDistanciaExata(lat1, lon1, lat2, lon2) {
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
     Math.sin(dLon/2) * Math.sin(dLon/2); 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  return R * c; // Distância em km
+  return R * c; 
 }
 
-// ========================================================
-// FUNÇÃO INTERNA: MOTOR DE PUSH (Isolado Anti-Crash)
-// ========================================================
 async function sendPushInternal(userId, tipo, titulo, corpo, dados) {
   try {
     const colecao = tipo === 'motorista' ? 'motoristas_cadastros' : 'clientes';
@@ -93,6 +88,42 @@ exports.getCoords = functions.runWith(runtimeOpts).https.onCall(async (data, con
   }
   const { lat, lng } = res.data.results[0].geometry.location;
   return { lat, lng };
+});
+
+// ========================================================
+// 1.1. DISTANCE MATRIX (🔥 CTO FIX: A FUNÇÃO QUE FALTAVA)
+// ========================================================
+exports.getDistance = functions.runWith(runtimeOpts).https.onCall(async (data, context) => {
+  const { origin, destination } = data;
+  
+  if (!origin || !destination) {
+    throw new functions.https.HttpsError('invalid-argument', 'Origem e destino são obrigatórios.');
+  }
+
+  const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY;
+  const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&key=${key}`;
+
+  try {
+    const res = await axios.get(url, { timeout: 5000 });
+    
+    if (res.data.status !== 'OK' || !res.data.rows[0]?.elements[0]) {
+      throw new functions.https.HttpsError('not-found', 'Rota não encontrada pelo Google.');
+    }
+
+    const element = res.data.rows[0].elements[0];
+    
+    if (element.status !== 'OK') {
+       throw new functions.https.HttpsError('not-found', 'Rota impossível entre os pontos informados.');
+    }
+
+    // Google retorna em metros. Dividimos por 1000 para a plataforma usar KM exatos (Ex: 500m = 0.5km).
+    const distanceInMeters = element.distance.value;
+    return distanceInMeters / 1000;
+
+  } catch (error) {
+    console.error("[DISTANCE MATRIX ERRO]:", error.message);
+    throw new functions.https.HttpsError('internal', 'Erro ao calcular rota oficial.');
+  }
 });
 
 // ========================================================
