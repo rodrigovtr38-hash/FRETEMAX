@@ -1,7 +1,7 @@
 // ============================================================================
-// ARQUIVO: ia.gemini.ts
-// PASTA: services/
-// OBJETIVO: Serviço principal de conexão REST/SDK com a API do Google Gemini
+// ARQUIVO: src/core/ai/services/ia.gemini.ts
+// CTO-Log: FASE 3 - Inteligência Viva
+// Status: Conexão atualizada para forçar estrutura JSON e usar diretrizes de sistema nativas.
 // ============================================================================
 
 import { FTI_CONFIG } from '../config/ia.config';
@@ -19,7 +19,6 @@ export const callGeminiAPI = async (
   console.log(`[FTI Services] Conectando ao modelo neural: ${FTI_CONFIG.modelName}`);
 
   try {
-    // 1. Validação da chave de API
     if (!FTI_CONFIG.apiKey) {
       console.warn('[FTI Services] Chave da API do Gemini não detectada nas variáveis de ambiente.');
       return {
@@ -30,7 +29,7 @@ export const callGeminiAPI = async (
       };
     }
 
-    // 2. Requisição HTTP real para a API do Google Gemini
+    // 🔥 CTO FIX: Utilização da propriedade nativa "system_instruction" para maior inteligência de contexto.
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${FTI_CONFIG.modelName}:generateContent?key=${FTI_CONFIG.apiKey}`,
       {
@@ -39,15 +38,19 @@ export const callGeminiAPI = async (
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: systemContext }]
+          },
           contents: [
             {
               role: 'user',
-              parts: [{ text: `${systemContext}\n\nInstrução do Usuário: ${prompt}` }]
+              parts: [{ text: prompt }]
             }
           ],
           generationConfig: {
-            temperature: FTI_CONFIG.temperature || 0.7,
+            temperature: FTI_CONFIG.temperature || 0.4,
             maxOutputTokens: FTI_CONFIG.maxTokens || 1024,
+            response_mime_type: "application/json" // 🔥 CTO FIX: Força a IA a devolver apenas JSON perfeito, blindando o ChatFrete de quebras.
           }
         })
       }
@@ -60,7 +63,6 @@ export const callGeminiAPI = async (
     const data = await response.json();
     const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-    // 3. Processa a resposta através do nosso Parser oficial
     return parseAIResponse(rawText);
 
   } catch (error) {
