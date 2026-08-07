@@ -1,10 +1,10 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/tripLifecycleService.ts
-// CTO-Log: Higienização, Destravamento de Transição e Liberação do Auto-Bid.
-// Status: Trava matemática destrancada para republicações.
+// CTO-Log: Auditoria Final (Bloco 2 - Sistema Vivo).
+// Status: Injeção atômica de "Timeline no Chat". A IA reportará cada transição do motorista para o painel do Embarcador em tempo real.
 // =========================================================
 
-import { doc, getDoc, serverTimestamp, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { AppTripState, canTransition } from '../state/tripStateMachine';
 import { DriverState } from '../state/driverStateMachine';
@@ -24,6 +24,53 @@ export class TripLifecycleService {
 
   private static release(key: string): void {
     this.inflight.delete(key);
+  }
+
+  // 🔥 CTO FIX: "Alma da Plataforma". Cria um registro de chat sempre que o status muda.
+  private static async registrarEventoDeIA(freteId: string, novoStatus: AppTripState, extras?: any) {
+    try {
+      const messagesRef = collection(db, 'fretes', freteId, 'chat');
+      let mensagemLog = '';
+
+      switch (novoStatus) {
+        case AppTripState.ACEITO:
+          mensagemLog = "🔔 [Torre Operacional]: Vinculação confirmada. Motorista designado para a operação.";
+          break;
+        case AppTripState.INDO_COLETA:
+          mensagemLog = "🚚 [Torre Operacional]: Deslocamento iniciado. Motorista a caminho do Ponto de Coleta.";
+          break;
+        case AppTripState.CHEGOU_COLETA:
+          mensagemLog = "📍 [Torre Operacional]: Alerta Geográfico. Motorista reportou chegada ao local de coleta.";
+          break;
+        case AppTripState.COLETANDO:
+          mensagemLog = "📦 [Torre Operacional]: Veículo em fase de carregamento na doca.";
+          break;
+        case AppTripState.EM_TRANSPORTE:
+          mensagemLog = "✅ [Torre Operacional]: Coleta finalizada (PIN validado). Motorista a caminho do Destino Final.";
+          break;
+        case AppTripState.ENTREGUE:
+          mensagemLog = "🏁 [Torre Operacional]: Rota Finalizada com Sucesso! Valores liberados pelo sistema Escrow.";
+          break;
+        case AppTripState.DISPONIVEL:
+           if (extras?.isRecusa) {
+             mensagemLog = "⚠️ [Torre Operacional]: Motorista reportou problema e abortou operação. Carga devolvida ao Radar (Prioridade Alta).";
+           }
+           break;
+        default:
+          return; // Não envia log para status intermediários não essenciais
+      }
+
+      if (mensagemLog) {
+        await addDoc(messagesRef, {
+          texto: mensagemLog,
+          nome: 'Torre de Controle (IA)',
+          tipoUsuario: 'admin',
+          createdAt: serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      console.warn("[CTO-Log] Falha ao injetar log da IA no chat:", e);
+    }
   }
 
   static async alterarStatusViagem(freteId: string, novoStatus: AppTripState, extras: Record<string, unknown> = {}): Promise<boolean> {
@@ -63,9 +110,6 @@ export class TripLifecycleService {
         statusReal = AppTripState.EM_TRANSPORTE; 
       }
 
-      // 🛡️ BLINDAGEM CTO: Desativado o interceptador de expiração que bloqueava as republicações
-      // Agora o sistema confia no painel do Embarcador para definir quando a carga morre ou renasce.
-
       await updateDoc(freteRef, {
         status: statusReal,
         paradaAtualIndex,
@@ -74,7 +118,10 @@ export class TripLifecycleService {
         ...extras,
       });
 
-      // Acordando a IA Operacional
+      // 🔥 Dispara o LOG para a tela de Embarcador/Motorista se sentirem num sistema vivo.
+      await this.registrarEventoDeIA(freteId, statusReal as AppTripState, { isRecusa: isForcedReset });
+
+      // Acordando a IA Notificadora (Event Bus Invisível)
       const freightPayload = { id: freteId, ...data, status: statusReal };
       
       if (statusReal === AppTripState.DISPONIVEL && isForcedReset) {
@@ -87,7 +134,6 @@ export class TripLifecycleService {
          ftiRadar.dispatch({ userId: data.motoristaId || 'unknown', eventType: 'TRIP_COMPLETED', data: freightPayload, timestamp: new Date().toISOString() });
       }
 
-      // GATILHO AUTOMÁTICO: Se virou DISPONIVEL, inicia busca
       if (statusReal === AppTripState.DISPONIVEL && data.dispatchStatus !== 'aberto_no_feed') {
         try {
           const fretePayload = {
