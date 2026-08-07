@@ -1,13 +1,15 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/ChatFrete.tsx
 // CTO-Log: Auditoria Concluída (Bloco 2 - Vida Visual).
-// Status: Renderização injetada para interpretar e exibir Mensagens "Admin/Torre IA" com cor e autoridade de sistema.
+// Status: A Inteligência Artificial Gemini foi plugada e agora "escuta e responde" às mensagens do usuário em tempo real.
 // =========================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { addDoc, collection, limit, onSnapshot, orderBy, query, serverTimestamp, DocumentData } from 'firebase/firestore';
 import { Loader2, Send, ShieldAlert, Zap } from 'lucide-react';
 import { db } from '../firebase';
+// 🔥 CTO FIX: Cérebro da Inteligência importado e plugado.
+import { useFTI } from '../core/ai/hooks/useFTI';
 
 interface ChatFreteProps {
   freteId: string;
@@ -29,6 +31,13 @@ export default function ChatFrete({ freteId, nome, tipoUsuario }: ChatFreteProps
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  // 🔥 CTO FIX: Acordando a IA para ouvir o contexto do Frete atual
+  const { interactWithAI, isProcessing } = useFTI({
+    userId: freteId,
+    user: { uid: nome, role: tipoUsuario, name: nome },
+    appState: { currentRoute: 'ChatOperacional' }
+  });
 
   useEffect(() => {
     if (!freteId) return;
@@ -71,19 +80,39 @@ export default function ChatFrete({ freteId, nome, tipoUsuario }: ChatFreteProps
 
     try {
       setSending(true);
+      const textoUsuario = mensagem.trim();
+
+      // 1. Grava a mensagem humana no banco
       await addDoc(collection(db, 'fretes', freteId, 'chat'), {
-        texto: mensagem.trim(),
+        texto: textoUsuario,
         nome,
         tipoUsuario,
         createdAt: serverTimestamp(),
       });
+      
       setMensagem('');
+
+      // 2. 🔥 CTO FIX: Envia a mensagem para a IA processar e responder
+      if (interactWithAI) {
+        const aiResponse = await interactWithAI(textoUsuario);
+        
+        // 3. Se a IA gerar uma resposta, injeta no chat na mesma hora
+        if (aiResponse && aiResponse.content) {
+          await addDoc(collection(db, 'fretes', freteId, 'chat'), {
+            texto: aiResponse.content,
+            nome: 'Torre de Controle (IA)',
+            tipoUsuario: 'admin',
+            createdAt: serverTimestamp(),
+          });
+        }
+      }
+
     } catch (error) {
       console.error('SEND CHAT ERROR:', error);
     } finally {
       setSending(false);
     }
-  }, [freteId, mensagem, nome, sending, tipoUsuario]);
+  }, [freteId, mensagem, nome, sending, tipoUsuario, interactWithAI]);
 
   return (
     <div className="flex flex-col h-full rounded-[2rem] border border-cyan-500/20 bg-slate-900 shadow-2xl backdrop-blur-xl overflow-hidden">
@@ -117,7 +146,6 @@ export default function ChatFrete({ freteId, nome, tipoUsuario }: ChatFreteProps
         ) : (
           <div className="space-y-4">
             {messages.map((message) => {
-              // 🔥 CTO FIX: Tratamento especial para mensagens do Sistema (A "Vida" da Plataforma)
               if (message.tipoUsuario === 'admin') {
                  return (
                    <div key={message.id} className="flex justify-center my-3 animate-in fade-in zoom-in duration-300">
@@ -150,6 +178,14 @@ export default function ChatFrete({ freteId, nome, tipoUsuario }: ChatFreteProps
                 </div>
               );
             })}
+            {isProcessing && (
+               <div className="flex justify-center my-3">
+                 <div className="bg-slate-950 border border-cyan-500/20 px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+                   <Loader2 size={12} className="text-cyan-400 animate-spin" />
+                   <p className="text-[10px] font-bold text-cyan-300 tracking-wide">IA Avaliando...</p>
+                 </div>
+               </div>
+            )}
             <div ref={bottomRef} />
           </div>
         )}
@@ -168,7 +204,7 @@ export default function ChatFrete({ freteId, nome, tipoUsuario }: ChatFreteProps
           <button
             type="button"
             onClick={sendMessage}
-            disabled={sending || !mensagem.trim()}
+            disabled={sending || isProcessing || !mensagem.trim()}
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] bg-cyan-500 text-slate-950 shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all duration-300 hover:scale-105 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
           >
             {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} className="ml-1" />}
