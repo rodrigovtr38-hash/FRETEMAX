@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: FASE 3 - Homologação de Integração Distribuída.
-// Status: "Bug do Fallback 5.0km" erradicado. Distâncias físicas curtas (<1km) são gravadas com precisão real (ex: 0.7km).
+// CTO-Log: Auditoria Final (Fluxo de Publicação).
+// Status: "Bug do Fallback 5.0km" erradicado. Distâncias locais processadas pelo Haversine puro do dispositivo para impedir distorções de Cloud Function.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -70,7 +70,6 @@ export default function Cliente() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isAutoFilled, setIsAutoFilled] = useState(false);
 
-  // Instalação PWA
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
 
@@ -145,8 +144,7 @@ export default function Cliente() {
     }
   }, [loadingPayment, loadingRoute]);
 
-  // Se a rota for absurdamente nula, assumimos 0.1km (100 metros) como piso absoluto físico para não travar matemática, e não mais 5km irreal.
-  const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? 0.1 : distanciaReal, [distanciaReal]);
+  const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? 0.5 : distanciaReal, [distanciaReal]);
 
   const calculoFinanceiro = useMemo(() => {
     const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
@@ -155,8 +153,6 @@ export default function Cliente() {
                    tipoMaterial.toLowerCase().includes('perigo');
 
     let valorMotoristaBase = 0;
-
-    // AQUI O 15KM É OBRIGATÓRIO PARA A MATEMÁTICA DE PREÇO (PRICING DISTANCE) DE ACORDO COM A FASE 2
     const distanciaFinanceira = validDistancia <= 15 ? 15 : validDistancia;
 
     switch (vehicle) {
@@ -362,9 +358,17 @@ export default function Cliente() {
         const destCoords = await getValidCoords(destStr, stop.cep);
         pGPS.push(destCoords);
 
+        // 🔥 CTO FIX: Proteção dupla contra o "Vírus do 5km" devolvido pela Cloud Function do Google
         const distanceResult = await callWithRetryAndTimeout<number | string>('getDistance', { origin: lastOrigin, destination: destStr });
-        const km = Number(distanceResult);
-        if (!Number.isNaN(km) && km > 0) { totalKm += km; }
+        let km = Number(distanceResult);
+        
+        // Compara com o Haversine (Matemática Pura). Se a Cloud Function forçar 5km (ou falhar) em rota curta, nós ignoramos e usamos o Haversine + 30% desvio de rua.
+        const distHaversine = locationService.calcularDistanciaKm(origCoords, destCoords);
+        if (Number.isNaN(km) || km <= 0 || (km === 5 && distHaversine < 2)) {
+           km = distHaversine > 0 ? distHaversine * 1.3 : 0.5; // Limite de 500m
+        }
+
+        totalKm += km;
         lastOrigin = destStr;
       }
       
@@ -382,9 +386,7 @@ export default function Cliente() {
       setDestinoGPS(fallbackDestino);
 
       const distHaversine = locationService.calcularDistanciaKm(fallbackOrigem, fallbackDestino);
-      // 🔥 CTO FIX: "Fim da Trava de 5.0 km Falsa".
-      // Se a rede falhar e o CEP for igual (mesmo bairro / dist = 0), injeta 0.1km realístico em vez do falso "5km".
-      const finalDist = distHaversine > 0 ? distHaversine : 0.1; 
+      const finalDist = distHaversine > 0 ? distHaversine : (0.5 * entregas.length); 
       setDistanciaReal(finalDist);
 
       setStep('preview');
@@ -436,9 +438,7 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
-      // 🔥 CTO FIX: "Vírus dos 15km" erradicado. 
-      // O 'distanciaRealKm' envia a distância física limpa (Display Distance). 
-      // O 'distanciaTarifada' guarda a distância de tabela (Pricing Distance) de 15km para o financeiro.
+      // 🔥 CTO FIX: Salva 'validDistancia' para nunca salvar Zero ou Null que ativa Fallback falso de JS
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
@@ -449,10 +449,10 @@ export default function Cliente() {
         clienteZap: whatsapp, 
         clienteDocumento: documentoLimpo,
         
-        distancia: validDistancia <= 15 ? 15 : validDistancia, // Financeiro (ANTT Mínimo para Histórico/Financeiro)
-        distanciaRealKm: Number(distanciaReal.toFixed(2)), // Motorista Visual (Física limpa como 0.5km ou 0.7km)
-        distanciaTotalKm: Number(distanciaReal.toFixed(2)), // Fallback para versões mais antigas do React Native
-        distanciaTarifada: validDistancia <= 15 ? 15 : validDistancia, // Pricing Distance
+        distancia: validDistancia <= 15 ? 15 : validDistancia, 
+        distanciaRealKm: validDistancia, 
+        distanciaTotalKm: validDistancia, 
+        distanciaTarifada: validDistancia <= 15 ? 15 : validDistancia, 
         
         veiculo: vehicle, 
         categoria: vehicle, 
