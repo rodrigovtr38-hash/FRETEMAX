@@ -1,12 +1,12 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/ChatFrete.tsx
-// CTO-Log: Auditoria Concluída (Bloco 4).
-// Status: Tipagem validada. Funcionalidade preservada sem alterações.
+// CTO-Log: Auditoria Concluída (Bloco 2 - Vida Visual).
+// Status: Renderização injetada para interpretar e exibir Mensagens "Admin/Torre IA" com cor e autoridade de sistema.
 // =========================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { addDoc, collection, limit, onSnapshot, orderBy, query, serverTimestamp, DocumentData } from 'firebase/firestore';
-import { Loader2, Send, ShieldAlert } from 'lucide-react';
+import { Loader2, Send, ShieldAlert, Zap } from 'lucide-react';
 import { db } from '../firebase';
 
 interface ChatFreteProps {
@@ -117,6 +117,20 @@ export default function ChatFrete({ freteId, nome, tipoUsuario }: ChatFreteProps
         ) : (
           <div className="space-y-4">
             {messages.map((message) => {
+              // 🔥 CTO FIX: Tratamento especial para mensagens do Sistema (A "Vida" da Plataforma)
+              if (message.tipoUsuario === 'admin') {
+                 return (
+                   <div key={message.id} className="flex justify-center my-3 animate-in fade-in zoom-in duration-300">
+                     <div className="bg-slate-950 border border-cyan-500/20 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 max-w-[90%]">
+                       <Zap size={12} className="text-cyan-400" />
+                       <p className="text-[10px] font-bold text-cyan-300 tracking-wide text-center">
+                         {message.texto}
+                       </p>
+                     </div>
+                   </div>
+                 );
+              }
+
               const isOwn = message.tipoUsuario === tipoUsuario;
               return (
                 <div key={message.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
