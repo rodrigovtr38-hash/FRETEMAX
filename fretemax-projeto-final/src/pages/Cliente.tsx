@@ -318,7 +318,7 @@ export default function Cliente() {
     return () => unsubscribe();
   }, []);
 
-  // 🔥 CTO FIX: Blindagem Operacional. Falso Geocoding foi erradicado. 
+  // 🔥 CTO FIX: Blindagem Operacional. Falso Geocoding e Mocks foram erradicados. 
   // O sistema só avança se a API oficial devolver as coordenadas estritas.
   const getValidCoords = async (addressStr: string): Promise<Coords> => {
     if (coordsCache.current[addressStr]) return coordsCache.current[addressStr];
@@ -356,8 +356,8 @@ export default function Cliente() {
         const destCoords = await getValidCoords(destStr);
         pGPS.push(destCoords);
 
-        // 🔥 CTO FIX: Falso Roteamento erradicado. 
-        // Chama a Cloud Function oficial e lança erro real se a rota for nula.
+        // 🔥 CTO FIX: Falso Roteamento erradicado. Sem try/catch interno.
+        // Chama a Cloud Function oficial. Se falhar, estoura a bomba para cima.
         const distanceResult = await callWithRetryAndTimeout<number>('getDistance', { origin: lastOrigin, destination: destStr });
         const km = Number(distanceResult);
         
@@ -376,6 +376,7 @@ export default function Cliente() {
       setStep('preview');
     } catch (error: any) {
       console.error("[CÁLCULO ROTA ERROR]:", error);
+      // O Catch agora apenas notifica o erro e para a execução. O Fallback foi deletado do sistema.
       showToast(error.message || 'Erro de comunicação com os servidores do Google Maps. Tente novamente.', 'error');
     } finally { 
       setLoadingRoute(false); 
