@@ -1,6 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientDriverCard.tsx
-// CTO-Log: Implementação de Prova Social (Badge Verificado) e UX de Autoridade.
+// CTO-Log: Auditoria Concluída (Bloco 2).
+// Status: Componente visual íntegro.
 // =========================================================
 
 import { MessageCircle, XCircle, ShieldCheck, Truck } from 'lucide-react';
