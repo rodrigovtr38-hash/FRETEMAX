@@ -1,22 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/tripLifecycleService.ts
-// CTO-Log: FASE 4 - Centralização Atômica da Fonte da Verdade (Revisão Contratual).
-// 
-// [CONTRATO EXPLÍCITO DO SERVIÇO]
-// ESTE SERVIÇO DELEGA E ALTERA EXCLUSIVAMENTE:
-// - status (Máquina de Estados)
-// - runtime (Sincronização de UI)
-// - paradaAtualIndex
-// - atualizadoEm
-//
-// CONTRATO ABERTO PARA O DISPATCH QUEUE SERVICE:
-// - dispatchStatus, dispatchIndex, dispatchTentativa, filaTotal, motoristaAtualDestaque, motoristaAtualNome
-// 
-// CONTRATO ABERTO PARA O MOTORISTA (Apenas no ato do ACEITE):
-// - motoristaId, motoristaNome, motoristaZap
-//
-// PROIBIÇÃO ABSOLUTA:
-// Valores financeiros, distâncias, pesos, coordenadas e timestamps de criação são ignorados.
+// CTO-Log: FASE 4 - Correção de Build (Vercel).
+// Status: Importação do DispatchQueueService ajustada (Maiúscula vs Minúscula)
+// para alinhar com os métodos estáticos do serviço de despacho.
 // =========================================================
 
 import { doc, serverTimestamp, collection, addDoc, runTransaction } from 'firebase/firestore';
@@ -25,7 +11,7 @@ import { AppTripState, canTransition } from '../state/tripStateMachine';
 import { DriverState } from '../state/driverStateMachine';
 import { StateSynchronizationService } from './stateSynchronizationService';
 import type { FretePayload } from './matchingEngine';
-import { dispatchQueueService } from './dispatchQueueService';
+import { DispatchQueueService } from './dispatchQueueService'; // 🔥 FIX: 'D' Maiúsculo importado
 import { ftiRadar } from '../core/ai/events/ia.events';
 
 export interface TripDocumentData {
@@ -43,19 +29,14 @@ export interface TripDocumentData {
 }
 
 export interface TripStateTransitionContract {
-  // Dados de Despacho (Exclusivos para fila e orquestração)
   dispatchStatus?: string;
   dispatchIndex?: number;
   dispatchTentativa?: number;
   filaTotal?: number;
   motoristaAtualDestaque?: string | null;
-  
-  // Dados de Vinculação (Apenas lidos quando o status transiciona para ACEITO)
   motoristaId?: string | null;
   motoristaNome?: string | null;
   motoristaZap?: string | null;
-
-  // Flags Comportamentais
   isRecusa?: boolean;
 }
 
@@ -133,9 +114,6 @@ export class TripLifecycleService {
       let wasForcedReset = false;
       let finalDocumentState: TripDocumentData | null = null;
 
-      // =======================================================
-      // THE SINGLE SOURCE OF TRUTH: TRANSAÇÃO ATÔMICA
-      // =======================================================
       await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(freteRef);
 
@@ -145,7 +123,6 @@ export class TripLifecycleService {
 
         const data = snapshot.data() as TripDocumentData;
 
-        // Válvula de Exceção engloba agora os status operacionais da fila de despacho
         const isForcedReset = novoStatus === AppTripState.DISPONIVEL && 
           [
             AppTripState.ACEITO, 
@@ -181,7 +158,6 @@ export class TripLifecycleService {
           statusCalculado = AppTripState.EM_TRANSPORTE; 
         }
 
-        // Montagem do Payload Seguro baseado em Contrato Explícito
         const payloadUpdate: Partial<TripDocumentData> = {
           status: statusCalculado,
           paradaAtualIndex,
@@ -190,14 +166,12 @@ export class TripLifecycleService {
         };
 
         if (contract) {
-          // Permissões do Fila de Despacho
           if (contract.dispatchStatus !== undefined) payloadUpdate.dispatchStatus = contract.dispatchStatus;
           if (contract.dispatchIndex !== undefined) payloadUpdate.dispatchIndex = contract.dispatchIndex;
           if (contract.dispatchTentativa !== undefined) payloadUpdate.dispatchTentativa = contract.dispatchTentativa;
           if (contract.filaTotal !== undefined) payloadUpdate.filaTotal = contract.filaTotal;
           if (contract.motoristaAtualDestaque !== undefined) payloadUpdate.motoristaAtualDestaque = contract.motoristaAtualDestaque;
           
-          // Permissões de Vinculação Exclusivas ao Estado ACEITO
           if (novoStatus === AppTripState.ACEITO) {
              if (contract.motoristaId !== undefined) payloadUpdate.motoristaId = contract.motoristaId;
              if (contract.motoristaNome !== undefined) payloadUpdate.motoristaNome = contract.motoristaNome;
@@ -205,7 +179,6 @@ export class TripLifecycleService {
           }
         }
 
-        // Regra de Limpeza de Autoria (Destituição de Carga)
         if (isForcedReset) {
           payloadUpdate.motoristaId = null;
           payloadUpdate.motoristaNome = null;
@@ -215,7 +188,6 @@ export class TripLifecycleService {
 
         transaction.update(freteRef, payloadUpdate as { [x: string]: any });
 
-        // Gera o estado final espelhado da transação
         finalDocumentState = {
           ...data,
           ...payloadUpdate,
@@ -223,16 +195,10 @@ export class TripLifecycleService {
         } as TripDocumentData;
       });
 
-      // =======================================================
-      // POST-TRANSACTION HOOKS (Efeitos Colaterais Seguros)
-      // Executados APENAS se a transação atômica teve sucesso absoluto
-      // =======================================================
-      
       if (!finalDocumentState) return false;
 
       await this.registrarEventoDeIA(freteId, statusCalculado as AppTripState, contract);
 
-      // Cast restrito para o despachante de fila e eventos
       const freightPayloadToBroadcast = { ...finalDocumentState } as unknown as FretePayload;
       
       if (statusCalculado === AppTripState.DISPONIVEL && wasForcedReset) {
@@ -241,14 +207,14 @@ export class TripLifecycleService {
       if (statusCalculado === AppTripState.EM_TRANSPORTE) {
          ftiRadar.dispatch({ userId: finalDocumentState.motoristaId || 'unknown', eventType: 'TRIP_STARTED', data: freightPayloadToBroadcast, timestamp: new Date().toISOString() });
       }
-      if (statusCalculado === AppTripState.ENTREGUE) {
+      if (statusCalculado === AppTripState.ENTREGUE || statusCalculado === 'finalizado') {
          ftiRadar.dispatch({ userId: finalDocumentState.motoristaId || 'unknown', eventType: 'TRIP_COMPLETED', data: freightPayloadToBroadcast, timestamp: new Date().toISOString() });
       }
 
-      // Delegação de Orquestração: Religando o motor de despacho
       if (statusCalculado === AppTripState.DISPONIVEL && finalDocumentState.dispatchStatus !== 'aberto_no_feed') {
         try {
-          dispatchQueueService.iniciarFila(freightPayloadToBroadcast).catch((err: unknown) => 
+          // 🔥 FIX: Uso correto da classe com D maiúsculo
+          DispatchQueueService.iniciarFila(freightPayloadToBroadcast).catch((err: unknown) => 
             console.error('[CTO-Log] AUTO_DISPATCH_ERROR', err)
           );
         } catch (dispatchError: unknown) {
@@ -268,10 +234,6 @@ export class TripLifecycleService {
     }
   }
 
-  /**
-   * Acionado para forçar o reinício da distribuição de uma carga paralisada.
-   * Não reescreve lógicas de fila. Delega atômicamente ao ciclo de vida e seu pós-hook de Fila.
-   */
   static async executarRedispatch(frete: FretePayload): Promise<void> {
     try {
       await this.alterarStatusViagem(frete.id, AppTripState.DISPONIVEL, { isRecusa: true });
