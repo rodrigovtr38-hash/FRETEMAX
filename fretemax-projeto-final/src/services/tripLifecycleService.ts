@@ -1,23 +1,22 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/tripLifecycleService.ts
-// CTO-Log: FASE 4 - Revisão Técnica da Reconstrução (Etapa 1).
+// CTO-Log: FASE 4 - Centralização Atômica da Fonte da Verdade (Revisão Contratual).
 // 
-// [CONTRATO ESTRITO DO SERVIÇO]
-// ESTE SERVIÇO PODE ALTERAR APENAS:
-// - status (da corrida)
-// - runtime (matriz de sincronização visual)
+// [CONTRATO EXPLÍCITO DO SERVIÇO]
+// ESTE SERVIÇO DELEGA E ALTERA EXCLUSIVAMENTE:
+// - status (Máquina de Estados)
+// - runtime (Sincronização de UI)
 // - paradaAtualIndex
-// - motoristaId, motoristaNome, motoristaZap, motoristaAtualDestaque (Apenas para remoção em Forcet Reset)
 // - atualizadoEm
 //
-// ESTE SERVIÇO NUNCA PODE ALTERAR (Protegido via Filtro de Payload):
-// - distancia (todas as variantes)
-// - peso, volumes, tipoMaterial
-// - valores financeiros (valorTotal, lucroPlataforma, valorMotorista, etc)
-// - dados de origem e destino (lat, lng, endereços)
-// - clienteId, empresaId, IDs estruturais
-// - dispatchStatus, dispatchIndex, dispatchTentativa (Pertencem ao DispatchQueueService)
-// - createdAt, criadoEm
+// CONTRATO ABERTO PARA O DISPATCH QUEUE SERVICE:
+// - dispatchStatus, dispatchIndex, dispatchTentativa, filaTotal, motoristaAtualDestaque, motoristaAtualNome
+// 
+// CONTRATO ABERTO PARA O MOTORISTA (Apenas no ato do ACEITE):
+// - motoristaId, motoristaNome, motoristaZap
+//
+// PROIBIÇÃO ABSOLUTA:
+// Valores financeiros, distâncias, pesos, coordenadas e timestamps de criação são ignorados.
 // =========================================================
 
 import { doc, serverTimestamp, collection, addDoc, runTransaction } from 'firebase/firestore';
@@ -31,8 +30,8 @@ import { ftiRadar } from '../core/ai/events/ia.events';
 
 export interface TripDocumentData {
   id?: string;
-  status?: AppTripState | string;
-  driverState?: DriverState | string;
+  status?: AppTripState;
+  driverState?: DriverState;
   paradaAtualIndex?: number;
   paradas?: unknown[];
   motoristaId?: string | null;
@@ -43,9 +42,24 @@ export interface TripDocumentData {
   [key: string]: unknown;
 }
 
+export interface TripStateTransitionContract {
+  // Dados de Despacho (Exclusivos para fila e orquestração)
+  dispatchStatus?: string;
+  dispatchIndex?: number;
+  dispatchTentativa?: number;
+  filaTotal?: number;
+  motoristaAtualDestaque?: string | null;
+  
+  // Dados de Vinculação (Apenas lidos quando o status transiciona para ACEITO)
+  motoristaId?: string | null;
+  motoristaNome?: string | null;
+  motoristaZap?: string | null;
+
+  // Flags Comportamentais
+  isRecusa?: boolean;
+}
+
 export class TripLifecycleService {
-  // Lock de Memória mantido apenas para Debouncing visual da UI (evitar duplo clique cego).
-  // A segurança real de concorrência agora pertence estritamente ao Firestore Transaction.
   private static inflight = new Set<string>();
 
   private static acquire(key: string): boolean {
@@ -58,8 +72,7 @@ export class TripLifecycleService {
     this.inflight.delete(key);
   }
 
-  // Cria um registro na coleção de Chat sempre que o status operacional evolui.
-  private static async registrarEventoDeIA(freteId: string, novoStatus: AppTripState, extras?: Record<string, unknown>) {
+  private static async registrarEventoDeIA(freteId: string, novoStatus: AppTripState, contract?: TripStateTransitionContract) {
     try {
       const messagesRef = collection(db, 'fretes', freteId, 'chat');
       let mensagemLog = '';
@@ -84,9 +97,12 @@ export class TripLifecycleService {
           mensagemLog = "🏁 [Torre Operacional]: Rota Finalizada com Sucesso! Valores liberados pelo sistema Escrow.";
           break;
         case AppTripState.DISPONIVEL:
-           if (extras?.isRecusa) {
-             mensagemLog = "⚠️ [Torre Operacional]: Motorista reportou problema e abortou operação. Carga devolvida ao Radar (Prioridade Alta).";
+           if (contract?.isRecusa) {
+             mensagemLog = "⚠️ [Torre Operacional]: Operação abortada/recusada. Carga devolvida ao Radar.";
            }
+           break;
+        case AppTripState.SEM_MOTORISTA:
+           mensagemLog = "⚠️ [Torre Operacional]: Tempo limite do Radar excedido. Nenhum motorista disponível.";
            break;
         default:
           return; 
@@ -105,11 +121,7 @@ export class TripLifecycleService {
     }
   }
 
-  /**
-   * Único ponto de entrada autorizado pela arquitetura para mudar o status de uma viagem.
-   * Totalmente protegido por Transação Atômica no Firestore e Payload Shielding.
-   */
-  static async alterarStatusViagem(freteId: string, novoStatus: AppTripState, extras: Record<string, unknown> = {}): Promise<boolean> {
+  static async alterarStatusViagem(freteId: string, novoStatus: AppTripState, contract?: TripStateTransitionContract): Promise<boolean> {
     const lockKey = `trip-${freteId}-${novoStatus}`;
 
     if (!this.acquire(lockKey)) return false;
@@ -133,7 +145,7 @@ export class TripLifecycleService {
 
         const data = snapshot.data() as TripDocumentData;
 
-        // Válvula de Exceção para Cancelamentos, Repasses e Abortos
+        // Válvula de Exceção engloba agora os status operacionais da fila de despacho
         const isForcedReset = novoStatus === AppTripState.DISPONIVEL && 
           [
             AppTripState.ACEITO, 
@@ -142,7 +154,9 @@ export class TripLifecycleService {
             AppTripState.COLETANDO, 
             AppTripState.EM_TRANSPORTE, 
             AppTripState.SEM_MOTORISTA, 
-            AppTripState.EXPIRADO
+            AppTripState.EXPIRADO,
+            AppTripState.OFERTANDO,
+            AppTripState.AGUARDANDO_ACEITE
           ].includes(data.status as AppTripState);
 
         wasForcedReset = isForcedReset;
@@ -162,38 +176,34 @@ export class TripLifecycleService {
 
         statusCalculado = runtime.tripState;
         
-        // Regra Intrínseca: Múltiplas Entregas
         if (novoStatus === AppTripState.ENTREGUE && paradaAtualIndex + 1 < totalParadas) {
           paradaAtualIndex += 1;
           statusCalculado = AppTripState.EM_TRANSPORTE; 
         }
 
-        // =======================================================
-        // PAYLOAD SHIELDING (Proteção contra injeção externa)
-        // =======================================================
-        const FORBIDDEN_EXTRAS = [
-          'status', 'runtime', 'motoristaId', 'motoristaNome', 'motoristaZap', 
-          'motoristaAtualDestaque', 'dispatchStatus', 'dispatchIndex', 
-          'dispatchTentativa', 'createdAt', 'criadoEm', 'atualizadoEm', 
-          'paradaAtualIndex', 'distancia', 'peso', 'valorTotal', 'valorMotorista',
-          'valorLiquidoMotorista', 'lucroPlataforma', 'distanciaRealKm', 'distanciaTarifada'
-        ];
-
-        const safeExtras = Object.keys(extras).reduce((acc, key) => {
-          if (!FORBIDDEN_EXTRAS.includes(key)) {
-            acc[key] = extras[key];
-          }
-          return acc;
-        }, {} as Record<string, unknown>);
-
-        // Montagem do Payload Seguro da Transação
-        const payloadUpdate: Record<string, unknown> = {
+        // Montagem do Payload Seguro baseado em Contrato Explícito
+        const payloadUpdate: Partial<TripDocumentData> = {
           status: statusCalculado,
           paradaAtualIndex,
           runtime,
-          atualizadoEm: serverTimestamp(),
-          ...safeExtras,
+          atualizadoEm: serverTimestamp() as unknown,
         };
+
+        if (contract) {
+          // Permissões do Fila de Despacho
+          if (contract.dispatchStatus !== undefined) payloadUpdate.dispatchStatus = contract.dispatchStatus;
+          if (contract.dispatchIndex !== undefined) payloadUpdate.dispatchIndex = contract.dispatchIndex;
+          if (contract.dispatchTentativa !== undefined) payloadUpdate.dispatchTentativa = contract.dispatchTentativa;
+          if (contract.filaTotal !== undefined) payloadUpdate.filaTotal = contract.filaTotal;
+          if (contract.motoristaAtualDestaque !== undefined) payloadUpdate.motoristaAtualDestaque = contract.motoristaAtualDestaque;
+          
+          // Permissões de Vinculação Exclusivas ao Estado ACEITO
+          if (novoStatus === AppTripState.ACEITO) {
+             if (contract.motoristaId !== undefined) payloadUpdate.motoristaId = contract.motoristaId;
+             if (contract.motoristaNome !== undefined) payloadUpdate.motoristaNome = contract.motoristaNome;
+             if (contract.motoristaZap !== undefined) payloadUpdate.motoristaZap = contract.motoristaZap;
+          }
+        }
 
         // Regra de Limpeza de Autoria (Destituição de Carga)
         if (isForcedReset) {
@@ -203,9 +213,9 @@ export class TripLifecycleService {
           payloadUpdate.motoristaAtualDestaque = null;
         }
 
-        transaction.update(freteRef, payloadUpdate);
+        transaction.update(freteRef, payloadUpdate as { [x: string]: any });
 
-        // Gera o estado final espelhado da transação para uso em memória pós-commit
+        // Gera o estado final espelhado da transação
         finalDocumentState = {
           ...data,
           ...payloadUpdate,
@@ -220,7 +230,7 @@ export class TripLifecycleService {
       
       if (!finalDocumentState) return false;
 
-      await this.registrarEventoDeIA(freteId, statusCalculado as AppTripState, { isRecusa: wasForcedReset });
+      await this.registrarEventoDeIA(freteId, statusCalculado as AppTripState, contract);
 
       // Cast restrito para o despachante de fila e eventos
       const freightPayloadToBroadcast = { ...finalDocumentState } as unknown as FretePayload;
@@ -260,13 +270,10 @@ export class TripLifecycleService {
 
   /**
    * Acionado para forçar o reinício da distribuição de uma carga paralisada.
-   * Não reescreve lógicas de fila. Delega atômicamente ao ciclo de vida.
+   * Não reescreve lógicas de fila. Delega atômicamente ao ciclo de vida e seu pós-hook de Fila.
    */
   static async executarRedispatch(frete: FretePayload): Promise<void> {
     try {
-      // Força a entrada da corrida em "DISPONIVEL" com a flag de Recusa.
-      // A transação limpará o motorista e o Post-Hook reengatilhará o DispatchQueue.
-      // Elimina qualquer Race Condition ou Dupla Escrita.
       await this.alterarStatusViagem(frete.id, AppTripState.DISPONIVEL, { isRecusa: true });
     } catch (error: unknown) {
       console.error('[CTO-Log] REDISPATCH_ERROR', error);
