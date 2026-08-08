@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
 // CTO-Log: Homologação Funcional - Produção
 // Status: Remoção total de fallbacks e mocks. Distância, Tempo e Coordenadas dependem 100% da API real do Google Cloud Functions.
+// Correção: Inclusão estrita do CEP na busca do Google Maps para evitar o erro de 'Endereço não localizado'.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -343,7 +344,7 @@ export default function Cliente() {
     setLoadingStep(0);
     
     try {
-      const origStr = `${coleta.rua}, ${coleta.num}, ${coleta.bairro}, Brazil`;
+      const origStr = `${coleta.rua}, ${coleta.num}, ${coleta.bairro}, ${coleta.cep}, Brazil`;
       const origCoords = await getValidCoords(origStr);
       setOrigemGPS(origCoords);
 
@@ -352,7 +353,7 @@ export default function Cliente() {
       let lastOrigin = origStr;
 
       for (const stop of entregas) {
-        const destStr = `${stop.rua}, ${stop.num}, ${stop.bairro}, Brazil`;
+        const destStr = `${stop.rua}, ${stop.num}, ${stop.bairro}, ${stop.cep}, Brazil`;
         const destCoords = await getValidCoords(destStr);
         pGPS.push(destCoords);
 
@@ -403,11 +404,11 @@ export default function Cliente() {
     }
 
     try {
-      const c1 = await getValidCoords(`${coleta.rua}, ${coleta.num}, ${coleta.bairro}, Brazil`);
+      const c1 = await getValidCoords(`${coleta.rua}, ${coleta.num}, ${coleta.bairro}, ${coleta.cep}, Brazil`);
       
       const coordsEntregas = [];
       for (const e of entregas) {
-         const c = await getValidCoords(`${e.rua}, ${e.num}, ${e.bairro}, Brazil`);
+         const c = await getValidCoords(`${e.rua}, ${e.num}, ${e.bairro}, ${e.cep}, Brazil`);
          coordsEntregas.push({ ...e, lat: c.lat, lng: c.lng });
       }
       const destinoFinal = coordsEntregas[coordsEntregas.length - 1];
