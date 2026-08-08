@@ -6,6 +6,7 @@
 // 2. Haversine Formula: Cálculo de distância nativo preciso.
 // 3. Centralização das Coleções Oficiais.
 // 4. 🔥 CTO FIX: Injeção da Cloud Function "getDistance" (Google Distance Matrix API).
+// 5. 🔥 CTO FIX: Injeção direta da Chave de API para deploy automático via GitHub.
 // =========================================================
 
 const functions = require('firebase-functions');
@@ -79,7 +80,9 @@ exports.getCoords = functions.runWith(runtimeOpts).https.onCall(async (data, con
   if (!address || typeof address !== 'string') {
     throw new functions.https.HttpsError('invalid-argument', 'Endereço inválido.');
   }
-  const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY;
+  
+  // 🔥 CTO FIX: Chave injetada diretamente para deploy via GitHub
+  const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY || "AIzaSyBTaI1NWrb_NGmOEjT_qiwOo_JYZC3f1aY";
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${key}`;
 
   const res = await axios.get(url, { timeout: 5000 });
@@ -100,7 +103,8 @@ exports.getDistance = functions.runWith(runtimeOpts).https.onCall(async (data, c
     throw new functions.https.HttpsError('invalid-argument', 'Origem e destino são obrigatórios.');
   }
 
-  const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY;
+  // 🔥 CTO FIX: Chave injetada diretamente para deploy via GitHub
+  const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY || "AIzaSyBTaI1NWrb_NGmOEjT_qiwOo_JYZC3f1aY";
   const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&key=${key}`;
 
   try {
