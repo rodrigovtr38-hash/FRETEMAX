@@ -1,15 +1,17 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
-// CTO-Log: FASE 3 - Homologação Operacional Distribuída.
-// Status: "Buraco Negro do Cancelamento" corrigido. Injeção atômica de Prioridade, Atualização Temporal do TTL (30 min) na recusa.
+// CTO-Log: FASE 4 - Reconstrução Controlada (Etapa 3).
+// Status: Escritas diretas (Batch/UpdateDoc) e concorrências erradicadas.
+// Delegação total do estado operacional da viagem para o TripLifecycleService.
+// Este serviço agora atua exclusivamente como comunicador e roteador de eventos de tempo real.
 // =========================================================
 
-import { writeBatch, doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { increment } from 'firebase/firestore';
 import { firebaseRealtimeService } from './firebaseRealtimeService';
 import { locationRealtimeService } from './locationRealtimeService';
 import { DriverState } from '../state/driverStateMachine';
-import { AppTripState } from '../state/tripStateMachine'; 
+import { AppTripState } from '../state/tripStateMachine';
+import { TripLifecycleService } from './tripLifecycleService';
 
 class DispatchRealtimeService {
   async setDriverOnline(driverId: string) {
@@ -39,7 +41,7 @@ class DispatchRealtimeService {
     }
   }
 
-  async enviarOfertaRealtime(driverId: string, payload: any) {
+  async enviarOfertaRealtime(driverId: string, payload: Record<string, unknown>) {
     try {
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
         novaOferta: {
@@ -58,141 +60,79 @@ class DispatchRealtimeService {
 
   async aceitarCorrida(driverId: string, freteId: string) {
     try {
-      const batch = writeBatch(db);
-      const timestamp = Date.now();
-
-      const driverRef = doc(db, 'motoristas_cadastros', driverId);
-      const driverOnlineRef = doc(db, 'motoristas_online', driverId); 
-      const freteRef = doc(db, 'fretes', freteId);
-
-      // 1. Atualiza Cadastro Oficial
-      batch.update(driverRef, {
+      await firebaseRealtimeService.updateDriverRealtime(driverId, {
         state: DriverState.ACEITOU,
         freteAtualId: freteId,
         activeTripId: freteId, 
         disponivel: false,
-        atualizadoEm: timestamp,
+        atualizadoEm: Date.now(),
       });
 
-      // 2. Remove Motorista do Radar de Busca Imediatamente
-      batch.update(driverOnlineRef, {
-        state: DriverState.ACEITOU,
-        disponivel: false,
-        freteAtualId: freteId,
-        atualizadoEm: timestamp,
+      const sucesso = await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.ACEITO, { 
+        motoristaId: driverId 
       });
 
-      // 3. Atualiza Frete
-      batch.update(freteRef, {
-        status: AppTripState.ACEITO,
-        motoristaId: driverId,
-        atualizadoEm: timestamp,
-      });
-
-      await batch.commit();
+      if (!sucesso) {
+        throw new Error('Falha ao registrar aceite na Máquina de Estados central.');
+      }
 
       locationRealtimeService.start(driverId, freteId);
     } catch (error) {
-      console.error('ERRO ACEITE ATÔMICO (BATCH):', error);
+      console.error('ERRO ACEITE DE CORRIDA:', error);
       throw error;
     }
   }
 
   async concluirViagemELiberarMotorista(driverId: string, freteId: string) {
     try {
-      const batch = writeBatch(db);
-      const timestamp = Date.now();
-
-      const driverRef = doc(db, 'motoristas_cadastros', driverId);
-      const driverOnlineRef = doc(db, 'motoristas_online', driverId); 
-      const freteRef = doc(db, 'fretes', freteId);
-
-      batch.update(driverRef, {
+      await firebaseRealtimeService.updateDriverRealtime(driverId, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
         activeTripId: null, 
         currentTripId: null, 
         disponivel: true,
-        atualizadoEm: timestamp,
+        atualizadoEm: Date.now(),
       });
 
-      batch.update(driverOnlineRef, {
-        state: DriverState.ONLINE,
-        disponivel: true,
-        freteAtualId: null,
-        atualizadoEm: timestamp,
+      await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.ENTREGUE, {
+        entregueEm: Date.now()
       });
 
-      batch.update(freteRef, {
-        status: AppTripState.ENTREGUE,
-        entregueEm: timestamp,
-        atualizadoEm: timestamp,
-      });
-
-      await batch.commit();
       locationRealtimeService.stop();
       
-      window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+      }
     } catch (error) {
-      console.error('ERRO AO CONCLUIR VIAGEM (BATCH):', error);
+      console.error('ERRO AO CONCLUIR VIAGEM:', error);
       throw error;
     }
   }
 
   async cancelarViagemMotorista(driverId: string, freteId: string, motivo: string) {
     try {
-      const batch = writeBatch(db);
-      const timestamp = Date.now();
-
-      const driverRef = doc(db, 'motoristas_cadastros', driverId);
-      const driverOnlineRef = doc(db, 'motoristas_online', driverId); 
-      const freteRef = doc(db, 'fretes', freteId);
-
-      // Libera Cadastro Oficial
-      batch.update(driverRef, {
+      await firebaseRealtimeService.updateDriverRealtime(driverId, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
         activeTripId: null,
         currentTripId: null,
         disponivel: true,
-        atualizadoEm: timestamp,
+        atualizadoEm: Date.now(),
       });
 
-      // Retorna o Motorista ao Radar de Buscas
-      batch.update(driverOnlineRef, {
-        state: DriverState.ONLINE,
-        disponivel: true,
-        freteAtualId: null,
-        atualizadoEm: timestamp,
-      });
-
-      // 🔥 CTO FIX: "Buraco Negro da Recusa Resolvido". 
-      // Quando um motorista solta a carga, o TTL (Time to Live) deve reiniciar com urgência no Radar (30 minutos)
-      const dataExpiracao = new Date();
-      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 30);
-
-      // Volta a Carga pro Mural como URGENTE
-      batch.update(freteRef, {
-        status: AppTripState.DISPONIVEL,
-        motoristaId: null,
-        motoristaNome: null,
-        motoristaZap: null,
-        alertaInsucesso: true,
+      await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.DISPONIVEL, {
+        isRecusa: true,
         motivoCancelamento: motivo,
-        canceladoPorMotoristaEm: timestamp,
-        atualizadoEm: timestamp,
-        prioridade: true, // Acende o FOGO de urgência no Feed
-        ofertaExpiraEm: dataExpiracao, // Evita sumir do Feed
-        createdAt: serverTimestamp(), // Pula pro topo do Feed em consultas padrão
-        criadoEm: Date.now() // 🔥 FORÇA o Feed do motorista (AvailableFreights.tsx) a zerar o cronômetro do zero!
+        canceladoPorMotoristaEm: Date.now()
       });
 
-      await batch.commit();
       locationRealtimeService.stop();
 
-      window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+      }
     } catch (error) {
-      console.error('ERRO AO ABORTAR VIAGEM (BATCH):', error);
+      console.error('ERRO AO ABORTAR VIAGEM:', error);
       throw error;
     }
   }
@@ -243,7 +183,7 @@ class DispatchRealtimeService {
     }
   }
 
-  async atualizarTripRealtime(tripId: string, payload: any) {
+  async atualizarTripRealtime(tripId: string, payload: Record<string, unknown>) {
     try {
       await firebaseRealtimeService.updateTripRealtime(tripId, {
         ...payload,
@@ -256,10 +196,7 @@ class DispatchRealtimeService {
 
   async atualizarStatusTrip(tripId: string, status: AppTripState) {
     try {
-      await firebaseRealtimeService.updateTripRealtime(tripId, {
-        status,
-        atualizadoEm: Date.now(),
-      });
+      await TripLifecycleService.alterarStatusViagem(tripId, status);
     } catch (error) {
       console.error('ERRO STATUS TRIP:', error);
     }
@@ -267,7 +204,7 @@ class DispatchRealtimeService {
 
   async salvarChavePix(freteId: string, chavePix: string) {
     try {
-      await updateDoc(doc(db, 'fretes', freteId), {
+      await firebaseRealtimeService.updateTripRealtime(freteId, {
         chavePixMotorista: chavePix,
         pixEnviadoEm: Date.now()
       });
@@ -279,7 +216,7 @@ class DispatchRealtimeService {
 
   async registrarVisualizacao(freteId: string) {
     try {
-      await updateDoc(doc(db, 'fretes', freteId), {
+      await firebaseRealtimeService.updateTripRealtime(freteId, {
         visualizacoes: increment(1)
       });
     } catch (error) {
@@ -289,7 +226,7 @@ class DispatchRealtimeService {
 
   async registrarInteresse(freteId: string) {
     try {
-      await updateDoc(doc(db, 'fretes', freteId), {
+      await firebaseRealtimeService.updateTripRealtime(freteId, {
         interessados: increment(1)
       });
     } catch (error) {
