@@ -319,8 +319,8 @@ export default function Cliente() {
     return () => unsubscribe();
   }, []);
 
-  // 🔥 CTO FIX: Blindagem Operacional. Falso Geocoding e Mocks foram erradicados. 
-  // O sistema só avança se a API oficial devolver as coordenadas estritas.
+  // 🔥 CTO FIX: Extração Forense de Exceções.
+  // Revela o erro real da nuvem (code, message, details) mantendo a lógica de fluxo 100% intacta.
   const getValidCoords = async (addressStr: string): Promise<Coords> => {
     if (coordsCache.current[addressStr]) return coordsCache.current[addressStr];
     
@@ -331,8 +331,15 @@ export default function Cliente() {
         return coords; 
       }
       throw new Error('A API retornou coordenadas vazias.');
-    } catch (error) {
-      throw new Error(`Endereço não localizado pelo servidor: ${addressStr}`);
+    } catch (error: any) {
+      const errorCode = error?.code || 'NO_CODE';
+      const errorMessage = error?.message || 'Falha de comunicação ou timeout';
+      const errorDetails = error?.details ? JSON.stringify(error.details) : 'Sem detalhes adicionais';
+      
+      console.error(`[DIAGNÓSTICO FORENSE] Erro interceptado em getValidCoords:`, error);
+      if (error?.stack) console.error(`[STACK TRACE]`, error.stack);
+
+      throw new Error(`[${errorCode}] ${errorMessage} | Info: ${errorDetails} (Original: Endereço não localizado pelo servidor: ${addressStr})`);
     }
   };
 
