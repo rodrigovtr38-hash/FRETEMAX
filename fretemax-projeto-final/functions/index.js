@@ -92,21 +92,21 @@ exports.getCoords = functions.runWith(runtimeOpts).https.onCall(async (data, con
     if (res.data.status !== 'OK' || !res.data.results?.[0]) {
       // 🔥 Extração Forense: Salva a resposta original do Google para o Frontend
       const googleStatus = res.data.status || 'STATUS_DESCONHECIDO';
-      const googleErrorMsg = res.data.error_message || 'Nenhuma mensagem de erro enviada pelo Google';
-      throw new functions.https.HttpsError('failed-precondition', `Google API Recused: [${googleStatus}] | Msg: ${googleErrorMsg}`);
+      const googleErrorMsg = res.data.error_message || 'Nenhuma mensagem detalhada do Google';
+      throw new functions.https.HttpsError('failed-precondition', `Google API Recusou: [${googleStatus}] | Detalhe: ${googleErrorMsg}`);
     }
     
     const { lat, lng } = res.data.results[0].geometry.location;
     return { lat, lng };
   } catch (error) {
-    // Preserva HttpsError já tratado
+    // Se o erro já for um HttpsError (lançado pelo if acima), repassa ele intacto
     if (error instanceof functions.https.HttpsError) {
       throw error;
     }
-    // Captura AxiosError (Cai aqui se o Google devolver HTTP 403, 400, etc)
-    const netStatus = error.response?.status || 'NO_NET_STATUS';
+    // Se for falha de rede do Axios (HTTP 403, 400, etc), extrai os dados reais
+    const netStatus = error.response?.status || 'SEM_STATUS_HTTP';
     const netData = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-    throw new functions.https.HttpsError('internal', `Falha de Rede Axios [${netStatus}]: ${netData}`);
+    throw new functions.https.HttpsError('internal', `Falha de Conexão Axios [${netStatus}]: ${netData}`);
   }
 });
 
@@ -129,8 +129,8 @@ exports.getDistance = functions.runWith(runtimeOpts).https.onCall(async (data, c
     
     if (res.data.status !== 'OK' || !res.data.rows[0]?.elements[0]) {
       const googleStatus = res.data.status || 'STATUS_DESCONHECIDO';
-      const googleErrorMsg = res.data.error_message || 'Nenhuma mensagem de erro enviada pelo Google';
-      throw new functions.https.HttpsError('failed-precondition', `Google Distance API Recused: [${googleStatus}] | Msg: ${googleErrorMsg}`);
+      const googleErrorMsg = res.data.error_message || 'Nenhuma mensagem detalhada do Google';
+      throw new functions.https.HttpsError('failed-precondition', `Google Distance API Recusou: [${googleStatus}] | Detalhe: ${googleErrorMsg}`);
     }
 
     const element = res.data.rows[0].elements[0];
@@ -147,9 +147,9 @@ exports.getDistance = functions.runWith(runtimeOpts).https.onCall(async (data, c
     if (error instanceof functions.https.HttpsError) {
       throw error;
     }
-    const netStatus = error.response?.status || 'NO_NET_STATUS';
+    const netStatus = error.response?.status || 'SEM_STATUS_HTTP';
     const netData = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-    throw new functions.https.HttpsError('internal', `Falha de Rede Axios Distance Matrix [${netStatus}]: ${netData}`);
+    throw new functions.https.HttpsError('internal', `Falha de Conexão Axios Matrix [${netStatus}]: ${netData}`);
   }
 });
 
