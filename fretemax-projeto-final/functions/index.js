@@ -7,6 +7,7 @@
 // 3. Centralização das Coleções Oficiais.
 // 4. 🔥 CTO FIX: Injeção da Cloud Function "getDistance" (Google Distance Matrix API).
 // 5. 🔥 CTO FIX: Injeção direta da Chave de API para deploy automático via GitHub.
+// 6. 🔥 CTO FIX: Auditoria Forense. Preservação do status real e error_message do Google na rejeição (REQUEST_DENIED, etc).
 // =========================================================
 
 const functions = require('firebase-functions');
@@ -85,12 +86,28 @@ exports.getCoords = functions.runWith(runtimeOpts).https.onCall(async (data, con
   const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY || "AIzaSyBTaI1NWrb_NGmOEjT_qiwOo_JYZC3f1aY";
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${key}`;
 
-  const res = await axios.get(url, { timeout: 5000 });
-  if (res.data.status !== 'OK' || !res.data.results?.[0]) {
-    throw new functions.https.HttpsError('not-found', 'Endereço não encontrado pelo Google.');
+  try {
+    const res = await axios.get(url, { timeout: 5000 });
+    
+    if (res.data.status !== 'OK' || !res.data.results?.[0]) {
+      // 🔥 Extração Forense: Salva a resposta original do Google para o Frontend
+      const googleStatus = res.data.status || 'STATUS_DESCONHECIDO';
+      const googleErrorMsg = res.data.error_message || 'Nenhuma mensagem de erro enviada pelo Google';
+      throw new functions.https.HttpsError('failed-precondition', `Google API Recused: [${googleStatus}] | Msg: ${googleErrorMsg}`);
+    }
+    
+    const { lat, lng } = res.data.results[0].geometry.location;
+    return { lat, lng };
+  } catch (error) {
+    // Preserva HttpsError já tratado
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    // Captura AxiosError (Cai aqui se o Google devolver HTTP 403, 400, etc)
+    const netStatus = error.response?.status || 'NO_NET_STATUS';
+    const netData = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+    throw new functions.https.HttpsError('internal', `Falha de Rede Axios [${netStatus}]: ${netData}`);
   }
-  const { lat, lng } = res.data.results[0].geometry.location;
-  return { lat, lng };
 });
 
 // ========================================================
@@ -111,13 +128,15 @@ exports.getDistance = functions.runWith(runtimeOpts).https.onCall(async (data, c
     const res = await axios.get(url, { timeout: 5000 });
     
     if (res.data.status !== 'OK' || !res.data.rows[0]?.elements[0]) {
-      throw new functions.https.HttpsError('not-found', 'Rota não encontrada pelo Google.');
+      const googleStatus = res.data.status || 'STATUS_DESCONHECIDO';
+      const googleErrorMsg = res.data.error_message || 'Nenhuma mensagem de erro enviada pelo Google';
+      throw new functions.https.HttpsError('failed-precondition', `Google Distance API Recused: [${googleStatus}] | Msg: ${googleErrorMsg}`);
     }
 
     const element = res.data.rows[0].elements[0];
     
     if (element.status !== 'OK') {
-       throw new functions.https.HttpsError('not-found', 'Rota impossível entre os pontos informados.');
+       throw new functions.https.HttpsError('failed-precondition', `Rota impossível. Element Status: [${element.status}]`);
     }
 
     // Google retorna em metros. Dividimos por 1000 para a plataforma usar KM exatos (Ex: 500m = 0.5km).
@@ -125,8 +144,12 @@ exports.getDistance = functions.runWith(runtimeOpts).https.onCall(async (data, c
     return distanceInMeters / 1000;
 
   } catch (error) {
-    console.error("[DISTANCE MATRIX ERRO]:", error.message);
-    throw new functions.https.HttpsError('internal', 'Erro ao calcular rota oficial.');
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    const netStatus = error.response?.status || 'NO_NET_STATUS';
+    const netData = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+    throw new functions.https.HttpsError('internal', `Falha de Rede Axios Distance Matrix [${netStatus}]: ${netData}`);
   }
 });
 
