@@ -1,0 +1,30 @@
+name: Deploy Cloud Functions
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'fretemax-projeto-final/functions/**'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+        working-directory: ./fretemax-projeto-final/functions
+
+      - name: Deploy to Firebase
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only functions
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: fretemax-4b257
+          PROJECT_PATH: ./fretemax-projeto-final
