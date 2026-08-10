@@ -1,7 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/state/tripStateMachine.ts
 // CTO-Log: Auditoria Final - Bloco 3
-// Ajuste: Injeção de Transições para 'DISPONIVEL' nas fases de coleta, validando o retorno urgente ao Radar em caso de recusa no local.
+// Ajuste: Injeção de Transições para 'DISPONIVEL' nas fases de coleta.
+// Correção Crítica: Autorizada transição direta de EM_TRANSPORTE para ENTREGUE (Bypass de PIN final).
 // =========================================================
 
 export enum AppTripState {
@@ -71,13 +72,13 @@ export const VALID_TRANSITIONS: Record<string, string[]> = {
   
   [AppTripState.EXPIRADO]: [AppTripState.CANCELADO, AppTripState.DISPONIVEL],
 
-  // 🔥 CTO FIX: Liberação de retorno ao status 'DISPONIVEL' (Feed) nas etapas de coleta caso haja problema no local.
   [AppTripState.ACEITO]: [AppTripState.INDO_COLETA, AppTripState.CANCELADO_MOTORISTA, AppTripState.CANCELADO_CLIENTE, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   [AppTripState.INDO_COLETA]: [AppTripState.CHEGOU_COLETA, AppTripState.CANCELADO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   [AppTripState.CHEGOU_COLETA]: [AppTripState.COLETANDO, AppTripState.CANCELADO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   [AppTripState.COLETANDO]: [AppTripState.EM_TRANSPORTE, AppTripState.CANCELADO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   
-  [AppTripState.EM_TRANSPORTE]: [AppTripState.PARADO_OPERACIONAL, AppTripState.FINALIZANDO, AppTripState.ERRO, AppTripState.REDISPATCH],
+  // 🔥 CTO FIX: Acesso direto ao ENTREGUE autorizado para evitar congelamento de tela.
+  [AppTripState.EM_TRANSPORTE]: [AppTripState.PARADO_OPERACIONAL, AppTripState.FINALIZANDO, AppTripState.ENTREGUE, AppTripState.ERRO, AppTripState.REDISPATCH],
   [AppTripState.PARADO_OPERACIONAL]: [AppTripState.EM_TRANSPORTE, AppTripState.ERRO],
   
   [AppTripState.FINALIZANDO]: [AppTripState.VALIDANDO_COMPROVANTE, AppTripState.ENTREGUE, AppTripState.ERRO],
