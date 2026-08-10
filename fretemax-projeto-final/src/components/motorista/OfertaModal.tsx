@@ -1,10 +1,10 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/OfertaModal.tsx
 // CTO-Log: Pop-up de Despacho Rápido.
-// Status: Cálculo de KM fixado. Progress Bar perfeitamente sincronizada com o Backend.
+// Status: Importação de ícones corrigida (Scale). Informações vitais preservadas.
 // =========================================================
 
-import { Clock, Zap, Package, MapPin, Truck, Layers } from 'lucide-react';
+import { Clock, Zap, Package, MapPin, Truck, Layers, Scale } from 'lucide-react';
 
 interface OrderData {
   id?: string;
@@ -89,7 +89,7 @@ export default function OfertaModal({
 
           <div className="mb-6 grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 flex flex-col items-center justify-center text-center">
-              <Package className="w-5 h-5 text-amber-400 mb-2" />
+              <Scale className="w-5 h-5 text-amber-400 mb-2" />
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Peso</p>
               <p className="text-sm font-bold text-white">{ofertaFrete.pesoKg || '---'} kg</p>
             </div>
