@@ -7,7 +7,7 @@
 // 3. Centralização das Coleções Oficiais.
 // 4. 🔥 CTO FIX: Injeção da Cloud Function "getDistance" (Google Distance Matrix API).
 // 5. 🔥 CTO FIX: Injeção direta da Chave de API para deploy automático via GitHub.
-// 6. 🔥 CTO FIX: Auditoria Forense. Preservação do status real e error_message do Google na rejeição (REQUEST_DENIED, etc).
+// 6. 🔥 CTO FIX: Auditoria Forense. Preservação do status real, error_message e payload completo do Google.
 // =========================================================
 
 const functions = require('firebase-functions');
@@ -90,10 +90,15 @@ exports.getCoords = functions.runWith(runtimeOpts).https.onCall(async (data, con
     const res = await axios.get(url, { timeout: 5000 });
     
     if (res.data.status !== 'OK' || !res.data.results?.[0]) {
-      // 🔥 Extração Forense: Salva a resposta original do Google para o Frontend
+      // 🔥 Extração Forense Absoluta: Extrai Status, Mensagem e Payload do Google
       const googleStatus = res.data.status || 'STATUS_DESCONHECIDO';
-      const googleErrorMsg = res.data.error_message || 'Nenhuma mensagem detalhada do Google';
-      throw new functions.https.HttpsError('failed-precondition', `Google API Recusou: [${googleStatus}] | Detalhe: ${googleErrorMsg}`);
+      const googleErrorMsg = res.data.error_message ? ` | Mensagem: ${res.data.error_message}` : '';
+      const payloadString = JSON.stringify(res.data);
+      
+      throw new functions.https.HttpsError(
+        'not-found', 
+        `Google Status: ${googleStatus}${googleErrorMsg} | Payload Completo: ${payloadString}`
+      );
     }
     
     const { lat, lng } = res.data.results[0].geometry.location;
