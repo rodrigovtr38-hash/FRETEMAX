@@ -322,10 +322,20 @@ export default function Cliente() {
   // 🔥 CTO FIX: Extração Forense de Exceções.
   // Revela o erro real da nuvem (code, message, details) mantendo a lógica de fluxo 100% intacta.
   const getValidCoords = async (addressStr: string): Promise<Coords> => {
-    if (coordsCache.current[addressStr]) return coordsCache.current[addressStr];
+    // 🔎 DIAGNOSTIC-LOG (1): endereço que está prestes a ser enviado para a Cloud Function
+    console.log('[CLIENTE][GETVALIDCOORDS][1-ENDERECO-A-ENVIAR]', addressStr);
+
+    if (coordsCache.current[addressStr]) {
+      console.log('[CLIENTE][GETVALIDCOORDS][CACHE-HIT]', addressStr, coordsCache.current[addressStr]);
+      return coordsCache.current[addressStr];
+    }
     
     try {
       const coords = await callWithRetryAndTimeout<Coords>('getCoords', { address: addressStr });
+
+      // 🔎 DIAGNOSTIC-LOG: payload bruto retornado pela Cloud Function em caso de sucesso
+      console.log('[CLIENTE][GETVALIDCOORDS][RESPOSTA-CLOUD-FUNCTION]', JSON.stringify(coords));
+
       if (coords && typeof coords.lat === 'number') { 
         coordsCache.current[addressStr] = coords; 
         return coords; 
@@ -336,7 +346,15 @@ export default function Cliente() {
       const errorMessage = error?.message || 'Falha de comunicação ou timeout';
       const errorDetails = error?.details ? JSON.stringify(error.details) : 'Sem detalhes adicionais';
       
+      // 🔎 DIAGNOSTIC-LOG (6): qual throw está prestes a ser executado, com todos os campos brutos do erro
+      console.error('[CLIENTE][GETVALIDCOORDS][6-THROW-EXECUTADO] repasse de erro de getCoords/rede', JSON.stringify({
+        addressStr,
+        errorCode,
+        errorMessage,
+        errorDetails,
+      }));
       console.error(`[DIAGNÓSTICO FORENSE] Erro interceptado em getValidCoords:`, error);
+      // 🔎 DIAGNOSTIC-LOG (7): stack completo do erro original (antes de ser reembrulhado)
       if (error?.stack) console.error(`[STACK TRACE]`, error.stack);
 
       throw new Error(`[${errorCode}] ${errorMessage} | Info: ${errorDetails} (Original: Endereço não localizado pelo servidor: ${addressStr})`);
