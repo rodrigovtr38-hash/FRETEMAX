@@ -2,10 +2,11 @@
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
 // CTO-Log: FASE 3 - Auditoria de Integração.
 // Status: "Vírus dos 15km" visual erradicado. Conversor Inteligente de Metros injetado.
+// Correção: Ícone 'Scale' adicionado na importação para evitar crash visual no Feed.
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertOctagon, CheckCircle2, Flame, Package, Zap, ShieldCheck, Ruler, ThumbsUp, Star, Share2 } from 'lucide-react';
+import { AlertOctagon, CheckCircle2, Flame, Package, Zap, ShieldCheck, Ruler, ThumbsUp, Star, Share2, Scale } from 'lucide-react';
 import { dispatchRealtimeService } from '../../../services/dispatchRealtimeService';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
@@ -193,7 +194,7 @@ export default function AvailableFreights({
 
                 <div className="grid grid-cols-3 gap-3 mb-6">
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center shadow-inner">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Renda Bruta</p>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-center gap-1"><Ruler size={10}/> Renda Bruta</p>
                     <p className="text-xs font-black text-emerald-400">R$ {ganhoPorKm.toFixed(2)}/km</p>
                   </div>
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
@@ -203,9 +204,9 @@ export default function AvailableFreights({
                     <p className="text-xs font-black text-white mt-1">{formatDistance(km)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
-                    <Package size={14} className="text-slate-400 mb-1" />
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Volumes</p>
-                    <p className="text-xs font-black text-white mt-1">{freight.volumes || 1} un</p>
+                    <Scale size={14} className="text-slate-400 mb-1" />
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Peso/Vol</p>
+                    <p className="text-xs font-bold text-slate-300">{freight.pesoKg ? `${freight.pesoKg}kg` : freight.volumes}</p>
                   </div>
                 </div>
 
