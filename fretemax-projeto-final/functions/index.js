@@ -103,7 +103,7 @@ exports.getCoords = functions.runWith(runtimeOpts).https.onCall(async (data, con
   }
   
   // 🔥 CTO FIX: Chave injetada diretamente para deploy via GitHub
-  const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY || "AIzaSyBTaI1NWrb_NGmOEjT_qiwOo_JYZC3f1aY";
+  const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY || "AIzaSyBgpikEz9ajVui9Rf4rQsm7iuykFA3HhGI";
  
   // 🔎 DIAGNOSTIC-LOG (2): qual chave está sendo usada (mascarada) e de qual fonte veio
   console.log('[GETCOORDS][2-CHAVE-GOOGLE]', JSON.stringify({
@@ -187,7 +187,7 @@ exports.getDistance = functions.runWith(runtimeOpts).https.onCall(async (data, c
   }
  
   // 🔥 CTO FIX: Chave injetada diretamente para deploy via GitHub
-  const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY || "AIzaSyBTaI1NWrb_NGmOEjT_qiwOo_JYZC3f1aY";
+  const key = functions.config().google?.maps_key || process.env.GOOGLE_MAPS_KEY || "AIzaSyBgpikEz9ajVui9Rf4rQsm7iuykFA3HhGI";
  
   // 🔎 DIAGNOSTIC-LOG (2): chave usada (mascarada) e origem
   console.log('[GETDISTANCE][2-CHAVE-GOOGLE]', JSON.stringify({
