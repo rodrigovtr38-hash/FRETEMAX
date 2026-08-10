@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'fretemax-projeto-final/functions/**'
 jobs:
   deploy:
     runs-on: ubuntu-latest
