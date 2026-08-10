@@ -2,9 +2,10 @@
 // NOME DO ARQUIVO: src/components/driver/dashboard/FreightRequestModal.tsx
 // CTO-Log: FASE 3 - Auditoria de Integração.
 // Status: Conversão de distâncias < 1km para metros no Modal.
+// Correção Crítica: Ícone Scale importado. Erro de renderização resolvido.
 // =========================================================
 
-import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info } from 'lucide-react';
+import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info, Scale } from 'lucide-react';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
 interface FreightRequestModalProps {
