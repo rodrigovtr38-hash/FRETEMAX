@@ -2,11 +2,11 @@
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
 // CTO-Log: FASE 4 - Reconstrução Controlada (Etapa 3).
 // Status: Escritas diretas (Batch/UpdateDoc) e concorrências erradicadas.
-// Delegação total do estado operacional da viagem para o TripLifecycleService.
-// Este serviço agora atua exclusivamente como comunicador e roteador de eventos de tempo real.
+// Correção: Fluxo de descompressão do Motorista ao acionar status ENTREGUE.
 // =========================================================
 
 import { increment } from 'firebase/firestore';
+import { auth } from '../firebase';
 import { firebaseRealtimeService } from './firebaseRealtimeService';
 import { locationRealtimeService } from './locationRealtimeService';
 import { DriverState } from '../state/driverStateMachine';
@@ -196,9 +196,16 @@ class DispatchRealtimeService {
 
   async atualizarStatusTrip(tripId: string, status: AppTripState) {
     try {
+      // 🔥 CTO FIX: Se for a etapa de ENTREGUE, libera o motorista da corrida para não congelar no Front
+      if (status === AppTripState.ENTREGUE && auth.currentUser?.uid) {
+        await this.concluirViagemELiberarMotorista(auth.currentUser.uid, tripId);
+        return;
+      }
+      
       await TripLifecycleService.alterarStatusViagem(tripId, status);
     } catch (error) {
       console.error('ERRO STATUS TRIP:', error);
+      throw error; // Lança o erro para a tela parar de girar e avisar o usuário
     }
   }
 
