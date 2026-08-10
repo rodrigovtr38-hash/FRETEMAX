@@ -1,14 +1,14 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
 // CTO-Log: Auditoria Final - Bloco 3
-// Status: Restauração dos botões de Navegação Externa (Waze/Maps).
+// Status: Navegação Dinâmica Externa (Waze/Maps) por Fase + Dados de Carga na tela.
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from '../firebase'; 
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
-import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation } from 'lucide-react';
+import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Package } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import { AppTripState } from '../state/tripStateMachine';
@@ -26,6 +26,9 @@ interface ActiveFreightData extends DocumentData {
   enderecoColetaTexto?: string;
   pinColeta?: string;
   pinEntregas?: string[];
+  peso?: string;
+  qtdVolumes?: string;
+  tipoMaterial?: string;
 }
 
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
@@ -44,7 +47,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       } else {
         setFrete(null);
       }
-      setLoading(false);
+      loading && setLoading(false);
     });
     return () => unsubscribe();
   }, [freteId]);
@@ -67,6 +70,12 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const mapDestinoGPS = destinoAtual?.lat ? { lat: destinoAtual.lat, lng: destinoAtual.lng } : null;
 
   const isFaseColeta = [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO].includes(frete.status);
+  
+  // 🔥 CTO FIX: Navegação Dinâmica. Se for coleta, Waze aponta pra Origem. Se não, aponta pro Destino.
+  const navDestinoGPS = isFaseColeta && frete.origemLat && frete.origemLng 
+    ? { lat: frete.origemLat, lng: frete.origemLng } 
+    : mapDestinoGPS;
+
   const enderecoAlvoTexto = isFaseColeta 
     ? frete.enderecoColetaTexto 
     : (destinoAtual?.enderecoTexto || destinoAtual?.rua ? `${destinoAtual.rua}, ${destinoAtual.num} - ${destinoAtual.bairro}` : 'Destino da rota');
@@ -143,21 +152,35 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           </h2>
         </div>
 
+        {/* DADOS DA CARGA */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-slate-800/50 rounded-2xl p-3 flex flex-col items-center justify-center border border-slate-700/50 text-center">
+               <Scale size={16} className="text-amber-400 mb-1" />
+               <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">Peso Estimado</p>
+               <p className="text-sm font-bold text-white">{frete.peso || 'N/A'}</p>
+            </div>
+            <div className="bg-slate-800/50 rounded-2xl p-3 flex flex-col items-center justify-center border border-slate-700/50 text-center">
+               <Package size={16} className="text-blue-400 mb-1" />
+               <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">Qtd / Tipo</p>
+               <p className="text-sm font-bold text-white truncate max-w-full px-2">{frete.qtdVolumes || '1'}x {frete.tipoMaterial || 'Vol'}</p>
+            </div>
+        </div>
+
         <div className="h-[250px] w-full mb-4 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 relative shadow-[0_0_20px_rgba(6,182,212,0.1)]">
           <MapaCliente origem={mapOriginGPS} destino={mapDestinoGPS} operationalMessage="Navegando..." />
         </div>
 
-        {/* 🔥 CTO FIX: Restauração dos Botões de Navegação GPS Externos */}
-        {mapDestinoGPS && (
+        {/* 🔥 CTO FIX: Botões de Navegação GPS Externos Dinâmicos */}
+        {navDestinoGPS && (
           <div className="grid grid-cols-2 gap-3 mb-6">
             <button 
-              onClick={() => window.open(`https://waze.com/ul?ll=${mapDestinoGPS.lat},${mapDestinoGPS.lng}&navigate=yes`, '_blank')}
+              onClick={() => window.open(`https://waze.com/ul?ll=${navDestinoGPS.lat},${navDestinoGPS.lng}&navigate=yes`, '_blank')}
               className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors"
             >
               <Navigation size={14} className="text-cyan-400" /> Abrir no Waze
             </button>
             <button 
-              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${mapDestinoGPS.lat},${mapDestinoGPS.lng}`, '_blank')}
+              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${navDestinoGPS.lat},${navDestinoGPS.lng}`, '_blank')}
               className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors"
             >
               <MapPin size={14} className="text-emerald-400" /> Google Maps
