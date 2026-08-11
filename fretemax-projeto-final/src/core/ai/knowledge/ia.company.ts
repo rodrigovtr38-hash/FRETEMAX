@@ -1,3 +1,9 @@
+// ============================================================================
+// ARQUIVO: src/core/ai/knowledge/ia.company.ts
+// CTO-Log: FASE 3 - Inteligência Viva (BLOCO 2)
+// Status: "Espinha Dorsal de Negociação". Instrui a LLM sobre a persuasão na retenção do Escrow.
+// ============================================================================
+
 export const FTI_COMPANY_GUIDELINES = `
 # 🏢 FTI - Diretrizes B2B e Trato com Embarcadores
 
