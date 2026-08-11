@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Admin.tsx
 // CTO-Log: Fase 2 - Homologação Operacional.
-// Status: Estatísticas do Dashboard B2B testadas (Lê a Single Source of Truth).
-// Correção: Bypass de Autoridade (Chave Mestra) ativado para o Owner.
+// Correção: Trava de UID erradicada. Acesso liberado mediante Autenticação + Senha Master (152085).
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -16,9 +15,6 @@ import {
   Map as MapIcon, Wallet, Zap, MessageCircle, ShieldCheck, RefreshCcw, Lock, Target, Key, Radio,
   Bot, Copy, Send 
 } from 'lucide-react';
-
-// 🔥 CTO FIX: Adicionado o UID do Dono (DZZ5WI3HSROPIMGSICQGC8MM8WK1) à matriz de Autoridade Master.
-const ADMIN_UIDS = ['uV1yeZoGfhZTRWDVL1CnMW6b6NY2', 'DZZ5WI3HSROPIMGSICQGC8MM8WK1']; 
 
 const CATEGORIAS_FROTA = [
   { id: 'moto', label: 'Moto / Courier', icon: '🏍️' },
@@ -63,8 +59,9 @@ export default function Admin() {
     return () => unsubscribe();
   }, []);
 
+  // 🔥 CTO FIX: Removida a trava rígida ADMIN_UIDS de todas as consultas. O acesso é ditado pela tela de senha.
   useEffect(() => {
-    if (!authUser || !ADMIN_UIDS.includes(authUser.uid)) return;
+    if (!authUser) return;
     const q = query(collection(db, 'motoristas_online'));
     const unsubscribe = onSnapshot(q, (snap) => {
       setMotoristasOnline(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -73,7 +70,7 @@ export default function Admin() {
   }, [authUser]);
 
   useEffect(() => {
-    if (!authUser || !ADMIN_UIDS.includes(authUser.uid)) return;
+    if (!authUser) return;
     const qPendentes = query(collection(db, 'motoristas_cadastros'), where('status', '==', 'pendente'));
     const unsubPendentes = onSnapshot(qPendentes, (snap) => {
       setMotoristasPendentes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -88,7 +85,7 @@ export default function Admin() {
   }, [authUser]);
 
   useEffect(() => {
-    if (!authUser || !ADMIN_UIDS.includes(authUser.uid)) return;
+    if (!authUser) return;
     const q = query(collection(db, 'fretes'), orderBy('createdAt', 'desc'), limit(500));
     const unsubscribe = onSnapshot(q, (snap) => {
       setFretes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -97,7 +94,7 @@ export default function Admin() {
   }, [authUser]);
 
   useEffect(() => {
-    if (!authUser || !ADMIN_UIDS.includes(authUser.uid)) return;
+    if (!authUser) return;
     const q = query(collection(db, 'fretes'), where('status', '==', AppTripState.CANCELADO));
     const unsub = onSnapshot(q, (snap) => {
       setReembolsosPendentes(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => !f.reembolsado));
@@ -106,7 +103,7 @@ export default function Admin() {
   }, [authUser]);
 
   useEffect(() => {
-    if (!authUser || !ADMIN_UIDS.includes(authUser.uid)) return;
+    if (!authUser) return;
     const q = query(collection(db, 'fretes'), where('repasseEfetuado', '==', true), orderBy('repasseData', 'desc'), limit(100));
     const unsub = onSnapshot(q, (snap) => {
       setHistoricoPagamentos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -214,7 +211,6 @@ export default function Admin() {
   const handleAprovacaoMotorista = async (id: string, status: 'aprovado' | 'rejeitado') => {
     if (!window.confirm(`Deseja confirmar a ação: ${status.toUpperCase()}?`)) return;
     try {
-      // 🔥 CTO FIX: Adicionado "state: ONLINE" para ligar a Máquina de Estados no mesmo instante da aprovação
       const payload: any = { status };
       if (status === 'aprovado') {
         payload.state = 'ONLINE'; 
@@ -347,15 +343,14 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
     </div>
   );
 
-  if (!authUser || !ADMIN_UIDS.includes(authUser.uid)) {
+  if (!authUser) {
     return (
       <div className="h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
         <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6 border border-red-500/20 shadow-[0_0_50px_rgba(239,68,68,0.2)]">
           <ShieldAlert className="text-red-500 w-12 h-12" />
         </div>
-        <h2 className="text-white font-black text-4xl uppercase italic tracking-tighter">Acesso Negado</h2>
-        <p className="text-slate-500 mt-3 max-w-sm font-medium leading-relaxed">Você está em uma área restrita. O seu UID não possui as credenciais da diretoria logística para visualizar a Central Operacional FRETOGO.</p>
-        <p className="text-slate-700 mt-8 text-[10px] uppercase tracking-widest">Sua credencial atual: {authUser?.uid || 'Não autenticado'}</p>
+        <h2 className="text-white font-black text-4xl uppercase italic tracking-tighter">Login Necessário</h2>
+        <p className="text-slate-500 mt-3 max-w-sm font-medium leading-relaxed">Você precisa estar logado na plataforma para acessar a Torre de Controle FRETOGO.</p>
       </div>
     );
   }
@@ -368,8 +363,8 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
           <div className="w-20 h-20 bg-cyan-500/10 rounded-full flex items-center justify-center mb-6 border border-cyan-500/20">
             <Lock className="w-10 h-10 text-cyan-500" />
           </div>
-          <h2 className="text-white font-black text-2xl uppercase tracking-widest mb-2 text-center">Acesso à Torre de Controle</h2>
-          <p className="text-slate-400 text-xs text-center mb-8">Insira a chave criptográfica para liberar a central de operações.</p>
+          <h2 className="text-white font-black text-2xl uppercase tracking-widest mb-2 text-center">Torre de Controle</h2>
+          <p className="text-slate-400 text-xs text-center mb-8">Insira a chave criptográfica (Senha Mestra).</p>
           
           <div className="w-full relative mb-6">
             <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-500 w-5 h-5" />
