@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/pages/Admin.tsx
 // CTO-Log: Fase 2 - Homologação Operacional.
 // Status: Estatísticas do Dashboard B2B testadas (Lê a Single Source of Truth).
+// Correção: Bypass de Autoridade (Chave Mestra) ativado para o Owner.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -16,7 +17,8 @@ import {
   Bot, Copy, Send 
 } from 'lucide-react';
 
-const ADMIN_UIDS = ['uV1yeZoGfhZTRWDVL1CnMW6b6NY2']; 
+// 🔥 CTO FIX: Adicionado o UID do Dono (DZZ5WI3HSROPIMGSICQGC8MM8WK1) à matriz de Autoridade Master.
+const ADMIN_UIDS = ['uV1yeZoGfhZTRWDVL1CnMW6b6NY2', 'DZZ5WI3HSROPIMGSICQGC8MM8WK1']; 
 
 const CATEGORIAS_FROTA = [
   { id: 'moto', label: 'Moto / Courier', icon: '🏍️' },
