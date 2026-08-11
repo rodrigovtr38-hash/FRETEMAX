@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/eventBusService.ts
 // CTO-Log: Barramento de Eventos e Gatilhos Globais (Fase 3).
-// Status: Totalmente Rastreável.
+// Status: "Mensageiro Central" (Hub). Conectado à Diretoria Operacional (FTI).
 // =========================================================
 
 type EventCallback<T = any> = (payload: T) => void;
@@ -13,9 +13,7 @@ class EventBusService {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
-
     this.listeners.get(event)?.add(callback);
-
     return () => {
       this.off(event, callback);
     };
@@ -26,17 +24,13 @@ class EventBusService {
       callback(payload);
       unsubscribe();
     });
-
     return unsubscribe;
   }
 
   off<T = any>(event: string, callback: EventCallback<T>) {
     const listeners = this.listeners.get(event);
-
     if (!listeners) return;
-
     listeners.delete(callback);
-
     if (listeners.size === 0) {
       this.listeners.delete(event);
     }
@@ -44,9 +38,13 @@ class EventBusService {
 
   emit<T = any>(event: string, payload?: T) {
     const listeners = this.listeners.get(event);
+    
+    // Log silencioso para a FTI rastrear o pulso de vida da plataforma
+    if (event !== 'STATE_SYNCED') { 
+      // console.debug(`[Hub de Eventos] ${event} disparado.`);
+    }
 
     if (!listeners) return;
-
     listeners.forEach(listener => {
       try {
         listener(payload);
@@ -61,7 +59,6 @@ class EventBusService {
       this.listeners.delete(event);
       return;
     }
-
     this.listeners.clear();
   }
 
