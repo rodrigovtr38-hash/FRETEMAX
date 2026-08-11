@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Admin.tsx
-// CTO-Log: Fase 2 - Homologação Operacional.
-// Correção: Trava de UID erradicada. Acesso liberado mediante Autenticação + Senha Master (152085).
+// CTO-Log: Fase 3 - Conclusão do Bloco 3 (Arquitetura FTI).
+// Correção: Painel de Métricas Neurais e "Vassoura de Lixo Digital" injetados no Dashboard.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -13,8 +13,12 @@ import {
   Loader2, CheckCircle, XCircle, Search, ShieldAlert, Truck, Users, 
   Calendar, DollarSign, Activity, Clock, AlertTriangle, Eye, 
   Map as MapIcon, Wallet, Zap, MessageCircle, ShieldCheck, RefreshCcw, Lock, Target, Key, Radio,
-  Bot, Copy, Send 
+  Bot, Copy, Send, Trash2, BrainCircuit // 🔥 CTO FIX: Novos ícones da IA adicionados
 } from 'lucide-react';
+
+// 🔥 CTO FIX: Importando os módulos do Cérebro FTI (Contador e Lixeiro)
+import { ftiMemory } from '../core/ai/memory/ia.memory';
+import { ftiAnalytics } from '../core/ai/analytics/ia.metrics';
 
 const CATEGORIAS_FROTA = [
   { id: 'moto', label: 'Moto / Courier', icon: '🏍️' },
@@ -51,6 +55,10 @@ export default function Admin() {
   const [conciergePrompt, setConciergePrompt] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // 🔥 Estados do Painel FTI
+  const [ftiSummary, setFtiSummary] = useState<any>(null);
+  const [isCleaning, setIsCleaning] = useState(false);
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(u => {
       setAuthUser(u);
@@ -59,7 +67,6 @@ export default function Admin() {
     return () => unsubscribe();
   }, []);
 
-  // 🔥 CTO FIX: Removida a trava rígida ADMIN_UIDS de todas as consultas. O acesso é ditado pela tela de senha.
   useEffect(() => {
     if (!authUser) return;
     const q = query(collection(db, 'motoristas_online'));
@@ -110,6 +117,13 @@ export default function Admin() {
     });
     return () => unsub();
   }, [authUser]);
+
+  // 🔥 CTO FIX: Efeito para carregar as Métricas da IA apenas quando acessar o Dashboard
+  useEffect(() => {
+    if (tab === 'dashboard' && authUser) {
+      ftiAnalytics.obterResumoAdmin().then(data => setFtiSummary(data));
+    }
+  }, [tab, authUser]);
 
   const filterByTime = (frete: any, filterType: string) => {
     if (filterType === 'todos') return true;
@@ -336,6 +350,20 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // 🔥 CTO FIX: Ação da Vassoura Automática
+  const handleFaxinaDB = async () => {
+    if (!window.confirm("ATENÇÃO: A FTI vai varrer o banco e apagar fretes finalizados/cancelados há mais de 30 dias para otimizar os custos. Deseja prosseguir?")) return;
+    setIsCleaning(true);
+    try {
+      const res = await ftiMemory.executarFaxinaBancoDeDados(30);
+      alert(`🧹 Faxina concluída! ${res.deletados} registros obsoletos foram pulverizados.`);
+    } catch (error) {
+      alert("Falha na rotina de limpeza. Tente novamente mais tarde.");
+    } finally {
+      setIsCleaning(false);
+    }
+  };
+
   if (loading) return (
     <div className="h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
       <Loader2 className="animate-spin text-cyan-500 w-12 h-12" />
@@ -437,6 +465,7 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
 
       <main className="max-w-7xl mx-auto p-4 md:p-8">
         
+        {/* CONCIERGE TAB */}
         {tab === 'concierge' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
              <div className="mb-8">
@@ -502,6 +531,7 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
           </div>
         )}
 
+        {/* DASHBOARD TAB */}
         {tab === 'dashboard' && (
           <div className="flex justify-end mb-6 animate-in fade-in">
              <div className="bg-slate-900/50 border border-white/5 rounded-xl p-1 flex gap-1 backdrop-blur-sm">
@@ -527,6 +557,7 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
         {tab === 'dashboard' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             
+            {/* ALERTAS 24H */}
             {stats.alertas24h > 0 && (
               <div className="mb-6 bg-amber-950/60 border-amber-500/50 rounded-2xl p-4 flex items-center justify-between animate-pulse">
                 <div className="flex items-center gap-3">
@@ -538,6 +569,48 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
                 </div>
               </div>
             )}
+
+            {/* 🔥 FTI AI PANEL - INJETADO NO DASHBOARD */}
+            <div className="mb-8 bg-slate-900/40 border border-cyan-500/20 rounded-2xl p-6 relative overflow-hidden">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                <h3 className="text-lg font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
+                  <BrainCircuit size={20} /> Inteligência Operacional (FTI)
+                </h3>
+                <button
+                  onClick={handleFaxinaDB}
+                  disabled={isCleaning}
+                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                >
+                  {isCleaning ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+                  Varrer Lixo Digital (30 dias)
+                </button>
+              </div>
+              
+              {ftiSummary ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-slate-950 p-4 rounded-xl border border-white/5">
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Interações Neurais</p>
+                    <p className="text-xl font-bold text-white">{ftiSummary.totalInteracoes}</p>
+                  </div>
+                  <div className="bg-slate-950 p-4 rounded-xl border border-white/5">
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Custo Nuvem (USD)</p>
+                    <p className="text-xl font-bold text-cyan-400">${ftiSummary.custoTotalUsd?.toFixed(4)}</p>
+                  </div>
+                  <div className="bg-slate-950 p-4 rounded-xl border border-white/5">
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Dúvidas Financeiras</p>
+                    <p className="text-xl font-bold text-amber-400">{ftiSummary.intencoes?.FINANCIAL || 0}</p>
+                  </div>
+                  <div className="bg-slate-950 p-4 rounded-xl border border-white/5">
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Buscas de Frete</p>
+                    <p className="text-xl font-bold text-green-400">{ftiSummary.intencoes?.FREIGHT_SEARCH || 0}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                  Carregando dados da Telemetria FTI...
+                </div>
+              )}
+            </div>
 
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
@@ -659,6 +732,7 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
           </div>
         )}
 
+        {/* MOTORISTAS TAB */}
         {tab === 'motoristas' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
@@ -740,6 +814,7 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
           </div>
         )}
 
+        {/* CORRIDAS TAB */}
         {tab === 'corridas' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
              
