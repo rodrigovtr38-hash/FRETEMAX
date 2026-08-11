@@ -1,8 +1,12 @@
 // ============================================================================
-// ARQUIVO: ia.memory.ts
+// ARQUIVO: src/core/ai/memory/ia.memory.ts
 // PASTA: src/core/ai/memory/
-// OBJETIVO: Gerenciador de Contexto e Histórico de Conversas (Memória RAM)
+// CTO-Log: FASE 3 - BLOCO 3 (Faxina de Banco de Dados)
+// Status: Memória RAM otimizada e Garbage Collector (Vassoura) ativado.
 // ============================================================================
+
+import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { db } from '../../../firebase';
 
 export interface MessageRecord {
   role: 'user' | 'model';
@@ -11,20 +15,18 @@ export interface MessageRecord {
 }
 
 /**
- * Classe responsável por manter a coerência da conversa.
- * Otimizada para rodar em memória de forma leve e limpar lixo digital.
+ * Classe responsável por manter a coerência da conversa e limpar lixo digital da plataforma.
  */
 export class FTIMemoryManager {
   private history: Map<string, MessageRecord[]> = new Map();
-  // Limite de segurança: Lembra apenas das últimas 8 mensagens para não estourar o custo (tokens) do Google Gemini.
   private readonly MAX_HISTORY_LENGTH = 8; 
 
-  // Recupera o histórico de um motorista específico
+  // --- 1. GERENCIAMENTO DE MEMÓRIA VOLÁTIL (CHAT E CONTEXTO) ---
+
   public getHistory(userId: string): MessageRecord[] {
     return this.history.get(userId) || [];
   }
 
-  // Adiciona uma nova mensagem à linha do tempo do usuário
   public addMessage(userId: string, role: 'user' | 'model', content: string): void {
     const currentHistory = this.getHistory(userId);
     
@@ -34,7 +36,6 @@ export class FTIMemoryManager {
       timestamp: Date.now()
     });
 
-    // Poda de segurança (FIFO): Remove a mensagem mais velha se passar de 8
     if (currentHistory.length > this.MAX_HISTORY_LENGTH) {
       currentHistory.shift(); 
     }
@@ -42,11 +43,55 @@ export class FTIMemoryManager {
     this.history.set(userId, currentHistory);
   }
 
-  // Limpa a memória (acionado automaticamente quando um frete é finalizado ou a sessão expira)
   public clearMemory(userId: string): void {
     this.history.delete(userId);
   }
+
+  // --- 2. GARBAGE COLLECTOR (VASSOURA DE BANCO DE DADOS) ---
+  
+  /**
+   * Executa a limpeza pesada no banco de dados.
+   * Remove fretes de teste ou mortos que já passaram do tempo limite de guarda.
+   */
+  public async executarFaxinaBancoDeDados(diasLimite: number = 30): Promise<{ deletados: number, status: string }> {
+    console.log(`[FTI Vassoura] Iniciando varredura por lixo digital de ${diasLimite} dias atrás...`);
+    
+    try {
+      const dataCorte = new Date();
+      dataCorte.setDate(dataCorte.getDate() - diasLimite);
+
+      // Puxa apenas fretes que não são mais úteis (Entregues ou Cancelados)
+      const fretesRef = collection(db, 'fretes');
+      const q = query(fretesRef, where('status', 'in', ['cancelado', 'finalizado', 'entregue', 'erro_pagamento']));
+      const snapshot = await getDocs(q);
+
+      const batch = writeBatch(db);
+      let deletadosCount = 0;
+
+      snapshot.forEach((documento) => {
+        const data = documento.data();
+        const dataAtualizacao = data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.createdAt?.toDate ? data.createdAt.toDate() : new Date());
+
+        // Se a carga for mais velha que a data de corte, entra na fila de exclusão
+        if (dataAtualizacao < dataCorte) {
+          batch.delete(documento.ref);
+          deletadosCount++;
+        }
+      });
+
+      if (deletadosCount > 0) {
+        await batch.commit();
+        console.log(`[FTI Vassoura] Limpeza concluída. ${deletadosCount} registros antigos pulverizados.`);
+      } else {
+        console.log(`[FTI Vassoura] Banco de dados já está limpo. Nenhum lixo encontrado.`);
+      }
+
+      return { deletados: deletadosCount, status: 'sucesso' };
+    } catch (error) {
+      console.error('[FTI Vassoura] Erro crítico ao tentar limpar o banco de dados:', error);
+      return { deletados: 0, status: 'erro' };
+    }
+  }
 }
 
-// Exporta uma instância única (Singleton) para ser usada em todo o app
 export const ftiMemory = new FTIMemoryManager();
