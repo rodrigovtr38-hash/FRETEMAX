@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
-// CTO-Log: FASE 3 - Auditoria UX Feed (Bloco 1).
-// Status: Limpeza de variáveis de Volumes fantasmas. Peso mantido. 
-// Etiqueta de Agendamento visível na lista.
+// CTO-Log: FASE 3 - Auditoria UX Feed (Bloco 2).
+// Status: Limpeza de variáveis de Volumes fantasmas. Peso mantido e Etiqueta Agendado.
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
@@ -201,7 +200,6 @@ export default function AvailableFreights({
                   </div>
                 </div>
 
-                {/* 🔥 CTO FIX: Peso Mantido no Feed, Volume Removido. */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center shadow-inner">
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-center gap-1"><Ruler size={10}/> Renda Bruta</p>
