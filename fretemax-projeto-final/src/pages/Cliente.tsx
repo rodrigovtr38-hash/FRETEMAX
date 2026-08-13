@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
 // CTO-Log: Homologação Funcional - Produção
 // Status: Limpeza de "Volume" realizada. Resumo de Rota refinado.
+// Correção: Troca de "Risco de Falha" para "Baixa Atratividade" na IA.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -181,7 +182,9 @@ export default function Cliente() {
     if (diff >= 1.05) return { status: 'Muito Alta', color: 'text-emerald-500', icon: <Flame size={16} className="text-orange-500 animate-pulse" /> };
     if (diff >= 0.95) return { status: 'Alta', color: 'text-blue-500', icon: <CheckCircle size={16} /> };
     if (diff >= 0.85) return { status: 'Média (Pode Demorar)', color: 'text-amber-500', icon: <AlertTriangle size={16} /> };
-    return { status: 'Baixa (Risco de Falha)', color: 'text-red-500', icon: <XCircle size={16} /> };
+    
+    // 🔥 CTO FIX: Trocado de "Risco de Falha" para "Baixa Atratividade". Assusta menos o cliente.
+    return { status: 'Baixa Atratividade', color: 'text-red-500', icon: <XCircle size={16} /> };
   }, [valorOfertaNum, valorSugeridoCalculado]);
 
   const isOfertaValida = valorOfertaNum > 0;
@@ -252,7 +255,7 @@ export default function Cliente() {
 
         setNome(data.nome || ''); setColeta(data.coleta || coleta); 
         setEntregas(data.entregas || (data.entrega ? [data.entrega] : [{ cep: '', bairro: '', rua: '', num: '' }]));
-        setPeso(data.peso || ''); setTipoMaterial(data.tipoMaterial || ''); // 🔥 CTO FIX: Removido setQtdVolumes
+        setPeso(data.peso || ''); setTipoMaterial(data.tipoMaterial || ''); 
         setVehicle(data.vehicle || 'moto'); setTipoFrete(data.tipoFrete || 'imediato');
         setDataAgendada(data.dataAgendada || ''); setWhatsapp(data.whatsapp || ''); setDocumento(data.documento || '');
         setValorOferta(data.valorOferta || '');
@@ -778,7 +781,6 @@ export default function Cliente() {
                   <select className={`col-span-1 md:col-span-2 ${inputClass} cursor-pointer`} value={vehicle} onChange={e => setVehicle(e.target.value as VehicleType)}>
                     {Object.entries(VEHICLE_CONFIG).map(([key, conf]) => (<option key={key} value={key}>{conf.nome}</option>))}
                   </select>
-                  {/* 🔥 CTO FIX: "Volumes" ou Caixa removidos. Peso mantido na integridade. */}
                   <input className={`col-span-2 ${inputClass}`} placeholder="Peso Bruto (Ex: 2500kg)" value={peso} onChange={e => setPeso(e.target.value)} />
                 </div>
 
@@ -898,7 +900,7 @@ export default function Cliente() {
               </div>
 
               {/* 🔥 CTO FIX: "Volumes" removido do Resumo da Rota. Interface visualmente limpa e fiel aos dados reais. */}
-              <div className="grid grid-cols-3 gap-3 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Truck size={18} className="text-cyan-400 mb-1" />
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Veículo</p>
@@ -909,10 +911,13 @@ export default function Cliente() {
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Peso Estimado</p>
                     <p className="text-sm font-bold text-white mt-1">{peso || 'N/A'}</p>
                  </div>
-                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
+                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md col-span-2 md:col-span-1">
                     <Clock3 size={18} className="text-amber-400 mb-1" />
-                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância Total</p>
-                    <p className="text-sm font-bold text-white mt-1">{distanciaReal.toFixed(1)} km</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância / Paradas</p>
+                    <p className="text-sm font-bold text-white mt-1">
+                      {distanciaReal.toFixed(1)} km 
+                      {entregas.length > 1 && <span className="text-cyan-400 ml-1">({entregas.length} paradas)</span>}
+                    </p>
                  </div>
               </div>
         
