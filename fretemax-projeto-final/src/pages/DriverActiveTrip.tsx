@@ -1,15 +1,15 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Auditoria Final - Bloco 1 (Liquidação de Motorista)
-// Correção: Implementado o "Funil de Liquidação". Após a última entrega (FINALIZANDO),
-// exige-se a foto do canhoto (POD) e a chave PIX antes de enviar para ENTREGUE e liberar o motorista.
+// CTO-Log: Auditoria Final - Bloco 1 (UX + Integração GPS Nativo Automático)
+// Correção: Volume Removido. Peso Mantido. GPS automático Waze/Maps.
+// Funil de POD + PIX Mantido.
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from '../firebase'; 
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
-import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Package, Camera, Wallet } from 'lucide-react';
+import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import { AppTripState } from '../state/tripStateMachine';
@@ -25,11 +25,11 @@ interface ActiveFreightData extends DocumentData {
   origemLat?: number;
   origemLng?: number;
   enderecoColetaTexto?: string;
+  enderecoEntregaTexto?: string;
   pinColeta?: string;
   pinEntregas?: string[];
   peso?: string;
-  qtdVolumes?: string;
-  tipoMaterial?: string;
+  clienteNome?: string;
 }
 
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
@@ -40,7 +40,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [pinError, setPinError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   
-  // Estados para a tela de Liquidação (PIX + POD)
   const [chavePix, setChavePix] = useState('');
   const [fotoPodBase64, setFotoPodBase64] = useState<string | null>(null);
 
@@ -82,7 +81,28 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
   const enderecoAlvoTexto = isFaseColeta 
     ? frete.enderecoColetaTexto 
-    : (destinoAtual?.enderecoTexto || destinoAtual?.rua ? `${destinoAtual.rua}, ${destinoAtual.num} - ${destinoAtual.bairro}` : 'Destino da rota');
+    : (destinoAtual?.enderecoTexto || destinoAtual?.rua ? `${destinoAtual.rua}, ${destinoAtual.num} - ${destinoAtual.bairro}` : frete.enderecoEntregaTexto || 'Destino da rota');
+
+  // 🔥 CTO FIX: Waze Automático (Rota Inteligente)
+  const handleOpenNav = (app: 'waze' | 'google') => {
+    let url = '';
+    const queryAddr = encodeURIComponent(enderecoAlvoTexto || '');
+    
+    if (app === 'waze') {
+      if (navDestinoGPS && navDestinoGPS.lat) {
+        url = `https://waze.com/ul?ll=${navDestinoGPS.lat},${navDestinoGPS.lng}&navigate=yes`;
+      } else {
+        url = `https://waze.com/ul?q=${queryAddr}&navigate=yes`;
+      }
+    } else {
+      if (navDestinoGPS && navDestinoGPS.lat) {
+        url = `https://www.google.com/maps/dir/?api=1&destination=${navDestinoGPS.lat},${navDestinoGPS.lng}`;
+      } else {
+        url = `https://www.google.com/maps/dir/?api=1&destination=${queryAddr}`;
+      }
+    }
+    window.open(url, '_blank');
+  };
 
   const handleStatusUpdate = async (novoStatus: AppTripState) => {
     setActionLoading(true);
@@ -105,7 +125,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1 });
         } else {
-           // 🔥 CTO FIX: Em vez de tentar o pulo suicida para ENTREGUE, vamos para a tela de Liquidação (FINALIZANDO)
            await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.FINALIZANDO);
         }
       }
@@ -130,18 +149,14 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     } catch (e) { setPinError('Erro ao registrar.'); } finally { setActionLoading(false); }
   };
 
-  // 🔥 Nova Função: Quando a corrida está Finalizando, o Motorista pede o Dinheiro.
   const handleLiquidacaoSubmit = async () => {
     if (!chavePix.trim()) { alert("Digite sua chave PIX para receber!"); return; }
     if (!fotoPodBase64) { alert("Envie a foto do canhoto assinado ou o comprovante da entrega!"); return; }
     
     setActionLoading(true);
     try {
-      // 1. Salva o PIX na corrida para o Admin ver
       await dispatchRealtimeService.salvarChavePix(frete.id, chavePix);
-      // 2. Salva a foto (Simulação de Base64 provisória, na próxima fase usamos Storage real)
       await dispatchRealtimeService.atualizarTripRealtime(frete.id, { comprovanteUrl: fotoPodBase64 });
-      // 3. Libera o Motorista pro Radar (Vai pra ENTREGUE)
       await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.ENTREGUE);
     } catch (error) {
       alert("Falha na comunicação. Tente novamente.");
@@ -151,12 +166,10 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   };
 
   const handleSimularTirarFoto = () => {
-    // Para validar a tela rapidamente, simulamos que uma foto foi batida e virou Base64
     setFotoPodBase64("data:image/jpeg;base64,/9j/4AAQSkZJRgABAAAAAQABAAD...");
     alert("Câmera conectada. Foto do canhoto registrada!");
   };
 
-  // Se estiver na fase final de pagamento, mostre o form de liquidação.
   if (frete.status === AppTripState.FINALIZANDO) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2.5rem] border-2 border-emerald-500/30 bg-slate-900 shadow-[0_0_50px_rgba(16,185,129,0.15)] p-8">
@@ -207,7 +220,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     );
   }
 
-  // Tela Padrão de Navegação Ativa
   return (
     <>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] border border-cyan-500/20 bg-slate-900 shadow-2xl p-6">
@@ -228,19 +240,15 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           <h2 className="text-xl font-black text-cyan-400 uppercase tracking-widest">
             {isFaseColeta ? 'Etapa 1: Coleta' : frete.pinEntregas && frete.pinEntregas.length > 1 ? `Etapa 2: Entrega ${paradaAtualIndex + 1} de ${frete.pinEntregas.length}` : 'Etapa 2: Entrega Final'}
           </h2>
+          <p className="text-[10px] uppercase font-black text-slate-500 mt-2">Embarcador: <span className="text-white">{frete.clienteNome || 'Privado'}</span></p>
         </div>
 
-        {/* DADOS DA CARGA */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="bg-slate-800/50 rounded-2xl p-3 flex flex-col items-center justify-center border border-slate-700/50 text-center">
+        {/* 🔥 CTO FIX: Lixo "QTD/TIPO" removido. Só Peso Centralizado. */}
+        <div className="flex justify-center mb-4">
+            <div className="bg-slate-800/50 rounded-2xl py-3 px-8 flex flex-col items-center justify-center border border-slate-700/50 text-center">
                <Scale size={16} className="text-amber-400 mb-1" />
-               <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">Peso Estimado</p>
-               <p className="text-sm font-bold text-white">{frete.peso || 'N/A'}</p>
-            </div>
-            <div className="bg-slate-800/50 rounded-2xl p-3 flex flex-col items-center justify-center border border-slate-700/50 text-center">
-               <Package size={16} className="text-blue-400 mb-1" />
-               <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">Qtd / Tipo</p>
-               <p className="text-sm font-bold text-white truncate max-w-full px-2">{frete.qtdVolumes || '1'}x {frete.tipoMaterial || 'Vol'}</p>
+               <p className="text-[9px] uppercase font-black tracking-widest text-slate-400">Peso Bruto</p>
+               <p className="text-sm font-bold text-white">{frete.pesoKg || frete.peso || 'Não informado'} kg</p>
             </div>
         </div>
 
@@ -248,22 +256,20 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           <MapaCliente origem={mapOriginGPS} destino={mapDestinoGPS} operationalMessage="Navegando..." />
         </div>
 
-        {navDestinoGPS && (
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <button 
-              onClick={() => window.open(`https://waze.com/ul?ll=${navDestinoGPS.lat},${navDestinoGPS.lng}&navigate=yes`, '_blank')}
-              className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors"
-            >
-              <Navigation size={14} className="text-cyan-400" /> Abrir no Waze
-            </button>
-            <button 
-              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${navDestinoGPS.lat},${navDestinoGPS.lng}`, '_blank')}
-              className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors"
-            >
-              <MapPin size={14} className="text-emerald-400" /> Google Maps
-            </button>
-          </div>
-        )}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <button 
+            onClick={() => handleOpenNav('waze')}
+            className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors"
+          >
+            <Navigation size={14} className="text-cyan-400" /> Abrir no Waze
+          </button>
+          <button 
+            onClick={() => handleOpenNav('google')}
+            className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors"
+          >
+            <MapPin size={14} className="text-emerald-400" /> Google Maps
+          </button>
+        </div>
         
         <div className="mb-6 flex items-start gap-3 bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
           <div className="mt-1 shrink-0"><MapPin size={18} className="text-cyan-400" /></div>
@@ -328,7 +334,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   );
 }
 
-// Ícone CheckCircle2 provisório para a tela de Liquidação.
 function CheckCircle2(props: any) {
   return (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
