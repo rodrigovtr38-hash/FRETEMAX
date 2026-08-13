@@ -1,22 +1,21 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Admin.tsx
 // CTO-Log: Fase 3 - Conclusão do Bloco 3 (Arquitetura FTI).
-// Correção: Painel de Métricas Neurais e "Vassoura de Lixo Digital" injetados no Dashboard.
+// Correção: Painel de Métricas Neurais e "Botão de Pânico" (Zerar Banco) injetados.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase';
-import { collection, onSnapshot, doc, query, orderBy, runTransaction, where, updateDoc, serverTimestamp, limit } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, orderBy, runTransaction, where, updateDoc, serverTimestamp, limit, writeBatch, getDocs } from 'firebase/firestore';
 import { NotificationService } from '../services/notificationService';
 import { AppTripState } from '../state/tripStateMachine'; 
 import { 
   Loader2, CheckCircle, XCircle, Search, ShieldAlert, Truck, Users, 
-  Calendar, DollarSign, Activity, Clock, AlertTriangle, Eye, 
+  DollarSign, Activity, Clock, AlertTriangle, Eye, 
   Map as MapIcon, Wallet, Zap, MessageCircle, ShieldCheck, RefreshCcw, Lock, Target, Key, Radio,
-  Bot, Copy, Send, Trash2, BrainCircuit // 🔥 CTO FIX: Novos ícones da IA adicionados
+  Trash2, BrainCircuit
 } from 'lucide-react';
 
-// 🔥 CTO FIX: Importando os módulos do Cérebro FTI (Contador e Lixeiro)
 import { ftiMemory } from '../core/ai/memory/ia.memory';
 import { ftiAnalytics } from '../core/ai/analytics/ia.metrics';
 
@@ -35,7 +34,7 @@ export default function Admin() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
 
-  const [tab, setTab] = useState<'dashboard' | 'motoristas' | 'corridas' | 'concierge'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'motoristas' | 'corridas'>('dashboard');
   const [fretes, setFretes] = useState<any[]>([]);
   const [motoristasPendentes, setMotoristasPendentes] = useState<any[]>([]);
   const [motoristasAprovados, setMotoristasAprovados] = useState<any[]>([]);
@@ -50,12 +49,6 @@ export default function Admin() {
   const [showHistorico, setShowHistorico] = useState(false);
   const [reembolsosPendentes, setReembolsosPendentes] = useState<any[]>([]);
 
-  const [conciergeMsg, setConciergeMsg] = useState('');
-  const [conciergeTarget, setConciergeTarget] = useState<'empresa' | 'motorista'>('empresa');
-  const [conciergePrompt, setConciergePrompt] = useState('');
-  const [copied, setCopied] = useState(false);
-
-  // 🔥 Estados do Painel FTI
   const [ftiSummary, setFtiSummary] = useState<any>(null);
   const [isCleaning, setIsCleaning] = useState(false);
 
@@ -118,7 +111,6 @@ export default function Admin() {
     return () => unsub();
   }, [authUser]);
 
-  // 🔥 CTO FIX: Efeito para carregar as Métricas da IA apenas quando acessar o Dashboard
   useEffect(() => {
     if (tab === 'dashboard' && authUser) {
       ftiAnalytics.obterResumoAdmin().then(data => setFtiSummary(data));
@@ -278,12 +270,6 @@ export default function Admin() {
     } catch (e: any) { alert(e.message); }
   };
 
-  const forceClearInsucesso = async (id: string) => {
-    try {
-      await updateDoc(doc(db, 'fretes', id), { alertaInsucesso: false });
-    } catch (e: any) { alert("Erro ao limpar alerta."); }
-  };
-
   const handleReembolso = async (idPedido: string) => {
     if (!window.confirm("CRÍTICO: Estornar PIX no Mercado Pago?")) return;
     try {
@@ -308,57 +294,34 @@ export default function Admin() {
     window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  const handleGerarPromptConcierge = () => {
-    if (!conciergeMsg.trim()) {
-      alert("Cole a mensagem do WhatsApp primeiro.");
+  // 🔥 CTO FIX: Botão de Pânico (Zerar Banco de Dados)
+  const handleNuclearReset = async () => {
+    const code = window.prompt("⚠️ CUIDADO: Esta ação vai varrer TODOS os testes do banco de dados (Fretes e Pagamentos). Motoristas não serão afetados. Digite 'ZERAR' para confirmar:");
+    if (code !== 'ZERAR') {
+      alert("Ação cancelada. Código de segurança incorreto.");
       return;
     }
-
-    let promptConstruido = '';
-
-    if (conciergeTarget === 'empresa') {
-      promptConstruido = `[CONTEXTO: EMPRESA B2B]
-Aja como Coordenador Comercial da FretoGo. Um cliente (empresa) enviou esta mensagem no WhatsApp:
-"${conciergeMsg}"
-
-OBJETIVO:
-Responda de forma HUMANA, CURTA e DIRETA. Sem parecer robô. Calcule a distância e defina o valor justo (Regra: Leves +20% taxa, Pesados +15% taxa). 
-Não insista se houver objeção dura, quebre a objeção com autoridade.
-REGRA DE PAGAMENTO: Se o cliente aceitar, Diga APENAS: "O pagamento é via PIX no link seguro (Mercado Pago) da nossa plataforma. O valor só é liberado ao motorista na entrega." NÃO PEÇA A CHAVE PIX DO CLIENTE.
-
-Escreva a resposta exata que devo enviar para ele no WhatsApp:`;
-    } else {
-      promptConstruido = `[CONTEXTO: MOTORISTA / GRUPO]
-Aja como Coordenador Operacional da FretoGo. O foco agora é falar com motoristas da base. A situação é baseada nesta informação:
-"${conciergeMsg}"
-
-OBJETIVO:
-Responda de forma simples, direta e profissional. Sem textos longos.
-REGRA DE OFERTA: Passe os dados da carga (Origem, Destino, Categoria, Valor que ele recebe).
-REGRA DE FECHAMENTO: Se ele aceitar, diga: "Carga sua. Você recebe R$ [VALOR] direto na sua conta após descarregar e enviar a foto do canhoto (POD) assinado pelo recebedor. Zero dor de cabeça."
-
-Escreva a resposta exata que devo enviar no WhatsApp:`;
-    }
-
-    setConciergePrompt(promptConstruido);
-    setCopied(false);
-  };
-
-  const handleCopyPrompt = () => {
-    navigator.clipboard.writeText(conciergePrompt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // 🔥 CTO FIX: Ação da Vassoura Automática
-  const handleFaxinaDB = async () => {
-    if (!window.confirm("ATENÇÃO: A FTI vai varrer o banco e apagar fretes finalizados/cancelados há mais de 30 dias para otimizar os custos. Deseja prosseguir?")) return;
+    
     setIsCleaning(true);
     try {
-      const res = await ftiMemory.executarFaxinaBancoDeDados(30);
-      alert(`🧹 Faxina concluída! ${res.deletados} registros obsoletos foram pulverizados.`);
+      const fretesRef = collection(db, 'fretes');
+      const snapshot = await getDocs(fretesRef);
+      const batch = writeBatch(db);
+      
+      let count = 0;
+      snapshot.forEach((documento) => {
+        batch.delete(documento.ref);
+        count++;
+      });
+      
+      if (count > 0) {
+        await batch.commit();
+      }
+      
+      alert(`💥 Reset Nuclear Concluído! ${count} fretes e testes fantasmas foram pulverizados. O Radar está limpo.`);
     } catch (error) {
-      alert("Falha na rotina de limpeza. Tente novamente mais tarde.");
+      alert("Falha na rotina de exclusão massiva.");
+      console.error(error);
     } finally {
       setIsCleaning(false);
     }
@@ -446,8 +409,7 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
             {[
               { id: 'dashboard', label: 'Visão Operacional', icon: Activity },
               { id: 'motoristas', label: 'Homologação de Frota', icon: Users, badge: motoristasPendentes.length },
-              { id: 'corridas', label: 'Malha Logística Live', icon: MapIcon },
-              { id: 'concierge', label: 'Concierge IA', icon: Bot }
+              { id: 'corridas', label: 'Malha Logística Live', icon: MapIcon }
             ].map(item => (
               <button
                 key={item.id}
@@ -465,75 +427,13 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
 
       <main className="max-w-7xl mx-auto p-4 md:p-8">
         
-        {/* CONCIERGE TAB */}
-        {tab === 'concierge' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
-             <div className="mb-8">
-               <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white flex items-center gap-3">
-                 <Bot className="text-cyan-500 w-8 h-8" /> 
-                 Concierge de <span className="text-cyan-500">Vendas (FTI)</span>
-               </h2>
-               <p className="text-slate-400 text-sm mt-2">Cole a mensagem do WhatsApp abaixo para a IA gerar a resposta perfeita com base na tabela ANTT e regras de pagamento da FretoGo.</p>
-             </div>
-
-             <div className="bg-slate-900/80 border border-white/10 rounded-[2rem] p-6 md:p-8 shadow-2xl backdrop-blur-md">
-                <div className="flex gap-4 mb-6">
-                  <button 
-                    onClick={() => setConciergeTarget('empresa')}
-                    className={`flex-1 py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all flex justify-center items-center gap-2 border ${conciergeTarget === 'empresa' ? 'bg-cyan-600 border-cyan-500 text-white shadow-[0_0_20px_rgba(8,145,178,0.4)]' : 'bg-slate-950 border-white/5 text-slate-500 hover:text-slate-300'}`}
-                  >
-                    <Target size={16}/> Cliente (Empresa)
-                  </button>
-                  <button 
-                    onClick={() => setConciergeTarget('motorista')}
-                    className={`flex-1 py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all flex justify-center items-center gap-2 border ${conciergeTarget === 'motorista' ? 'bg-amber-600 border-amber-500 text-white shadow-[0_0_20px_rgba(217,119,6,0.4)]' : 'bg-slate-950 border-white/5 text-slate-500 hover:text-slate-300'}`}
-                  >
-                    <Truck size={16}/> Motorista (Frota)
-                  </button>
-                </div>
-
-                <div className="mb-6">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mensagem recebida no WhatsApp:</label>
-                  <textarea 
-                    value={conciergeMsg}
-                    onChange={e => setConciergeMsg(e.target.value)}
-                    placeholder="Ex: Preciso de um Fiorino de Guarulhos para Campinas hoje à tarde..."
-                    className="w-full bg-slate-950 border border-white/10 rounded-2xl p-5 text-white font-medium focus:border-cyan-500 outline-none transition-all resize-none h-32"
-                  />
-                </div>
-
-                <button 
-                  onClick={handleGerarPromptConcierge}
-                  className="w-full bg-white text-slate-950 py-4 rounded-xl font-black uppercase text-sm tracking-widest shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:bg-slate-200 transition-all flex justify-center items-center gap-2 mb-8"
-                >
-                  <Send size={18}/> Estruturar Resposta da IA
-                </button>
-
-                {conciergePrompt && (
-                  <div className="animate-in fade-in bg-slate-950 rounded-2xl border border-cyan-500/30 p-1 relative">
-                    <div className="absolute top-4 right-4">
-                      <button 
-                        onClick={handleCopyPrompt}
-                        className="bg-cyan-600 hover:bg-cyan-500 text-white p-2 rounded-lg transition-all flex items-center gap-2"
-                        title="Copiar instrução"
-                      >
-                        {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
-                        <span className="text-[10px] font-black uppercase tracking-widest">{copied ? 'Copiado!' : 'Copiar para FTI'}</span>
-                      </button>
-                    </div>
-                    <div className="p-5 pt-8">
-                      <p className="text-[10px] font-black text-cyan-500 uppercase tracking-widest mb-3">INSTRUÇÃO PRONTA (COLE ISSO NA IA / CHATGPT):</p>
-                      <pre className="text-slate-300 font-mono text-xs whitespace-pre-wrap leading-relaxed">{conciergePrompt}</pre>
-                    </div>
-                  </div>
-                )}
-             </div>
-          </div>
-        )}
-
         {/* DASHBOARD TAB */}
         {tab === 'dashboard' && (
-          <div className="flex justify-end mb-6 animate-in fade-in">
+          <div className="flex justify-between items-center mb-6 animate-in fade-in">
+             <button onClick={handleNuclearReset} disabled={isCleaning} className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2">
+                {isCleaning ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} ZERAR BANCO (TESTES)
+             </button>
+
              <div className="bg-slate-900/50 border border-white/5 rounded-xl p-1 flex gap-1 backdrop-blur-sm">
                 {[
                   { id: 'hoje', label: 'Hoje' },
@@ -570,20 +470,12 @@ Escreva a resposta exata que devo enviar no WhatsApp:`;
               </div>
             )}
 
-            {/* 🔥 FTI AI PANEL - INJETADO NO DASHBOARD */}
+            {/* 🔥 FTI AI PANEL */}
             <div className="mb-8 bg-slate-900/40 border border-cyan-500/20 rounded-2xl p-6 relative overflow-hidden">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <h3 className="text-lg font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2">
                   <BrainCircuit size={20} /> Inteligência Operacional (FTI)
                 </h3>
-                <button
-                  onClick={handleFaxinaDB}
-                  disabled={isCleaning}
-                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
-                >
-                  {isCleaning ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
-                  Varrer Lixo Digital (30 dias)
-                </button>
               </div>
               
               {ftiSummary ? (
