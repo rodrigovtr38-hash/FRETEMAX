@@ -1,12 +1,12 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
-// CTO-Log: FASE 3 - Auditoria de Integração.
-// Status: "Vírus dos 15km" visual erradicado. Conversor Inteligente de Metros injetado.
-// Correção: Ícone 'Scale' adicionado na importação para evitar crash visual no Feed.
+// CTO-Log: FASE 3 - Auditoria UX Feed (Bloco 1).
+// Status: Limpeza de variáveis de Volumes fantasmas. Peso mantido. 
+// Etiqueta de Agendamento visível na lista.
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertOctagon, CheckCircle2, Flame, Package, Zap, ShieldCheck, Ruler, ThumbsUp, Star, Share2, Scale } from 'lucide-react';
+import { AlertOctagon, CheckCircle2, Flame, Package, Zap, ShieldCheck, Ruler, ThumbsUp, Star, Share2, CalendarClock, Scale } from 'lucide-react';
 import { dispatchRealtimeService } from '../../../services/dispatchRealtimeService';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
@@ -29,7 +29,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const FREIGHT_TTL_MS = 30 * 60 * 1000; 
 
-// 🔥 CTO FIX: Formatador Inteligente de Distância. Transforma "0.7 km" em "700 m" para UX Perfeita.
 const formatDistance = (km: number | undefined | null) => {
   if (!km || isNaN(km)) return '0 km';
   if (km < 1) return `${Math.round(km * 1000)} m`;
@@ -80,7 +79,7 @@ export default function AvailableFreights({
 
   const now = Date.now();
   const validFreights = freights.filter(freight => {
-    if (freight.agendado) return true;
+    if (freight.agendado || freight.tipoFrete === 'agendado') return true;
     const timestamp = freight.criadoEm || freight.atualizadoEm || (freight.createdAt as any)?.toMillis?.() || now;
     return (now - timestamp) < FREIGHT_TTL_MS;
   });
@@ -137,6 +136,7 @@ export default function AvailableFreights({
             const isHot = freight.prioridade || (freight.valorMotorista && freight.valorMotorista > 150);
             const km = freight.distanciaRealKm || freight.distanciaTotalKm || freight.distanciaEntregaKm || freight.distancia || 1;
             const ganhoPorKm = (freight.valorLiquidoMotorista || freight.valorMotorista || 0) / km;
+            const isAgendado = freight.agendado || freight.tipoFrete === 'agendado';
 
             return (
               <div
@@ -163,12 +163,21 @@ export default function AvailableFreights({
                       <span className="text-xl mr-1">R$</span>
                       {(freight.valorLiquidoMotorista || freight.valorMotorista || 0).toFixed(2).replace('.', ',')}
                     </h2>
+                    <p className="text-[9px] uppercase font-bold text-slate-500 mt-1">Empresa: <span className="text-slate-300">{freight.clienteNome || 'Privado'}</span></p>
                   </div>
-                  <div className={`rounded-xl border px-3 py-1.5 flex items-center gap-1.5 ${isHot ? 'bg-orange-500/10 border-orange-500/30' : 'bg-slate-800 border-white/10'}`}>
-                    {isHot && <Flame size={14} className="text-orange-400 animate-pulse" />}
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${isHot ? 'text-orange-400' : 'text-slate-300'}`}>
-                      {CATEGORY_LABELS[freight.categoria || 'carro']}
-                    </span>
+                  <div className={`rounded-xl border px-3 py-1.5 flex flex-col items-end gap-1 ${isHot ? 'bg-orange-500/10 border-orange-500/30' : 'bg-slate-800 border-white/10'}`}>
+                    <div className="flex items-center gap-1.5">
+                      {isHot && <Flame size={14} className="text-orange-400 animate-pulse" />}
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${isHot ? 'text-orange-400' : 'text-slate-300'}`}>
+                        {CATEGORY_LABELS[freight.categoria || 'carro']}
+                      </span>
+                    </div>
+                    {/* 🔥 TAG DE AGENDAMENTO */}
+                    {isAgendado && (
+                      <span className="bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1">
+                        <CalendarClock size={10} /> Agendado
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -192,6 +201,7 @@ export default function AvailableFreights({
                   </div>
                 </div>
 
+                {/* 🔥 CTO FIX: Peso Mantido no Feed, Volume Removido. */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center shadow-inner">
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-center gap-1"><Ruler size={10}/> Renda Bruta</p>
@@ -200,13 +210,12 @@ export default function AvailableFreights({
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
                     <Ruler size={14} className="text-slate-400 mb-1" />
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Distância</p>
-                    {/* 🔥 CTO FIX: Renderização convertida de KM para M caso seja < 1km */}
                     <p className="text-xs font-black text-white mt-1">{formatDistance(km)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
                     <Scale size={14} className="text-slate-400 mb-1" />
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Peso/Vol</p>
-                    <p className="text-xs font-bold text-slate-300">{freight.pesoKg ? `${freight.pesoKg}kg` : freight.volumes}</p>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Peso Bruto</p>
+                    <p className="text-xs font-bold text-slate-300">{freight.pesoKg || freight.peso || '--'} kg</p>
                   </div>
                 </div>
 
@@ -242,15 +251,6 @@ export default function AvailableFreights({
                     {isHot ? 'Capturar Urgente' : 'Analisar Operação'}
                   </button>
                 </div>
-
-                {isHot && (
-                  <div className="absolute top-3 right-3 pointer-events-none">
-                    <div className="bg-orange-500/10 border border-orange-500/30 text-orange-400 text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-md">
-                      <Zap size={12} className="animate-pulse" />
-                      Alta Demanda
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
