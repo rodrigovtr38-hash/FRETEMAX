@@ -2,7 +2,7 @@
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
 // CTO-Log: FASE 3 - Auditoria UX Feed.
 // Correção: Blindagem contra falta de "pinEntregas".
-// Tag de Multi-Drop agora exibe o número de paradas perfeitamente.
+// Tag de Multi-Drop agora exibe o número de paradas perfeitamente e claro no Feed.
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
@@ -138,7 +138,7 @@ export default function AvailableFreights({
             const ganhoPorKm = (freight.valorLiquidoMotorista || freight.valorMotorista || 0) / km;
             const isAgendado = freight.agendado || freight.tipoFrete === 'agendado';
             
-            // 🔥 CTO FIX: NumParadas blindado para evitar crash e avisar motorista.
+            // 🔥 CTO FIX: Cálculo seguro de paradas para o Feed
             const numParadas = freight.pinEntregas?.length || freight.paradas?.length || 1;
             const isMultiDrop = freight.multiplasEntregas || numParadas > 1;
 
@@ -176,15 +176,14 @@ export default function AvailableFreights({
                         {CATEGORY_LABELS[freight.categoria || 'carro']}
                       </span>
                     </div>
-                    {/* 🔥 TAG DE AGENDAMENTO */}
                     {isAgendado && (
                       <span className="bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1">
                         <CalendarClock size={10} /> Agendado
                       </span>
                     )}
-                    {/* 🔥 TAG MULTI-DROP APRIMORADA */}
+                    {/* 🔥 ALERTA MULTI-DROP CLARO NO FEED */}
                     {isMultiDrop && (
-                      <span className="bg-purple-500/20 text-purple-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1 mt-1">
+                      <span className="bg-purple-500/20 text-purple-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1 mt-1 shadow-[0_0_10px_rgba(168,85,247,0.3)]">
                         <Layers size={10} /> Multi-Drop ({numParadas})
                       </span>
                     )}
@@ -205,11 +204,11 @@ export default function AvailableFreights({
                   <div className="flex items-start gap-3">
                     <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Destino</p>
-                      {/* 🔥 AVISO DE PARADAS DIRETAMENTE NO TEXTO */}
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Destino Final</p>
+                      {/* 🔥 AVISO VISUAL DE PARADAS EXTRAS */}
                       <p className="text-sm font-bold text-white truncate mt-0.5">
                         {freight.enderecoEntregaTexto} 
-                        {isMultiDrop && <span className="text-cyan-400 ml-1"> (+ {numParadas - 1} paradas)</span>}
+                        {isMultiDrop && <span className="text-purple-400 ml-1"> (+ {numParadas - 1} paradas)</span>}
                       </p>
                     </div>
                   </div>
