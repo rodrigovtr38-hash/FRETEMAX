@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/components/driver/dashboard/FreightRequestModal.tsx
 // CTO-Log: FASE 3 - Auditoria de Integração e Resgate de Crash.
 // Status: "TypeError: Cannot read properties of undefined" ERADICADO.
+// Correção (Polimento): Tarja Visual de Alerta MULTI-DROP.
 // =========================================================
 
 import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info, Scale, Briefcase, Layers } from 'lucide-react';
@@ -108,7 +109,7 @@ export default function FreightRequestModal({
             </div>
           </div>
 
-          {/* 🔥 ALERTA MULTI-DROP BLINDADO */}
+          {/* 🔥 ALERTA MULTI-DROP VISUAL PARA O MOTORISTA */}
           {isMultiDrop && (
             <div className="bg-purple-900/20 border border-purple-500/30 rounded-[1.5rem] p-4 flex items-center justify-center gap-3">
                <Layers className="text-purple-400 animate-pulse" size={20} />
@@ -150,6 +151,8 @@ export default function FreightRequestModal({
               <Briefcase size={18} className="mx-auto text-blue-400 mb-2" />
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Embarcador</p>
               <h4 className="mt-1 text-sm font-bold text-white truncate">{freight.clienteNome || 'Empresa Privada'}</h4>
+              {/* 🔥 Mostrando Especificações da Mercadoria */}
+              {freight.tipoMaterial && <p className="text-[9px] text-slate-400 mt-1 uppercase truncate">{freight.tipoMaterial}</p>}
             </div>
 
             <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center">
@@ -165,6 +168,14 @@ export default function FreightRequestModal({
               <h4 className="mt-1 text-sm font-black text-emerald-400 relative z-10">R$ {(freight.valorLiquidoMotorista || freight.valorMotorista || 0).toFixed(2).replace('.', ',')}</h4>
             </div>
           </div>
+          
+          {/* Se a empresa enviou observações (Formulário Ouro), exibe aqui */}
+          {freight.observacoes && (
+             <div className="bg-blue-900/10 border border-blue-500/20 rounded-2xl p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">Instruções do Embarcador:</p>
+                <p className="text-xs text-blue-200 font-medium">{freight.observacoes}</p>
+             </div>
+          )}
         </div>
 
         {/* FOOTER: BOTÕES DE AÇÃO */}
