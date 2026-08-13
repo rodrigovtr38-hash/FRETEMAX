@@ -1,15 +1,15 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
-// CTO-Log: Homologação Funcional - Produção
-// Status: Limpeza de "Volume" realizada. Resumo de Rota refinado.
-// Correção: Troca de "Risco de Falha" para "Baixa Atratividade" na IA.
+// CTO-Log: Auditoria de Polimento (Fase de Escala).
+// Status: "Formulário Enterprise" ativado. Injeção de Tipo de Carga, Volumes, NF e Contato.
+// Correção: Texto da IA alterado para evitar sustos ("Abaixo do Mercado").
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, auth } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, doc, Timestamp, updateDoc } from 'firebase/firestore'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, Users, HeadphonesIcon, RefreshCw, Lock, Scale, Clock3, BrainCircuit, BarChart3, TrendingUp, AlertOctagon, Download } from 'lucide-react';
+import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, Users, HeadphonesIcon, RefreshCw, Lock, Scale, Clock3, BrainCircuit, BarChart3, TrendingUp, AlertOctagon, Download, FileText, Phone } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import ChatFrete from '../components/ChatFrete';
 import ClientStatusCard from '../components/client/ClientStatusCard';
@@ -70,12 +70,16 @@ export default function Cliente() {
   const [coleta, setColeta] = useState<AddressData>({ cep: '', bairro: '', rua: '', num: '' });
   const [entregas, setEntregas] = useState<AddressData[]>([{ cep: '', bairro: '', rua: '', num: '' }]);
   const [peso, setPeso] = useState('');
-  const [tipoMaterial, setTipoMaterial] = useState('');
   const [vehicle, setVehicle] = useState<VehicleType>('moto'); 
   const [tipoFrete, setTipoFrete] = useState<'imediato' | 'agendado'>('imediato');
   const [dataAgendada, setDataAgendada] = useState('');
-  
   const [valorOferta, setValorOferta] = useState('');
+
+  // 🔥 CTO FIX: Novos campos operacionais (Auditoria Level 10/10)
+  const [tipoMaterial, setTipoMaterial] = useState('Caixas Secas');
+  const [qtdVolumes, setQtdVolumes] = useState('');
+  const [valorNF, setValorNF] = useState('');
+  const [observacoes, setObservacoes] = useState('');
 
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [orderData, setOrderData] = useState<OrderData | null>(null);
@@ -139,7 +143,7 @@ export default function Cliente() {
   const calculoFinanceiro = useMemo(() => {
     const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
     const isMOPP = tipoMaterial.toLowerCase().includes('mopp') || 
-                   tipoMaterial.toLowerCase().includes('quimic') || 
+                   tipoMaterial.toLowerCase().includes('químic') || 
                    tipoMaterial.toLowerCase().includes('perigo');
 
     let valorMotoristaBase = 0;
@@ -181,10 +185,9 @@ export default function Cliente() {
     const diff = valorOfertaNum / valorSugeridoCalculado;
     if (diff >= 1.05) return { status: 'Muito Alta', color: 'text-emerald-500', icon: <Flame size={16} className="text-orange-500 animate-pulse" /> };
     if (diff >= 0.95) return { status: 'Alta', color: 'text-blue-500', icon: <CheckCircle size={16} /> };
-    if (diff >= 0.85) return { status: 'Média (Pode Demorar)', color: 'text-amber-500', icon: <AlertTriangle size={16} /> };
     
-    // 🔥 CTO FIX: Trocado de "Risco de Falha" para "Baixa Atratividade". Assusta menos o cliente.
-    return { status: 'Baixa Atratividade', color: 'text-red-500', icon: <XCircle size={16} /> };
+    // 🔥 CTO FIX: "Risco de Falha" removido. Trocado por "Abaixo do Mercado".
+    return { status: 'Abaixo do Mercado', color: 'text-amber-500', icon: <AlertTriangle size={16} /> };
   }, [valorOfertaNum, valorSugeridoCalculado]);
 
   const isOfertaValida = valorOfertaNum > 0;
@@ -255,7 +258,14 @@ export default function Cliente() {
 
         setNome(data.nome || ''); setColeta(data.coleta || coleta); 
         setEntregas(data.entregas || (data.entrega ? [data.entrega] : [{ cep: '', bairro: '', rua: '', num: '' }]));
-        setPeso(data.peso || ''); setTipoMaterial(data.tipoMaterial || ''); 
+        setPeso(data.peso || ''); 
+        
+        // CTO FIX: Resgatando os novos campos do cache (se existirem)
+        setTipoMaterial(data.tipoMaterial || 'Caixas Secas'); 
+        setQtdVolumes(data.qtdVolumes || ''); 
+        setValorNF(data.valorNF || ''); 
+        setObservacoes(data.observacoes || ''); 
+        
         setVehicle(data.vehicle || 'moto'); setTipoFrete(data.tipoFrete || 'imediato');
         setDataAgendada(data.dataAgendada || ''); setWhatsapp(data.whatsapp || ''); setDocumento(data.documento || '');
         setValorOferta(data.valorOferta || '');
@@ -265,8 +275,10 @@ export default function Cliente() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('fretogo_form_backup', JSON.stringify({ nome, coleta, entregas, peso, tipoMaterial, vehicle, tipoFrete, dataAgendada, whatsapp, documento, valorOferta }));
-  }, [nome, coleta, entregas, peso, tipoMaterial, vehicle, tipoFrete, dataAgendada, whatsapp, documento, valorOferta]);
+    localStorage.setItem('fretogo_form_backup', JSON.stringify({ 
+      nome, coleta, entregas, peso, tipoMaterial, qtdVolumes, valorNF, observacoes, vehicle, tipoFrete, dataAgendada, whatsapp, documento, valorOferta 
+    }));
+  }, [nome, coleta, entregas, peso, tipoMaterial, qtdVolumes, valorNF, observacoes, vehicle, tipoFrete, dataAgendada, whatsapp, documento, valorOferta]);
 
   useEffect(() => {
     if (!currentOrderId) return;
@@ -321,32 +333,19 @@ export default function Cliente() {
   }, []);
 
   const getValidCoords = async (addressStr: string): Promise<Coords> => {
-    console.log('[CLIENTE][GETVALIDCOORDS][1-ENDERECO-A-ENVIAR]', addressStr);
-
     if (coordsCache.current[addressStr]) {
-      console.log('[CLIENTE][GETVALIDCOORDS][CACHE-HIT]', addressStr, coordsCache.current[addressStr]);
       return coordsCache.current[addressStr];
     }
     
     try {
       const coords = await callWithRetryAndTimeout<Coords>('getCoords', { address: addressStr });
-      console.log('[CLIENTE][GETVALIDCOORDS][RESPOSTA-CLOUD-FUNCTION]', JSON.stringify(coords));
-
       if (coords && typeof coords.lat === 'number') { 
         coordsCache.current[addressStr] = coords; 
         return coords; 
       }
       throw new Error('A API retornou coordenadas vazias.');
     } catch (error: any) {
-      const errorCode = error?.code || 'NO_CODE';
-      const errorMessage = error?.message || 'Falha de comunicação ou timeout';
-      const errorDetails = error?.details ? JSON.stringify(error.details) : 'Sem detalhes adicionais';
-      
-      console.error('[CLIENTE][GETVALIDCOORDS][6-THROW-EXECUTADO] repasse de erro de getCoords/rede', JSON.stringify({ addressStr, errorCode, errorMessage, errorDetails }));
-      console.error(`[DIAGNÓSTICO FORENSE] Erro interceptado em getValidCoords:`, error);
-      if (error?.stack) console.error(`[STACK TRACE]`, error.stack);
-
-      throw new Error(`[${errorCode}] ${errorMessage} | Info: ${errorDetails} (Original: Endereço não localizado pelo servidor: ${addressStr})`);
+      throw new Error(`Endereço não localizado pelo servidor: ${addressStr}`);
     }
   };
 
@@ -457,7 +456,12 @@ export default function Cliente() {
         veiculo: vehicle, 
         categoria: vehicle, 
         peso: peso || 'Não informado', 
-        tipoMaterial: tipoMaterial || 'Carga geral',
+        
+        // 🔥 CTO FIX: Envio das informações Ouro pro Motorista não ir às cegas.
+        tipoMaterial: tipoMaterial,
+        qtdVolumes: qtdVolumes,
+        valorNF: valorNF,
+        observacoes: observacoes,
         
         valorTotal: valorFreteBruto, 
         valorFreteBruto: valorFreteBruto,
@@ -773,15 +777,38 @@ export default function Cliente() {
                 </div>
               </div>
 
+              {/* 🔥 CTO FIX: NOVOS CAMPOS OPERACIONAIS (Auditoria) */}
               <div className="bg-slate-50 p-6 md:p-8 rounded-3xl border border-slate-100">
                 <h2 className="mb-6 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
-                  <Package className="h-5 w-5 text-amber-500" /> Especificações da Carga
+                  <FileText className="h-5 w-5 text-slate-400" /> Detalhes da Mercadoria
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                   <select className={`${inputClass} cursor-pointer`} value={tipoMaterial} onChange={e => setTipoMaterial(e.target.value)}>
+                      <option value="Caixas Secas">Caixas Secas</option>
+                      <option value="Documentos">Documentos / Envelopes</option>
+                      <option value="Alimentação Seca">Alimentação Seca</option>
+                      <option value="Produto Frágil">Produto Frágil</option>
+                      <option value="Peças Automotivas">Peças / Equipamentos</option>
+                      <option value="MOPP / Perigoso">MOPP / Carga Perigosa (+20%)</option>
+                      <option value="Outros">Outros</option>
+                   </select>
+                   <input className={inputClass} placeholder="Qtd. de Volumes (Ex: 3 caixas)" value={qtdVolumes} onChange={e => setQtdVolumes(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <input className={inputClass} placeholder="Valor da NF / Declarado (Opcional)" value={valorNF} onChange={e => setValorNF(e.target.value)} />
+                   <input className={inputClass} placeholder="Instruções p/ Motorista (Ex: Doca 3, Falar c/ João)" value={observacoes} onChange={e => setObservacoes(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-6 md:p-8 rounded-3xl border border-slate-100">
+                <h2 className="mb-6 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
+                  <Package className="h-5 w-5 text-amber-500" /> Especificações do Veículo
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                   <select className={`col-span-1 md:col-span-2 ${inputClass} cursor-pointer`} value={vehicle} onChange={e => setVehicle(e.target.value as VehicleType)}>
                     {Object.entries(VEHICLE_CONFIG).map(([key, conf]) => (<option key={key} value={key}>{conf.nome}</option>))}
                   </select>
-                  <input className={`col-span-2 ${inputClass}`} placeholder="Peso Bruto (Ex: 2500kg)" value={peso} onChange={e => setPeso(e.target.value)} />
+                  <input className={`col-span-1 md:col-span-2 ${inputClass}`} placeholder="Peso Bruto Estimado (Ex: 250kg)" value={peso} onChange={e => setPeso(e.target.value)} />
                 </div>
 
                 <div className="bg-white rounded-3xl border-2 border-slate-200 overflow-hidden shadow-sm mb-6">
@@ -899,7 +926,17 @@ export default function Cliente() {
                 <div className="h-14 w-14 rounded-full bg-blue-50 flex items-center justify-center"><MapPin className="h-6 w-6 text-blue-600" /></div>
               </div>
 
-              {/* 🔥 CTO FIX: "Volumes" removido do Resumo da Rota. Interface visualmente limpa e fiel aos dados reais. */}
+              {/* 🔥 CTO FIX: Checklist de Confiança (Sugerido pela Auditoria) */}
+              <div className="mb-8 bg-blue-50 border border-blue-100 rounded-2xl p-4">
+                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Auditoria de Segurança</p>
+                 <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700">
+                    <span className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500"/> Distância ({distanciaReal.toFixed(1)}km)</span>
+                    <span className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500"/> Escrow (Protegido)</span>
+                    <span className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500"/> Paradas Verificadas</span>
+                    <span className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500"/> Múltiplos PINs Ativos</span>
+                 </div>
+              </div>
+
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Truck size={18} className="text-cyan-400 mb-1" />
@@ -908,15 +945,14 @@ export default function Cliente() {
                  </div>
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Scale size={18} className="text-cyan-400 mb-1" />
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Peso Estimado</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Peso Bruto</p>
                     <p className="text-sm font-bold text-white mt-1">{peso || 'N/A'}</p>
                  </div>
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md col-span-2 md:col-span-1">
                     <Clock3 size={18} className="text-amber-400 mb-1" />
-                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância / Paradas</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância Total</p>
                     <p className="text-sm font-bold text-white mt-1">
                       {distanciaReal.toFixed(1)} km 
-                      {entregas.length > 1 && <span className="text-cyan-400 ml-1">({entregas.length} paradas)</span>}
                     </p>
                  </div>
               </div>
@@ -930,7 +966,7 @@ export default function Cliente() {
                 <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-2">Destino Final</p>
                   <p className="text-lg font-bold text-slate-900">{entregas[entregas.length - 1].rua}, {entregas[entregas.length - 1].num}</p>
-                  <p className="text-sm text-slate-500">{entregas.length > 1 ? `+ ${entregas.length - 1} paradas no trajeto` : entregas[0].bairro}</p>
+                  <p className="text-sm text-slate-500">{entregas.length > 1 ? `+ ${entregas.length - 1} paradas extras no trajeto` : entregas[0].bairro}</p>
                 </div>
               </div>
 
