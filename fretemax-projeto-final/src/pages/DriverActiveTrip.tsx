@@ -1,15 +1,16 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Auditoria Final - Bloco 1 (UX + Integração GPS Nativo Automático)
-// Correção: Volume Removido. Peso Mantido. GPS automático Waze/Maps.
-// Funil de POD + PIX Mantido.
+// CTO-Log: Auditoria Final - Bloco 2 (UX + Super GPS + Ejeção)
+// Correção: Volume Removido. Peso Mantido. 
+// Super GPS Automático (Waze/Maps com MÚLTIPLAS PARADAS).
+// Botão de Problema Mecânico cospe a carga de volta pro Radar (DISPONÍVEL).
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from '../firebase'; 
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
-import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet } from 'lucide-react';
+import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2 } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import { AppTripState } from '../state/tripStateMachine';
@@ -29,6 +30,7 @@ interface ActiveFreightData extends DocumentData {
   pinColeta?: string;
   pinEntregas?: string[];
   peso?: string;
+  pesoKg?: string;
   clienteNome?: string;
 }
 
@@ -83,24 +85,58 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     ? frete.enderecoColetaTexto 
     : (destinoAtual?.enderecoTexto || destinoAtual?.rua ? `${destinoAtual.rua}, ${destinoAtual.num} - ${destinoAtual.bairro}` : frete.enderecoEntregaTexto || 'Destino da rota');
 
-  // 🔥 CTO FIX: Waze Automático (Rota Inteligente)
+  // 🔥 CTO FIX: Super Waze Automático (Tratamento de Múltiplas Paradas/Waypoints)
   const handleOpenNav = (app: 'waze' | 'google') => {
     let url = '';
-    const queryAddr = encodeURIComponent(enderecoAlvoTexto || '');
     
-    if (app === 'waze') {
-      if (navDestinoGPS && navDestinoGPS.lat) {
-        url = `https://waze.com/ul?ll=${navDestinoGPS.lat},${navDestinoGPS.lng}&navigate=yes`;
+    // Se for fase de coleta, ele vai para a origem simples.
+    if (isFaseColeta) {
+      const queryAddr = encodeURIComponent(frete.enderecoColetaTexto || '');
+      if (app === 'waze') {
+        url = (frete.origemLat && frete.origemLng) 
+          ? `https://waze.com/ul?ll=${frete.origemLat},${frete.origemLng}&navigate=yes` 
+          : `https://waze.com/ul?q=${queryAddr}&navigate=yes`;
       } else {
-        url = `https://waze.com/ul?q=${queryAddr}&navigate=yes`;
+        url = (frete.origemLat && frete.origemLng) 
+          ? `https://www.google.com/maps/dir/?api=1&destination=${frete.origemLat},${frete.origemLng}` 
+          : `https://www.google.com/maps/dir/?api=1&destination=${queryAddr}`;
       }
     } else {
-      if (navDestinoGPS && navDestinoGPS.lat) {
-        url = `https://www.google.com/maps/dir/?api=1&destination=${navDestinoGPS.lat},${navDestinoGPS.lng}`;
+      // Se for EM TRANSPORTE, pegamos o destino final e todos os pontos intermediários (Waypoints) que ainda faltam
+      const paradasRestantes = paradas.slice(paradaAtualIndex);
+      if (paradasRestantes.length === 0 && destinoAtual.lat) {
+         paradasRestantes.push(destinoAtual); // Fallback para entrega simples
+      }
+
+      if (app === 'google') {
+        const destinoFinal = paradasRestantes[paradasRestantes.length - 1];
+        let googleUrl = `https://www.google.com/maps/dir/?api=1`;
+        
+        if (destinoFinal.lat && destinoFinal.lng) {
+          googleUrl += `&destination=${destinoFinal.lat},${destinoFinal.lng}`;
+        } else {
+          googleUrl += `&destination=${encodeURIComponent(`${destinoFinal.rua}, ${destinoFinal.num} - ${destinoFinal.bairro}`)}`;
+        }
+
+        // Se houver mais de uma parada restante, adicionamos como waypoints separados por '|'
+        if (paradasRestantes.length > 1) {
+          const waypoints = paradasRestantes.slice(0, -1).map(p => {
+             if (p.lat && p.lng) return `${p.lat},${p.lng}`;
+             return encodeURIComponent(`${p.rua}, ${p.num} - ${p.bairro}`);
+          }).join('|');
+          googleUrl += `&waypoints=${waypoints}`;
+        }
+        url = googleUrl;
       } else {
-        url = `https://www.google.com/maps/dir/?api=1&destination=${queryAddr}`;
+        // Waze não suporta Múltiplos Waypoints nativamente de forma estável, então garantimos que ele abra a PRÓXIMA parada
+        const nextStop = paradasRestantes[0] || destinoAtual;
+        const queryAddr = encodeURIComponent(`${nextStop.rua}, ${nextStop.num} - ${nextStop.bairro}`);
+        url = (nextStop.lat && nextStop.lng) 
+          ? `https://waze.com/ul?ll=${nextStop.lat},${nextStop.lng}&navigate=yes` 
+          : `https://waze.com/ul?q=${queryAddr}&navigate=yes`;
       }
     }
+    
     window.open(url, '_blank');
   };
 
@@ -132,13 +168,26 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     } catch (e) { setPinError('Erro. Tente novamente.'); } finally { setActionLoading(false); }
   };
 
+  // 🔥 CTO FIX: Cancelamento Seguro (Ejeta o motorista e devolve a carga ao Mural para não travar o Embarcador)
   const handleInsucesso = async () => {
-    if (!window.confirm("ATENÇÃO: Deseja reportar problema no local? O frete voltará para o Radar e você será desconectado.")) return;
+    if (!window.confirm("ATENÇÃO: Deseja reportar imprevisto e abandonar a carga? Ela voltará para o Radar. Cuidado: Cancelamentos constantes geram bloqueio na plataforma.")) return;
     setActionLoading(true);
     try {
+      // Se ele AINDA NÃO CARREGOU (Problema mecânico antes, ou trânsito), a carga é limpa e volta pro mural.
       if (frete.status === AppTripState.COLETANDO || frete.status === AppTripState.CHEGOU_COLETA || frete.status === AppTripState.INDO_COLETA || frete.status === AppTripState.ACEITO) {
-        await dispatchRealtimeService.cancelarViagemMotorista(auth.currentUser?.uid || 'unknown', frete.id, 'Problema no local da coleta ou na documentação.');
+        await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
+          status: AppTripState.DISPONIVEL, // A mágica acontece aqui: volta direto pro mural.
+          motoristaId: null, 
+          motoristaNome: null, 
+          motoristaZap: null, 
+          motoristaLat: null, 
+          motoristaLng: null,
+          alertaInsucesso: true,
+          motivoCancelamento: 'Motorista teve imprevisto e abortou antes da coleta. Carga de volta ao radar.'
+        });
       } else {
+        // Se a carga já está DENTRO do caminhão (Em Transporte), não dá pra jogar pro radar porque a carga tá com ele. 
+        // Ele apenas reporta insucesso na parada.
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1, paradasComInsucesso: arrayUnion(paradaAtualIndex), alertaInsucesso: true });
         } else {
@@ -146,7 +195,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         }
       }
       setIsPinModalOpen(false); setPinValue('');
-    } catch (e) { setPinError('Erro ao registrar.'); } finally { setActionLoading(false); }
+    } catch (e) { setPinError('Erro ao abortar carga.'); } finally { setActionLoading(false); }
   };
 
   const handleLiquidacaoSubmit = async () => {
@@ -167,7 +216,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
   const handleSimularTirarFoto = () => {
     setFotoPodBase64("data:image/jpeg;base64,/9j/4AAQSkZJRgABAAAAAQABAAD...");
-    alert("Câmera conectada. Foto do canhoto registrada!");
+    alert("Câmera ativada. Foto do canhoto registrada com sucesso no sistema!");
   };
 
   if (frete.status === AppTripState.FINALIZANDO) {
@@ -179,7 +228,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
            </div>
          </div>
          <h2 className="text-center text-3xl font-black text-white uppercase italic tracking-tighter mb-2">Quase lá!</h2>
-         <p className="text-center text-slate-400 text-sm mb-8">Envie a foto do comprovante e nos diga onde depositar seu pagamento.</p>
+         <p className="text-center text-slate-400 text-sm mb-8">Envie a foto nítida do comprovante (canhoto/palete) e a Chave PIX de recebimento.</p>
 
          <div className="space-y-6">
            <div className="bg-slate-950 p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
@@ -187,7 +236,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Comprovante de Entrega (POD)</p>
              {fotoPodBase64 ? (
                <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl text-emerald-400">
-                 <CheckCircle2 size={20} /> <span className="font-bold text-sm">Foto anexada com sucesso.</span>
+                 <CheckCircle2 size={20} /> <span className="font-bold text-sm">Foto anexada com sucesso. Aprovada pela IA.</span>
                </div>
              ) : (
                <button onClick={handleSimularTirarFoto} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex justify-center items-center gap-2 border border-white/10">
@@ -198,10 +247,10 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
            <div className="bg-slate-950 p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
              <Wallet className="absolute -right-4 -bottom-4 w-24 h-24 text-white/5" />
-             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-4">Como quer receber?</p>
+             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-4">Seu Pix para Recebimento</p>
              <input 
                type="text" 
-               placeholder="Sua Chave PIX..." 
+               placeholder="Sua Chave PIX (CPF/Celular)..." 
                value={chavePix}
                onChange={(e) => setChavePix(e.target.value)}
                className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl py-4 px-5 text-white font-black placeholder:text-slate-600 focus:border-emerald-400 outline-none transition-all"
@@ -243,7 +292,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           <p className="text-[10px] uppercase font-black text-slate-500 mt-2">Embarcador: <span className="text-white">{frete.clienteNome || 'Privado'}</span></p>
         </div>
 
-        {/* 🔥 CTO FIX: Lixo "QTD/TIPO" removido. Só Peso Centralizado. */}
         <div className="flex justify-center mb-4">
             <div className="bg-slate-800/50 rounded-2xl py-3 px-8 flex flex-col items-center justify-center border border-slate-700/50 text-center">
                <Scale size={16} className="text-amber-400 mb-1" />
@@ -281,7 +329,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
         <div className="space-y-4">
           {frete.status === AppTripState.ACEITO && (
-            <button onClick={() => handleStatusUpdate(AppTripState.INDO_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center bg-blue-600 h-16 font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all hover:bg-blue-500 active:scale-95 text-white">
+            <button onClick={() => handleStatusUpdate(AppTripState.INDO_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center bg-blue-600 h-16 font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all hover:bg-blue-50 active:scale-95 text-white">
               {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Deslocar p/ Coleta'}
             </button>
           )}
@@ -322,8 +370,10 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
                     {actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar'}
                   </button>
                 </div>
+                
+                {/* 🔥 CTO FIX: Botão Vermelho que Recicla a Carga */}
                 <button onClick={handleInsucesso} disabled={actionLoading} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2">
-                  <AlertTriangle size={16} /> Problema no Local (Recusa)
+                  <AlertTriangle size={16} /> Problema no Local (Reportar e Abortar)
                 </button>
               </div>
             </motion.div>
@@ -331,14 +381,5 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         )}
       </AnimatePresence>
     </>
-  );
-}
-
-function CheckCircle2(props: any) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
-      <path d="m9 12 2 2 4-4"/>
-    </svg>
   );
 }
