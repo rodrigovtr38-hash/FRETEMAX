@@ -2,11 +2,12 @@
 // NOME DO ARQUIVO: src/components/ChatFrete.tsx
 // CTO-Log: Auditoria Concluída (Bloco 2 - Vida Visual).
 // Status: A Inteligência Artificial Gemini foi plugada e agora "escuta e responde" às mensagens do usuário em tempo real.
+// Correção: Destaque visual "Amarelo/Cyan" para as mensagens do sistema (Torre Operacional)
 // =========================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { addDoc, collection, limit, onSnapshot, orderBy, query, serverTimestamp, DocumentData } from 'firebase/firestore';
-import { Loader2, Send, ShieldAlert, Zap } from 'lucide-react';
+import { Loader2, Send, ShieldAlert, Zap, Radio } from 'lucide-react';
 import { db } from '../firebase';
 // 🔥 CTO FIX: Cérebro da Inteligência importado e plugado.
 import { useFTI } from '../core/ai/hooks/useFTI';
@@ -146,12 +147,14 @@ export default function ChatFrete({ freteId, nome, tipoUsuario }: ChatFreteProps
         ) : (
           <div className="space-y-4">
             {messages.map((message) => {
-              if (message.tipoUsuario === 'admin') {
+              
+              // 🔥 CTO FIX: Tratamento especial para as Mensagens do Sistema / Torre
+              if (message.tipoUsuario === 'admin' || message.nome.includes('Torre')) {
                  return (
                    <div key={message.id} className="flex justify-center my-3 animate-in fade-in zoom-in duration-300">
-                     <div className="bg-slate-950 border border-cyan-500/20 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 max-w-[90%]">
-                       <Zap size={12} className="text-cyan-400" />
-                       <p className="text-[10px] font-bold text-cyan-300 tracking-wide text-center">
+                     <div className="bg-slate-950 border border-cyan-500/30 px-4 py-2 rounded-full shadow-[0_0_15px_rgba(34,211,238,0.1)] flex items-center gap-2 max-w-[95%]">
+                       <Radio size={14} className="text-amber-400 animate-pulse" />
+                       <p className="text-[10px] font-black text-slate-300 tracking-wide text-center">
                          {message.texto}
                        </p>
                      </div>
