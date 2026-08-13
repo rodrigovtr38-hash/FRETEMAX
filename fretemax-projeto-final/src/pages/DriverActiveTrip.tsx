@@ -1,11 +1,11 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Auditoria Final - Correção de Fluxo Multi-Drop
-// Correção Crítica: Motorista OBRIGADO a tirar foto (POD) em CADA parada.
-// PIX solicitado apenas na etapa FINALIZANDO.
+// CTO-Log: Auditoria Final - Bloco 2 (UX + Super GPS + Ejeção + Funil POD Multi-Drop)
+// Correção: Blindagem de erro "length" no array de pinEntregas.
+// Motorista OBRIGADO a tirar foto (POD) em CADA parada. PIX no final.
 // =========================================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from '../firebase'; 
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
@@ -43,7 +43,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [pinError, setPinError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   
-  // 🔥 CTO FIX: Controle de Foto por Parada
   const [fotoPodBase64, setFotoPodBase64] = useState<string | null>(null);
   const [chavePix, setChavePix] = useState('');
 
@@ -119,7 +118,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     alert("Câmera ativada. Foto da mercadoria registrada com sucesso!");
   };
 
-  // 🔥 CTO FIX: Lógica Robusta de Foto + PIN em cada parada
   const handlePinSubmit = async () => {
     setActionLoading(true);
     setPinError('');
@@ -128,22 +126,24 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         if (pinValue !== frete.pinColeta) { setPinError('PIN incorreto.'); setActionLoading(false); return; }
         await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.EM_TRANSPORTE);
       } else {
-        // Exige foto antes de liberar o PIN na entrega
         if (!fotoPodBase64) {
           setPinError('A foto do canhoto/mercadoria é OBRIGATÓRIA.');
           setActionLoading(false); 
           return;
         }
 
+        // 🔥 CTO FIX: Blindagem contra falta de "pinEntregas" (teste antigo)
         const pinEntregas = frete.pinEntregas || [];
-        if (pinValue !== pinEntregas[paradaAtualIndex]) { setPinError('PIN incorreto.'); setActionLoading(false); return; }
+        if (pinEntregas.length > 0 && pinValue !== pinEntregas[paradaAtualIndex]) { 
+          setPinError('PIN incorreto.'); 
+          setActionLoading(false); 
+          return; 
+        }
         
-        // Salva a foto específica desta parada no Firebase
         const fotosAtuais = frete.fotosPod || {};
         fotosAtuais[`parada_${paradaAtualIndex}`] = fotoPodBase64;
         await dispatchRealtimeService.atualizarTripRealtime(frete.id, { fotosPod: fotosAtuais });
 
-        // Avança para a próxima parada ou finaliza
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1 });
         } else {
@@ -152,7 +152,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       }
       setIsPinModalOpen(false); 
       setPinValue('');
-      setFotoPodBase64(null); // Reseta a foto para a próxima parada estar limpa
+      setFotoPodBase64(null);
     } catch (e) { setPinError('Erro. Tente novamente.'); } finally { setActionLoading(false); }
   };
 
@@ -193,7 +193,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     }
   };
 
-  // 🔥 TELA DE FINALIZAÇÃO: Apenas Pede o PIX (As fotos já foram tiradas em cada parada)
+  // 🔥 TELA DE FINALIZAÇÃO: Apenas Pede o PIX
   if (frete.status === AppTripState.FINALIZANDO) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2.5rem] border-2 border-emerald-500/30 bg-slate-900 shadow-[0_0_50px_rgba(16,185,129,0.15)] p-8">
@@ -230,6 +230,9 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     );
   }
 
+  // 🔥 CTO FIX: Blindagem de segurança de paradas para garantir que "paradaAtualIndex" seja mostrada corretamente
+  const totalParadas = frete.pinEntregas?.length || paradas.length || 1;
+
   return (
     <>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] border border-cyan-500/20 bg-slate-900 shadow-2xl p-6">
@@ -245,7 +248,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
         <div className="mb-6 text-center">
           <h2 className="text-xl font-black text-cyan-400 uppercase tracking-widest">
-            {isFaseColeta ? 'Etapa 1: Coleta' : frete.pinEntregas && frete.pinEntregas.length > 1 ? `Etapa 2: Entrega ${paradaAtualIndex + 1} de ${frete.pinEntregas.length}` : 'Etapa 2: Entrega Final'}
+            {isFaseColeta ? 'Etapa 1: Coleta' : totalParadas > 1 ? `Etapa 2: Entrega ${paradaAtualIndex + 1} de ${totalParadas}` : 'Etapa 2: Entrega Final'}
           </h2>
           <p className="text-[10px] uppercase font-black text-slate-500 mt-2">Embarcador: <span className="text-white">{frete.clienteNome || 'Privado'}</span></p>
         </div>
