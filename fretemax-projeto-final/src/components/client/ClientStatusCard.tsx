@@ -2,11 +2,11 @@
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
 // CTO-Log: FASE 3 - Auditoria de Integração.
 // Status: Animações Pulsantes "Vivas" injetadas.
-// Correção: Multi-PIN ativado para garantir segurança em rotas com até 5 paradas.
+// Correção: Multi-PIN visual ajustado para clareza na tela do Embarcador.
 // =========================================================
 
 import { useState, useEffect } from 'react';
-import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star, MapPin, CheckCircle2, DollarSign, Plus, RefreshCw, XCircle, Activity } from 'lucide-react';
+import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star, CheckCircle2, DollarSign, Plus, RefreshCw, XCircle, Activity } from 'lucide-react';
 
 interface ClientStatusCardProps {
   orderData: any;
@@ -59,7 +59,7 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
   let safeStatus = 'Sincronizando operação...';
   let statusColor = 'text-cyan-400';
   let bgColor = 'bg-cyan-500/10 border-cyan-500/30';
-  let isPulsing = true; // 🔥 CTO FIX: Controle de pulso de animação viva
+  let isPulsing = true; 
 
   if (isTimeExpired) { safeStatus = 'Baixa Procura (Mural)'; statusColor = 'text-amber-400'; bgColor = 'bg-amber-500/10 border-amber-500/30'; isPulsing = false; }
   else if (status === 'aguardando_pagamento') { safeStatus = 'Aguardando Escrow'; isPulsing = true; }
@@ -115,7 +115,6 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
       
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          {/* 🔥 CTO FIX: Animação Viva da Torre de Monitoramento */}
           <div className={`p-3.5 rounded-[1.5rem] border relative ${bgColor}`}>
              {isPulsing && <div className="absolute inset-0 rounded-[1.5rem] border-2 border-cyan-500 opacity-20 animate-ping"></div>}
             {isTimeExpired ? (
@@ -281,7 +280,7 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
           </div>
         </div>
 
-        {/* 🔥 CTO FIX: Sistema Inteligente de Múltiplos PINs para Rota com até 5 Paradas */}
+        {/* 🔥 CTO FIX: Layout Organizado para Múltiplos PINs de Entrega */}
         {(pinColeta || (pinEntregas && pinEntregas.length > 0)) && (
           <div className="rounded-[1.5rem] border border-cyan-500/30 bg-cyan-950/30 p-5 mt-6 relative overflow-hidden shadow-inner">
             <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
@@ -301,9 +300,9 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
                 </div>
               )}
               
-              {/* Renderiza a lista de todos os PINs das Múltiplas Paradas */}
+              {/* PINs das Múltiplas Paradas */}
               {pinEntregas && pinEntregas.map((pin: string, index: number) => {
-                 const isActiveDrop = paradaAtualIndex === index;
+                 const isActiveDrop = paradaAtualIndex === index && status !== 'coletando';
                  const isCompletedDrop = paradaAtualIndex > index;
                  
                  return (
