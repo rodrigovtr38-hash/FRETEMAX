@@ -3,13 +3,14 @@
 // CTO-Log: Auditoria Final - Bloco 2 (UX + Super GPS + Ejeção + Funil POD Multi-Drop)
 // Correção: Blindagem de erro "length" no array de pinEntregas.
 // Motorista OBRIGADO a tirar foto (POD) em CADA parada. PIX no final.
+// NOVO: Limite de 3 erros no PIN + Disparo Automático para o Canal de Chat.
 // =========================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from '../firebase'; 
-import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
-import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2 } from 'lucide-react';
+import { doc, onSnapshot, arrayUnion, DocumentData, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import { AppTripState } from '../state/tripStateMachine';
@@ -31,7 +32,9 @@ interface ActiveFreightData extends DocumentData {
   peso?: string;
   pesoKg?: string;
   clienteNome?: string;
+  clienteZap?: string;
   fotosPod?: Record<string, string>;
+  motoristaNome?: string;
 }
 
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
@@ -43,6 +46,10 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [pinError, setPinError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   
+  // 🔥 CTO FIX: Trava de Segurança Antifraude (Limite de Erros no PIN)
+  const [tentativasPin, setTentativasPin] = useState(0);
+  const [bloqueioPin, setBloqueioPin] = useState(false);
+
   const [fotoPodBase64, setFotoPodBase64] = useState<string | null>(null);
   const [chavePix, setChavePix] = useState('');
 
@@ -106,10 +113,33 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     window.open(url, '_blank');
   };
 
+  // 🔥 CTO FIX: Gatilho Automático para a Torre de Controle
+  const enviarAvisoTorre = async (mensagem: string) => {
+    try {
+      await addDoc(collection(db, 'fretes', frete.id, 'chat'), {
+        texto: mensagem,
+        nome: 'Torre Operacional',
+        tipoUsuario: 'admin',
+        createdAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.warn("Aviso da Torre falhou, mas operação segue.");
+    }
+  };
+
   const handleStatusUpdate = async (novoStatus: AppTripState) => {
     setActionLoading(true);
     try {
       await dispatchRealtimeService.atualizarStatusTrip(frete.id, novoStatus);
+      
+      // Disparo automático de mensagens baseado no status
+      if (novoStatus === AppTripState.INDO_COLETA) {
+        enviarAvisoTorre("Deslocamento iniciado. Motorista a caminho do Ponto de Coleta.");
+      } else if (novoStatus === AppTripState.CHEGOU_COLETA) {
+        enviarAvisoTorre("Alerta Geográfico: Motorista reportou chegada ao local de coleta.");
+      } else if (novoStatus === AppTripState.COLETANDO) {
+        enviarAvisoTorre("Veículo posicionado. Fase de carregamento na doca iniciada.");
+      }
     } catch (e) { console.error(e); } finally { setActionLoading(false); }
   };
 
@@ -119,35 +149,67 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   };
 
   const handlePinSubmit = async () => {
+    if (bloqueioPin) return;
     setActionLoading(true);
     setPinError('');
     try {
       if (frete.status === AppTripState.COLETANDO) {
-        if (pinValue !== frete.pinColeta) { setPinError('PIN incorreto.'); setActionLoading(false); return; }
-        await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.EM_TRANSPORTE);
-      } else {
-        if (!fotoPodBase64) {
-          setPinError('A foto do canhoto/mercadoria é OBRIGATÓRIA.');
-          setActionLoading(false); 
-          return;
-        }
-
-        // 🔥 CTO FIX: Blindagem contra falta de "pinEntregas" (teste antigo)
-        const pinEntregas = frete.pinEntregas || [];
-        if (pinEntregas.length > 0 && pinValue !== pinEntregas[paradaAtualIndex]) { 
-          setPinError('PIN incorreto.'); 
+        // Validação Coleta
+        if (pinValue !== frete.pinColeta) { 
+          const errosAtuais = tentativasPin + 1;
+          setTentativasPin(errosAtuais);
+          if (errosAtuais >= 3) {
+            setBloqueioPin(true);
+            setPinError('SISTEMA BLOQUEADO: Limite de 3 tentativas excedido. Contate a Torre.');
+            enviarAvisoTorre(`⚠️ ALERTA DE SEGURANÇA: Motorista (${frete.motoristaNome}) errou o PIN da Coleta 3 vezes e foi bloqueado pelo sistema.`);
+          } else {
+            setPinError(`PIN incorreto. Restam ${3 - errosAtuais} tentativas.`); 
+          }
           setActionLoading(false); 
           return; 
         }
         
+        // PIN Certo
+        setTentativasPin(0);
+        await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.EM_TRANSPORTE);
+        enviarAvisoTorre("✅ Coleta finalizada (PIN validado). Motorista a caminho do Destino Final.");
+      
+      } else {
+        // Validação Entrega (Com Foto OBRIGATÓRIA)
+        if (!fotoPodBase64) {
+          setPinError('A foto do canhoto/mercadoria é OBRIGATÓRIA antes de validar o PIN.');
+          setActionLoading(false); 
+          return;
+        }
+
+        const pinEntregas = frete.pinEntregas || [];
+        if (pinEntregas.length > 0 && pinValue !== pinEntregas[paradaAtualIndex]) { 
+          const errosAtuais = tentativasPin + 1;
+          setTentativasPin(errosAtuais);
+          if (errosAtuais >= 3) {
+            setBloqueioPin(true);
+            setPinError('SISTEMA BLOQUEADO: Limite de 3 tentativas excedido. Contate a Torre.');
+            enviarAvisoTorre(`⚠️ ALERTA DE SEGURANÇA: Motorista errou o PIN da Parada ${paradaAtualIndex + 1} por 3 vezes seguidas e o painel foi travado.`);
+          } else {
+            setPinError(`PIN incorreto. Restam ${3 - errosAtuais} tentativas.`); 
+          }
+          setActionLoading(false); 
+          return; 
+        }
+        
+        // PIN Certo
+        setTentativasPin(0);
         const fotosAtuais = frete.fotosPod || {};
         fotosAtuais[`parada_${paradaAtualIndex}`] = fotoPodBase64;
         await dispatchRealtimeService.atualizarTripRealtime(frete.id, { fotosPod: fotosAtuais });
+
+        enviarAvisoTorre(`✅ Entrega na Parada ${paradaAtualIndex + 1} concluída (Foto POD e PIN validados).`);
 
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1 });
         } else {
            await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.FINALIZANDO);
+           enviarAvisoTorre("🏁 Roteiro completo. Motorista aguardando liquidação financeira.");
         }
       }
       setIsPinModalOpen(false); 
@@ -161,6 +223,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     setActionLoading(true);
     try {
       if (frete.status === AppTripState.COLETANDO || frete.status === AppTripState.CHEGOU_COLETA || frete.status === AppTripState.INDO_COLETA || frete.status === AppTripState.ACEITO) {
+        enviarAvisoTorre("🚨 ATENÇÃO: Motorista reportou imprevisto mecânico/operacional antes do carregamento. A carga foi DEVOLVIDA PARA O MURAL.");
         await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
           status: AppTripState.DISPONIVEL, 
           motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
@@ -168,6 +231,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           motivoCancelamento: 'Motorista teve imprevisto e abortou antes da coleta.'
         });
       } else {
+        enviarAvisoTorre(`⚠️ AVISO: Motorista reportou insucesso na Parada ${paradaAtualIndex + 1}. Favor verificar canal de suporte.`);
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1, paradasComInsucesso: arrayUnion(paradaAtualIndex), alertaInsucesso: true });
         } else {
@@ -185,7 +249,11 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     try {
       await dispatchRealtimeService.salvarChavePix(frete.id, chavePix);
       await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.ENTREGUE);
-      alert("PIX enviado! O pagamento será processado na sua conta.");
+      
+      const adminPhone = "5511999999999"; 
+      const msg = `Olá, finalizei a corrida #${frete.id.slice(0,8).toUpperCase()}.\nMinha chave PIX é: ${chavePix}\nO canhoto já foi enviado no app. Fico no aguardo do repasse.`;
+      
+      window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (error) {
       alert("Falha na comunicação. Tente novamente.");
     } finally {
@@ -193,7 +261,13 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     }
   };
 
-  // 🔥 TELA DE FINALIZAÇÃO: Apenas Pede o PIX
+  const handleContatoEmpresa = () => {
+    if (!frete.clienteZap) { alert("Telefone da empresa não disponível."); return; }
+    const numero = frete.clienteZap.replace(/\D/g, '');
+    const msg = `Olá, sou o motorista parceiro da FretoGo. Estou a caminho para a corrida #${frete.id.slice(0,8).toUpperCase()}.`;
+    window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   if (frete.status === AppTripState.FINALIZANDO) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2.5rem] border-2 border-emerald-500/30 bg-slate-900 shadow-[0_0_50px_rgba(16,185,129,0.15)] p-8">
@@ -203,7 +277,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
            </div>
          </div>
          <h2 className="text-center text-3xl font-black text-white uppercase italic tracking-tighter mb-2">Rota Concluída!</h2>
-         <p className="text-center text-slate-400 text-sm mb-8">Todos os comprovantes de entrega foram enviados. Digite seu PIX para receber o valor protegido.</p>
+         <p className="text-center text-slate-400 text-sm mb-8">Todos os comprovantes de entrega foram enviados. Digite seu PIX para solicitar o valor à Torre de Controle.</p>
 
          <div className="space-y-6">
            <div className="bg-slate-950 p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
@@ -221,16 +295,15 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
            <button 
              onClick={handleLiquidacaoSubmit} 
              disabled={actionLoading || !chavePix} 
-             className="w-full flex items-center justify-center bg-emerald-500 h-16 font-black uppercase tracking-[0.2em] rounded-[1.5rem] disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-emerald-400 active:scale-95 shadow-[0_10px_30px_rgba(16,185,129,0.3)] text-slate-950"
+             className="w-full flex items-center justify-center gap-2 bg-emerald-500 h-16 font-black uppercase tracking-[0.2em] rounded-[1.5rem] disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-emerald-400 active:scale-95 shadow-[0_10px_30px_rgba(16,185,129,0.3)] text-slate-950"
            >
-             {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Solicitar PIX e Finalizar'}
+             {actionLoading ? <Loader2 className="animate-spin" size={24}/> : <><MessageCircle size={20} /> Solicitar PIX via WhatsApp</>}
            </button>
          </div>
       </motion.div>
     );
   }
 
-  // 🔥 CTO FIX: Blindagem de segurança de paradas para garantir que "paradaAtualIndex" seja mostrada corretamente
   const totalParadas = frete.pinEntregas?.length || paradas.length || 1;
 
   return (
@@ -250,7 +323,12 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           <h2 className="text-xl font-black text-cyan-400 uppercase tracking-widest">
             {isFaseColeta ? 'Etapa 1: Coleta' : totalParadas > 1 ? `Etapa 2: Entrega ${paradaAtualIndex + 1} de ${totalParadas}` : 'Etapa 2: Entrega Final'}
           </h2>
-          <p className="text-[10px] uppercase font-black text-slate-500 mt-2">Embarcador: <span className="text-white">{frete.clienteNome || 'Privado'}</span></p>
+          <div className="mt-2 flex flex-col items-center gap-2">
+            <p className="text-[10px] uppercase font-black text-slate-500">Embarcador: <span className="text-white">{frete.clienteNome || 'Privado'}</span></p>
+            <button onClick={handleContatoEmpresa} className="text-[10px] uppercase font-black tracking-widest text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors flex items-center gap-1">
+              <MessageCircle size={10} /> Contatar Empresa
+            </button>
+          </div>
         </div>
 
         <div className="flex justify-center mb-4">
@@ -316,7 +394,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
                 {frete.status === AppTripState.COLETANDO ? 'Verifique a mercadoria e insira o PIN da doca.' : 'Registre a foto do local/canhoto ANTES de pedir o PIN.'}
               </p>
               
-              {/* 🔥 AQUI A FOTO É EXIGIDA EM CADA PARADA */}
               {frete.status !== AppTripState.COLETANDO && (
                 <div className="mb-6 p-4 bg-slate-950 rounded-2xl border border-white/5 text-center">
                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-3">Foto Obrigatória da Entrega</p>
@@ -332,14 +409,14 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
                 </div>
               )}
 
-              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pinValue} onChange={(e) => { setPinValue(e.target.value.replace(/\D/g, '')); setPinError(''); }} className="w-full p-5 text-center text-5xl font-black tracking-[0.5em] bg-slate-950 text-cyan-400 border-2 border-cyan-500/30 rounded-2xl mb-4 focus:outline-none focus:border-cyan-400 placeholder:text-slate-800" placeholder="0000" />
+              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pinValue} disabled={bloqueioPin} onChange={(e) => { setPinValue(e.target.value.replace(/\D/g, '')); setPinError(''); }} className="w-full p-5 text-center text-5xl font-black tracking-[0.5em] bg-slate-950 text-cyan-400 border-2 border-cyan-500/30 rounded-2xl mb-4 focus:outline-none focus:border-cyan-400 placeholder:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="0000" />
               
               {pinError && <p className="text-red-400 text-[10px] font-black text-center mb-4 uppercase tracking-widest">{pinError}</p>}
               
               <div className="flex flex-col gap-3 mt-4">
                 <div className="flex gap-2">
-                  <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); setFotoPodBase64(null); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
-                  <button onClick={handlePinSubmit} disabled={actionLoading || pinValue.length < 4} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
+                  <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); setFotoPodBase64(null); setTentativasPin(0); setBloqueioPin(false); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
+                  <button onClick={handlePinSubmit} disabled={actionLoading || pinValue.length < 4 || bloqueioPin} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
                     {actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar'}
                   </button>
                 </div>
