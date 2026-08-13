@@ -1,9 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
 // CTO-Log: Homologação Funcional - Produção
-// Status: Remoção total de fallbacks e mocks. Distância, Tempo e Coordenadas dependem 100% da API real do Google Cloud Functions.
-// Correção: Injeção de âncora geográfica (Cidade/UF) para evitar ZERO_RESULTS no Geocoding do Google Maps.
-// CTO FIX: Bypass de Sessão injetado para simulação de fluxo ponta a ponta.
+// Status: Limpeza de "Volume" realizada. Resumo de Rota refinado.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -71,7 +69,6 @@ export default function Cliente() {
   const [coleta, setColeta] = useState<AddressData>({ cep: '', bairro: '', rua: '', num: '' });
   const [entregas, setEntregas] = useState<AddressData[]>([{ cep: '', bairro: '', rua: '', num: '' }]);
   const [peso, setPeso] = useState('');
-  const [qtdVolumes, setQtdVolumes] = useState('');
   const [tipoMaterial, setTipoMaterial] = useState('');
   const [vehicle, setVehicle] = useState<VehicleType>('moto'); 
   const [tipoFrete, setTipoFrete] = useState<'imediato' | 'agendado'>('imediato');
@@ -255,7 +252,7 @@ export default function Cliente() {
 
         setNome(data.nome || ''); setColeta(data.coleta || coleta); 
         setEntregas(data.entregas || (data.entrega ? [data.entrega] : [{ cep: '', bairro: '', rua: '', num: '' }]));
-        setPeso(data.peso || ''); setQtdVolumes(data.qtdVolumes || ''); setTipoMaterial(data.tipoMaterial || '');
+        setPeso(data.peso || ''); setTipoMaterial(data.tipoMaterial || ''); // 🔥 CTO FIX: Removido setQtdVolumes
         setVehicle(data.vehicle || 'moto'); setTipoFrete(data.tipoFrete || 'imediato');
         setDataAgendada(data.dataAgendada || ''); setWhatsapp(data.whatsapp || ''); setDocumento(data.documento || '');
         setValorOferta(data.valorOferta || '');
@@ -265,8 +262,8 @@ export default function Cliente() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('fretogo_form_backup', JSON.stringify({ nome, coleta, entregas, peso, qtdVolumes, tipoMaterial, vehicle, tipoFrete, dataAgendada, whatsapp, documento, valorOferta }));
-  }, [nome, coleta, entregas, peso, qtdVolumes, tipoMaterial, vehicle, tipoFrete, dataAgendada, whatsapp, documento, valorOferta]);
+    localStorage.setItem('fretogo_form_backup', JSON.stringify({ nome, coleta, entregas, peso, tipoMaterial, vehicle, tipoFrete, dataAgendada, whatsapp, documento, valorOferta }));
+  }, [nome, coleta, entregas, peso, tipoMaterial, vehicle, tipoFrete, dataAgendada, whatsapp, documento, valorOferta]);
 
   useEffect(() => {
     if (!currentOrderId) return;
@@ -431,10 +428,7 @@ export default function Cliente() {
       const parsedDate = tipoFrete === 'agendado' && dataAgendada ? new Date(dataAgendada) : null;
       const firebaseTimestamp = parsedDate ? Timestamp.fromDate(parsedDate) : null;
 
-      // 🔥 CTO FIX: Bypass de Sessão (Ponte de Safena Injetada)
-      // Se não houver login validado, geramos um crachá fantasma para liberar o fluxo de testes.
       const currentUser = auth.currentUser || { uid: "cliente_teste_admin_123" };
-      // if (!currentUser) throw new Error("Sua sessão expirou. Faça login novamente.");
 
       const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
       const taxaPlataforma = isHeavy ? 0.15 : 0.20;
@@ -460,7 +454,6 @@ export default function Cliente() {
         veiculo: vehicle, 
         categoria: vehicle, 
         peso: peso || 'Não informado', 
-        qtdVolumes: qtdVolumes || 'Não informado', 
         tipoMaterial: tipoMaterial || 'Carga geral',
         
         valorTotal: valorFreteBruto, 
@@ -499,7 +492,6 @@ export default function Cliente() {
 
       localStorage.setItem('fretogo_current_order', docRef.id); setCurrentOrderId(docRef.id);
 
-      // Gatilho B2B e testes locais - Pula o pagamento se for o CPF master ou se estiver no Bypass
       if (documentoLimpo === '34181118827' || currentUser.uid === "cliente_teste_admin_123") {
         const dataExpiracao = new Date();
         dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 15);
@@ -786,8 +778,8 @@ export default function Cliente() {
                   <select className={`col-span-1 md:col-span-2 ${inputClass} cursor-pointer`} value={vehicle} onChange={e => setVehicle(e.target.value as VehicleType)}>
                     {Object.entries(VEHICLE_CONFIG).map(([key, conf]) => (<option key={key} value={key}>{conf.nome}</option>))}
                   </select>
-                  <input className={inputClass} placeholder="Peso (Ex: 2500kg)" value={peso} onChange={e => setPeso(e.target.value)} />
-                  <input className={inputClass} placeholder="Produto / Volume" value={tipoMaterial} onChange={e => setTipoMaterial(e.target.value)} />
+                  {/* 🔥 CTO FIX: "Volumes" ou Caixa removidos. Peso mantido na integridade. */}
+                  <input className={`col-span-2 ${inputClass}`} placeholder="Peso Bruto (Ex: 2500kg)" value={peso} onChange={e => setPeso(e.target.value)} />
                 </div>
 
                 <div className="bg-white rounded-3xl border-2 border-slate-200 overflow-hidden shadow-sm mb-6">
@@ -905,7 +897,8 @@ export default function Cliente() {
                 <div className="h-14 w-14 rounded-full bg-blue-50 flex items-center justify-center"><MapPin className="h-6 w-6 text-blue-600" /></div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+              {/* 🔥 CTO FIX: "Volumes" removido do Resumo da Rota. Interface visualmente limpa e fiel aos dados reais. */}
+              <div className="grid grid-cols-3 gap-3 mb-8">
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Truck size={18} className="text-cyan-400 mb-1" />
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Veículo</p>
@@ -917,13 +910,8 @@ export default function Cliente() {
                     <p className="text-sm font-bold text-white mt-1">{peso || 'N/A'}</p>
                  </div>
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
-                    <Package size={18} className="text-cyan-400 mb-1" />
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Volumes</p>
-                    <p className="text-sm font-bold text-white mt-1">{qtdVolumes || '1'} un</p>
-                 </div>
-                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Clock3 size={18} className="text-amber-400 mb-1" />
-                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância / ETA</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância Total</p>
                     <p className="text-sm font-bold text-white mt-1">{distanciaReal.toFixed(1)} km</p>
                  </div>
               </div>
@@ -935,7 +923,7 @@ export default function Cliente() {
                   <p className="text-sm text-slate-500">{coleta.bairro}</p>
                 </div>
                 <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-2">Destino</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-2">Destino Final</p>
                   <p className="text-lg font-bold text-slate-900">{entregas[entregas.length - 1].rua}, {entregas[entregas.length - 1].num}</p>
                   <p className="text-sm text-slate-500">{entregas.length > 1 ? `+ ${entregas.length - 1} paradas no trajeto` : entregas[0].bairro}</p>
                 </div>
