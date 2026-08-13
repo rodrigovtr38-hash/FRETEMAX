@@ -2,10 +2,11 @@
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
 // CTO-Log: FASE 3 - Auditoria UX Feed (Bloco 2).
 // Status: Limpeza de variáveis de Volumes fantasmas. Peso mantido e Etiqueta Agendado.
+// CTO FIX: Etiqueta de MULTI-DROP aparente nas cargas aplicáveis.
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertOctagon, CheckCircle2, Flame, Package, Zap, ShieldCheck, Ruler, ThumbsUp, Star, Share2, CalendarClock, Scale } from 'lucide-react';
+import { AlertOctagon, CheckCircle2, Flame, Package, Zap, ShieldCheck, Ruler, ThumbsUp, Star, Share2, CalendarClock, Scale, Layers } from 'lucide-react';
 import { dispatchRealtimeService } from '../../../services/dispatchRealtimeService';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
@@ -136,6 +137,7 @@ export default function AvailableFreights({
             const km = freight.distanciaRealKm || freight.distanciaTotalKm || freight.distanciaEntregaKm || freight.distancia || 1;
             const ganhoPorKm = (freight.valorLiquidoMotorista || freight.valorMotorista || 0) / km;
             const isAgendado = freight.agendado || freight.tipoFrete === 'agendado';
+            const isMultiDrop = freight.multiplasEntregas || (freight.pinEntregas && freight.pinEntregas.length > 1);
 
             return (
               <div
@@ -175,6 +177,12 @@ export default function AvailableFreights({
                     {isAgendado && (
                       <span className="bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1">
                         <CalendarClock size={10} /> Agendado
+                      </span>
+                    )}
+                    {/* 🔥 TAG MULTI-DROP */}
+                    {isMultiDrop && (
+                      <span className="bg-purple-500/20 text-purple-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1 mt-1">
+                        <Layers size={10} /> Multi-Drop
                       </span>
                     )}
                   </div>
