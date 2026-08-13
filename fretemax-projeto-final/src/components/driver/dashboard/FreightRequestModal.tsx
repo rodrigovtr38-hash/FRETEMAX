@@ -2,10 +2,10 @@
 // NOME DO ARQUIVO: src/components/driver/dashboard/FreightRequestModal.tsx
 // CTO-Log: FASE 3 - Auditoria de Integração.
 // Status: Conversão de distâncias < 1km para metros no Modal.
-// Correção Crítica: Ícone Scale importado. Erro de renderização resolvido.
+// Correção: Volume Removido. Peso Mantido. Nome do Cliente Injetado.
 // =========================================================
 
-import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info, Scale } from 'lucide-react';
+import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info, Scale, Briefcase } from 'lucide-react';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
 interface FreightRequestModalProps {
@@ -27,7 +27,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   bitrem: 'Bitrem',
 };
 
-// 🔥 CTO FIX: Formatador de Metros para clareza em viagens curtas.
 const formatDistance = (km: number | undefined | null) => {
   if (!km || isNaN(km)) return '0 km';
   if (km < 1) return `${Math.round(km * 1000)} m`;
@@ -120,9 +119,9 @@ export default function FreightRequestModal({
 
             <div className="rounded-3xl border border-emerald-500/20 bg-slate-900/60 p-5 relative overflow-hidden">
               <div className="absolute -right-4 -top-4 opacity-5 pointer-events-none">
-                 <Package size={100} />
+                 <MapPinned size={100} /> 
               </div>
-              <Package size={22} className="text-emerald-400" />
+              <MapPinned size={22} className="text-emerald-400" />
               <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Destino Final</p>
               <h3 className="mt-1 text-base md:text-lg font-bold text-white leading-tight line-clamp-3">{freight.enderecoEntregaTexto}</h3>
               <p className="mt-3 text-xs font-bold text-slate-400">
@@ -131,23 +130,20 @@ export default function FreightRequestModal({
             </div>
           </div>
 
-          {/* ESPECIFICAÇÕES TÉCNICAS */}
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+          {/* 🔥 CTO FIX: ESPECIFICAÇÕES TÉCNICAS E CLIENTE (Volume Removido. Peso Mantido. Cliente Adicionado) */}
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
             <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center">
-              <Truck size={18} className="mx-auto text-slate-400 mb-2" />
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Veículo</p>
-              <h4 className="mt-1 text-sm font-bold text-white truncate">{CATEGORY_LABELS[freight.categoria || 'carro']}</h4>
+              <Briefcase size={18} className="mx-auto text-blue-400 mb-2" />
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Embarcador</p>
+              <h4 className="mt-1 text-sm font-bold text-white truncate">{freight.clienteNome || 'Empresa Privada'}</h4>
             </div>
+
             <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center">
               <Scale size={18} className="mx-auto text-slate-400 mb-2" />
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Peso Bruto</p>
               <h4 className="mt-1 text-sm font-bold text-white">{(freight.pesoKg || freight.peso || 0)} kg</h4>
             </div>
-            <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center">
-              <Package size={18} className="mx-auto text-slate-400 mb-2" />
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Volumes</p>
-              <h4 className="mt-1 text-sm font-bold text-white">{freight.volumes || freight.qtdVolumes || 1} un</h4>
-            </div>
+            
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-4 text-center shadow-inner relative overflow-hidden">
               <div className="absolute inset-0 bg-emerald-500/5 animate-pulse"></div>
               <Zap size={18} className="mx-auto text-emerald-400 mb-2 relative z-10" />
