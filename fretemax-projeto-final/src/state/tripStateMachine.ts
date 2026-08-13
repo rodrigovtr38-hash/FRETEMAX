@@ -1,8 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/state/tripStateMachine.ts
-// CTO-Log: Auditoria Final - Bloco 3
-// Ajuste: Injeção de Transições para 'DISPONIVEL' nas fases de coleta.
-// Correção Crítica: Autorizada transição direta de EM_TRANSPORTE para ENTREGUE (Bypass de PIN final).
+// CTO-Log: Auditoria Final - Bloco 2 (Segurança de Cancelamento)
+// Ajuste: Injeção de Transições para 'DISPONIVEL' nas fases ativas.
+// Correção: Se a carga quebrar no meio do caminho, volta para o Radar.
 // =========================================================
 
 export enum AppTripState {
@@ -72,13 +72,14 @@ export const VALID_TRANSITIONS: Record<string, string[]> = {
   
   [AppTripState.EXPIRADO]: [AppTripState.CANCELADO, AppTripState.DISPONIVEL],
 
+  // 🔥 CTO FIX: Transições autorizadas para o motorista cuspir a carga de volta para o Radar (DISPONIVEL)
   [AppTripState.ACEITO]: [AppTripState.INDO_COLETA, AppTripState.CANCELADO_MOTORISTA, AppTripState.CANCELADO_CLIENTE, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   [AppTripState.INDO_COLETA]: [AppTripState.CHEGOU_COLETA, AppTripState.CANCELADO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   [AppTripState.CHEGOU_COLETA]: [AppTripState.COLETANDO, AppTripState.CANCELADO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   [AppTripState.COLETANDO]: [AppTripState.EM_TRANSPORTE, AppTripState.CANCELADO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   
-  // 🔥 CTO FIX: Acesso direto ao ENTREGUE autorizado para evitar congelamento de tela.
-  [AppTripState.EM_TRANSPORTE]: [AppTripState.PARADO_OPERACIONAL, AppTripState.FINALIZANDO, AppTripState.ENTREGUE, AppTripState.ERRO, AppTripState.REDISPATCH],
+  // Se o caminhão quebrar, volta pro feed.
+  [AppTripState.EM_TRANSPORTE]: [AppTripState.PARADO_OPERACIONAL, AppTripState.FINALIZANDO, AppTripState.ENTREGUE, AppTripState.ERRO, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
   [AppTripState.PARADO_OPERACIONAL]: [AppTripState.EM_TRANSPORTE, AppTripState.ERRO],
   
   [AppTripState.FINALIZANDO]: [AppTripState.VALIDANDO_COMPROVANTE, AppTripState.ENTREGUE, AppTripState.ERRO],
