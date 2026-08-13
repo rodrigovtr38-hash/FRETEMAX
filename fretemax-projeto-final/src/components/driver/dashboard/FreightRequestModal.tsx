@@ -1,9 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/FreightRequestModal.tsx
-// CTO-Log: FASE 3 - Auditoria de Integração.
-// Status: Conversão de distâncias < 1km para metros no Modal.
-// Correção: Volume Removido. Peso Mantido. Nome do Cliente Injetado.
-// CTO FIX: Alerta visual para rotas Multi-Drop.
+// CTO-Log: FASE 3 - Auditoria de Integração e Resgate de Crash.
+// Status: "TypeError: Cannot read properties of undefined" ERADICADO.
 // =========================================================
 
 import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info, Scale, Briefcase, Layers } from 'lucide-react';
@@ -44,7 +42,9 @@ export default function FreightRequestModal({
 }: FreightRequestModalProps) {
   if (!visible || !freight) return null;
 
-  const isMultiDrop = freight.multiplasEntregas || (freight.pinEntregas && freight.pinEntregas.length > 1);
+  // 🔥 CTO FIX: Blindagem contra dados indefinidos (Fim do TypeError 'length')
+  const numParadas = freight.pinEntregas?.length || freight.paradas?.length || 1;
+  const isMultiDrop = freight.multiplasEntregas || numParadas > 1;
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/80 px-4 backdrop-blur-xl animate-in fade-in duration-200">
@@ -108,12 +108,12 @@ export default function FreightRequestModal({
             </div>
           </div>
 
-          {/* 🔥 CTO FIX: ALERTA MULTI-DROP */}
+          {/* 🔥 ALERTA MULTI-DROP BLINDADO */}
           {isMultiDrop && (
             <div className="bg-purple-900/20 border border-purple-500/30 rounded-[1.5rem] p-4 flex items-center justify-center gap-3">
                <Layers className="text-purple-400 animate-pulse" size={20} />
                <p className="text-sm font-black text-purple-300 uppercase tracking-widest">
-                 Atenção: Esta é uma Rota Multi-Drop ({freight.pinEntregas.length} Paradas)
+                 Atenção: Esta é uma Rota Multi-Drop ({numParadas} Paradas)
                </p>
             </div>
           )}
@@ -140,7 +140,7 @@ export default function FreightRequestModal({
               <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Destino Final</p>
               <h3 className="mt-1 text-base md:text-lg font-bold text-white leading-tight line-clamp-3">{freight.enderecoEntregaTexto}</h3>
               <p className="mt-3 text-xs font-bold text-slate-400">
-                {isMultiDrop ? `Roteiro com ${freight.pinEntregas.length} paradas` : 'Destino direto.'}
+                {isMultiDrop ? `Roteiro com ${numParadas} paradas no total.` : 'Destino direto.'}
               </p>
             </div>
           </div>
