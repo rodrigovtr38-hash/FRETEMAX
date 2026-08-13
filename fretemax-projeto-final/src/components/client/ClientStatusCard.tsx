@@ -1,11 +1,12 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
 // CTO-Log: FASE 3 - Auditoria de Integração.
-// Status: Leitura limpa da distância implementada e conversão para Metros em curtas distâncias.
+// Status: Animações Pulsantes "Vivas" injetadas.
+// Correção: Multi-PIN ativado para garantir segurança em rotas com até 5 paradas.
 // =========================================================
 
 import { useState, useEffect } from 'react';
-import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star, MapPin, CheckCircle2, DollarSign, Plus, RefreshCw, XCircle } from 'lucide-react';
+import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star, MapPin, CheckCircle2, DollarSign, Plus, RefreshCw, XCircle, Activity } from 'lucide-react';
 
 interface ClientStatusCardProps {
   orderData: any;
@@ -14,7 +15,6 @@ interface ClientStatusCardProps {
   onCancelar: () => void;
 }
 
-// 🔥 CTO FIX: Formatador Inteligente de Distância. Transforma "0.7 km" em "700 m".
 const formatDistance = (km: number | undefined | null) => {
   if (!km || isNaN(km)) return '0 km';
   if (km < 1) return `${Math.round(km * 1000)} m`;
@@ -59,17 +59,18 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
   let safeStatus = 'Sincronizando operação...';
   let statusColor = 'text-cyan-400';
   let bgColor = 'bg-cyan-500/10 border-cyan-500/30';
+  let isPulsing = true; // 🔥 CTO FIX: Controle de pulso de animação viva
 
-  if (isTimeExpired) { safeStatus = 'Baixa Procura (Mural)'; statusColor = 'text-amber-400'; bgColor = 'bg-amber-500/10 border-amber-500/30'; }
-  else if (status === 'aguardando_pagamento') { safeStatus = 'Aguardando Escrow'; }
-  else if (status === 'disponivel' || status === 'buscando_motorista') { safeStatus = 'Radar Ativo no Feed'; }
-  else if (status === 'cancelado') { safeStatus = 'Operação Abortada'; statusColor = 'text-red-400'; bgColor = 'bg-red-500/10 border-red-500/30'; }
+  if (isTimeExpired) { safeStatus = 'Baixa Procura (Mural)'; statusColor = 'text-amber-400'; bgColor = 'bg-amber-500/10 border-amber-500/30'; isPulsing = false; }
+  else if (status === 'aguardando_pagamento') { safeStatus = 'Aguardando Escrow'; isPulsing = true; }
+  else if (status === 'disponivel' || status === 'buscando_motorista') { safeStatus = 'Radar Ativo no Feed'; isPulsing = true; }
+  else if (status === 'cancelado') { safeStatus = 'Operação Abortada'; statusColor = 'text-red-400'; bgColor = 'bg-red-500/10 border-red-500/30'; isPulsing = false; }
   else if (status === 'aceito') { safeStatus = 'Motorista a Caminho'; statusColor = 'text-blue-400'; bgColor = 'bg-blue-500/10 border-blue-500/30'; }
   else if (status === 'indo_coleta') { safeStatus = 'Indo para Coleta'; statusColor = 'text-blue-400'; bgColor = 'bg-blue-500/10 border-blue-500/30'; }
-  else if (status === 'chegou_coleta') { safeStatus = 'Aguardando no Local'; statusColor = 'text-indigo-400'; bgColor = 'bg-indigo-500/10 border-indigo-500/30'; }
+  else if (status === 'chegou_coleta') { safeStatus = 'Aguardando no Local'; statusColor = 'text-indigo-400'; bgColor = 'bg-indigo-500/10 border-indigo-500/30'; isPulsing = false; }
   else if (status === 'coletando') { safeStatus = 'Carregando Veículo'; statusColor = 'text-amber-400'; bgColor = 'bg-amber-500/10 border-amber-500/30'; }
   else if (status === 'em_transporte') { safeStatus = 'Carga em Trânsito'; statusColor = 'text-emerald-400'; bgColor = 'bg-emerald-500/10 border-emerald-500/30'; }
-  else if (status === 'finalizando' || status === 'entregue' || status === 'finalizado') { safeStatus = 'Entrega Concluída'; statusColor = 'text-emerald-400'; bgColor = 'bg-emerald-500/10 border-emerald-500/30'; }
+  else if (status === 'finalizando' || status === 'entregue' || status === 'finalizado') { safeStatus = 'Entrega Concluída'; statusColor = 'text-emerald-400'; bgColor = 'bg-emerald-500/10 border-emerald-500/30'; isPulsing = false; }
 
   const isDataReady = typeof distancia === 'number' && typeof valorTotal === 'number' && valorTotal > 0;
   
@@ -114,11 +115,13 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
       
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className={`p-3.5 rounded-[1.5rem] border ${bgColor}`}>
+          {/* 🔥 CTO FIX: Animação Viva da Torre de Monitoramento */}
+          <div className={`p-3.5 rounded-[1.5rem] border relative ${bgColor}`}>
+             {isPulsing && <div className="absolute inset-0 rounded-[1.5rem] border-2 border-cyan-500 opacity-20 animate-ping"></div>}
             {isTimeExpired ? (
               <AlertTriangle className="h-7 w-7 text-amber-400" />
             ) : (
-              <Radar className={`h-7 w-7 ${statusColor} ${['disponivel', 'aguardando_pagamento'].includes(status) ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+              <Activity className={`h-7 w-7 ${statusColor} ${isPulsing ? 'animate-pulse' : ''}`} />
             )}
           </div>
           <div>
@@ -179,6 +182,7 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
 
       <div className="space-y-4">
         
+        {/* Timeline Viva */}
         {motoristaNome && !isTimeExpired && (
           <div className="mb-6 py-4">
             <div className="flex items-center justify-between relative">
@@ -189,7 +193,7 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
                   <div key={idx} className="relative z-10 flex flex-col items-center gap-2">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
                       stepStatus === 'completed' ? 'bg-emerald-500 border-emerald-400 text-slate-900' :
-                      stepStatus === 'active' ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(59,130,246,0.6)]' :
+                      stepStatus === 'active' ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(59,130,246,0.6)] animate-bounce' :
                       'bg-slate-900 border-slate-700 text-slate-600'
                     }`}>
                       {step.icon}
@@ -253,7 +257,7 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
               </div>
               <div className="min-w-0">
                 <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Profissional Designado</span>
-                <p className="text-sm font-bold truncate mt-0.5 text-white">
+                <p className="text-sm font-bold truncate mt-0.5 text-white animate-pulse">
                   Buscando parceiros no raio...
                 </p>
               </div>
@@ -277,29 +281,46 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
           </div>
         </div>
 
+        {/* 🔥 CTO FIX: Sistema Inteligente de Múltiplos PINs para Rota com até 5 Paradas */}
         {(pinColeta || (pinEntregas && pinEntregas.length > 0)) && (
           <div className="rounded-[1.5rem] border border-cyan-500/30 bg-cyan-950/30 p-5 mt-6 relative overflow-hidden shadow-inner">
             <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
             <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400 flex items-center gap-2 mb-4">
-              <Lock size={14} /> Chaves de Liberação (PIN)
+              <Lock size={14} /> Chaves de Liberação (PIN) de Rota
             </p>
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-col gap-3">
+              
+              {/* PIN da Coleta */}
               {pinColeta && (
-                <div className="bg-slate-950 px-4 py-3 rounded-2xl border border-white/10 flex-1 min-w-[140px] shadow-[0_5px_15px_rgba(0,0,0,0.3)]">
-                  <span className="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Liberação Coleta</span>
-                  <span className="font-mono font-black text-xl text-white tracking-[0.2em] block">{pinColeta}</span>
+                <div className="bg-slate-950 px-4 py-3 rounded-2xl border border-white/10 flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.3)]">
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">Passo 1: PIN da Coleta</span>
+                    <span className="font-mono font-black text-xl text-white tracking-[0.2em] block">{pinColeta}</span>
+                  </div>
+                  <CheckCircle2 size={24} className={status === 'coletando' ? 'text-amber-500 animate-pulse' : 'text-emerald-500'} />
                 </div>
               )}
-              {pinEntregas && pinEntregas.length > 0 && (
-                <div className="bg-slate-950 px-4 py-3 rounded-2xl border border-emerald-500/20 flex-1 min-w-[140px] shadow-[0_5px_15px_rgba(0,0,0,0.3)]">
-                  <span className="text-[9px] text-slate-400 uppercase font-bold tracking-widest block mb-1">
-                    Liberação Escrow {multiplasEntregas ? `(Drop ${paradaAtualIndex + 1})` : ''}
-                  </span>
-                  <span className="font-mono font-black text-xl text-emerald-400 tracking-[0.2em] block">
-                    {pinEntregas[paradaAtualIndex] || pinEntregas[0]}
-                  </span>
-                </div>
-              )}
+              
+              {/* Renderiza a lista de todos os PINs das Múltiplas Paradas */}
+              {pinEntregas && pinEntregas.map((pin: string, index: number) => {
+                 const isActiveDrop = paradaAtualIndex === index;
+                 const isCompletedDrop = paradaAtualIndex > index;
+                 
+                 return (
+                  <div key={index} className={`bg-slate-950 px-4 py-3 rounded-2xl border flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.3)] transition-all ${isActiveDrop ? 'border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.2)]' : 'border-white/5 opacity-70'}`}>
+                    <div>
+                      <span className={`text-[9px] uppercase font-bold tracking-widest block mb-1 ${isActiveDrop ? 'text-cyan-400' : 'text-slate-500'}`}>
+                        PIN de Entrega {pinEntregas.length > 1 ? `- Parada ${index + 1}` : ''}
+                      </span>
+                      <span className={`font-mono font-black text-xl tracking-[0.2em] block ${isCompletedDrop ? 'text-slate-600 line-through' : isActiveDrop ? 'text-emerald-400' : 'text-white'}`}>
+                        {pin}
+                      </span>
+                    </div>
+                    {isCompletedDrop && <CheckCircle2 size={20} className="text-emerald-500/50" />}
+                  </div>
+                );
+              })}
+
             </div>
           </div>
         )}
