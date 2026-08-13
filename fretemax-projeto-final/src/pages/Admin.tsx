@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Admin.tsx
 // CTO-Log: Fase 3 - Conclusão do Bloco 3 (Arquitetura FTI).
-// Correção: Painel de Métricas Neurais e "Botão de Pânico" (Zerar Banco) injetados.
+// Correção: Botão Nuclear aprimorado para limpar faturamento e fretes, preservando Motoristas.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -294,33 +294,44 @@ export default function Admin() {
     window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // 🔥 CTO FIX: Botão de Pânico (Zerar Banco de Dados)
+  // 🔥 CTO FIX: Botão Nuclear de Limpeza (Zero impacto nos Motoristas)
   const handleNuclearReset = async () => {
-    const code = window.prompt("⚠️ CUIDADO: Esta ação vai varrer TODOS os testes do banco de dados (Fretes e Pagamentos). Motoristas não serão afetados. Digite 'ZERAR' para confirmar:");
+    const code = window.prompt("⚠️ CUIDADO: Esta ação vai varrer TODOS os fretes de teste e zerar os faturamentos. Suas homologações de motoristas ficarão INTACTAS. Digite 'ZERAR' para prosseguir:");
     if (code !== 'ZERAR') {
-      alert("Ação cancelada. Código de segurança incorreto.");
+      alert("Ação abortada. Código incorreto.");
       return;
     }
     
     setIsCleaning(true);
     try {
+      const batch = writeBatch(db);
+      let countFretes = 0;
+      let countLogs = 0;
+
+      // Limpa os fretes (o que zera os cards financeiros de faturamento)
       const fretesRef = collection(db, 'fretes');
       const snapshot = await getDocs(fretesRef);
-      const batch = writeBatch(db);
-      
-      let count = 0;
-      snapshot.forEach((documento) => {
-        batch.delete(documento.ref);
-        count++;
+      snapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+        countFretes++;
       });
       
-      if (count > 0) {
+      // Limpa os custos e interações neurais da IA
+      const logsRef = collection(db, 'analytics_ia_logs');
+      const logsSnap = await getDocs(logsRef);
+      logsSnap.forEach((doc) => {
+        batch.delete(doc.ref);
+        countLogs++;
+      });
+      
+      if (countFretes > 0 || countLogs > 0) {
         await batch.commit();
       }
       
-      alert(`💥 Reset Nuclear Concluído! ${count} fretes e testes fantasmas foram pulverizados. O Radar está limpo.`);
+      alert(`💥 Banco Resetado! ${countFretes} fretes apagados e ${countLogs} logs da IA eliminados. Faturamento zerado para a Produção.`);
+      window.location.reload(); // Atualiza a tela para os gráficos voltarem a 0 na hora
     } catch (error) {
-      alert("Falha na rotina de exclusão massiva.");
+      alert("Falha ao executar a varredura.");
       console.error(error);
     } finally {
       setIsCleaning(false);
@@ -431,7 +442,7 @@ export default function Admin() {
         {tab === 'dashboard' && (
           <div className="flex justify-between items-center mb-6 animate-in fade-in">
              <button onClick={handleNuclearReset} disabled={isCleaning} className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2">
-                {isCleaning ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} ZERAR BANCO (TESTES)
+                {isCleaning ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} ZERAR FRETES E FATURAMENTO
              </button>
 
              <div className="bg-slate-900/50 border border-white/5 rounded-xl p-1 flex gap-1 backdrop-blur-sm">
@@ -706,131 +717,6 @@ export default function Admin() {
           </div>
         )}
 
-        {/* CORRIDAS TAB */}
-        {tab === 'corridas' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-             
-             <div className="bg-slate-900/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-white/5 flex flex-col md:flex-row gap-4 mb-8 shadow-xl">
-                <div className="flex-1 relative">
-                   <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-cyan-500 w-5 h-5" />
-                   <input 
-                    placeholder="Buscar por ID ou Nome na malha..." 
-                    onChange={e => setSearchTerm(e.target.value)} 
-                    className="w-full bg-slate-950 border border-white/10 rounded-2xl py-4 pl-14 pr-4 text-white font-bold focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all placeholder:text-slate-600" 
-                   />
-                </div>
-                <div className="flex gap-3">
-                  <select 
-                    onChange={e => setStatusFilter(e.target.value)} 
-                    value={statusFilter}
-                    className="bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-slate-300 font-black uppercase text-[10px] tracking-widest outline-none cursor-pointer hover:border-cyan-500 transition-all"
-                  >
-                    <option value="todos">Status Global</option>
-                    <option value={AppTripState.DISPONIVEL}>Radar Ativo</option>
-                    <option value={AppTripState.ACEITO}>Motorista Acionado</option>
-                    <option value={AppTripState.INDO_COLETA}>Em Deslocamento</option>
-                    <option value={AppTripState.EM_TRANSPORTE}>Em Rota Escolta</option>
-                    <option value={AppTripState.ENTREGUE}>Aguardando Liquidação</option>
-                    <option value="finalizado">Concluídos</option>
-                    <option value={AppTripState.CANCELADO}>Operação Abortada</option>
-                  </select>
-                </div>
-             </div>
-
-             <div className="space-y-6">
-                {fretesFiltrados.length === 0 ? (
-                  <div className="text-center py-24 bg-slate-900/30 rounded-[3rem] border border-dashed border-white/5 backdrop-blur-sm">
-                    <MapIcon size={48} className="mx-auto mb-6 text-slate-700" />
-                    <p className="text-slate-400 font-black uppercase italic tracking-widest text-lg">Malha Logística Estável</p>
-                    <p className="text-slate-600 text-sm mt-2">Nenhuma carga transitando nos filtros selecionados.</p>
-                  </div>
-                ) : (
-                  fretesFiltrados.map(f => (
-                    <div key={f.id} className="bg-slate-900/80 border rounded-[2.5rem] p-6 md:p-8 transition-all relative overflow-hidden group shadow-2xl backdrop-blur-md border-white/5 hover:border-cyan-500/30">
-                      
-                      <div className="flex flex-col lg:flex-row justify-between gap-8 pl-2">
-                        
-                        <div className="flex-[1.5]">
-                          <div className="flex items-center gap-4 mb-6 border-b border-white/5 pb-4">
-                            <span className="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
-                              {f.status.replace('_', ' ')}
-                            </span>
-                            <span className="text-[10px] font-mono text-slate-500 font-bold">OP_ID: #{f.id.slice(0,8).toUpperCase()}</span>
-                          </div>
-
-                          <div className="flex items-start gap-5">
-                             <div className="flex flex-col items-center gap-1 mt-1">
-                               <div className="w-4 h-4 bg-slate-950 border-2 border-blue-500 rounded-full"></div>
-                               <div className="w-0.5 h-12 bg-slate-800 rounded-full"></div>
-                               <div className="w-4 h-4 bg-slate-950 border-2 border-green-500 rounded-full"></div>
-                             </div>
-                             <div className="space-y-6 flex-1">
-                                <div>
-                                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Origem / Coleta</p>
-                                   <p className="text-sm font-bold text-white leading-tight">{f.origem?.endereco || f.cidadeOrigem || 'Endereço Indisponível'}</p>
-                                </div>
-                                <div>
-                                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Destino Final</p>
-                                   <p className="text-sm font-bold text-white leading-tight">{f.destino?.endereco || f.cidadeDestino || 'Endereço Indisponível'}</p>
-                                </div>
-                             </div>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2 mt-6 bg-slate-950 p-4 rounded-2xl border border-white/5">
-                             <div className="text-center border-r border-white/5">
-                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Distância</p>
-                               <p className="text-xs font-bold text-cyan-400">{f.distanciaTotalKm?.toFixed(1) || f.distancia?.toFixed(1) || '--'} km</p>
-                             </div>
-                             <div className="text-center border-r border-white/5">
-                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Peso / Qtd</p>
-                               <p className="text-xs font-bold text-slate-300">{f.pesoKg ? `${f.pesoKg} kg` : (f.volumes || f.peso || '--')}</p>
-                             </div>
-                             <div className="text-center">
-                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Categoria</p>
-                               <p className="text-xs font-bold text-amber-400 capitalize">{(f.veiculo || f.categoria)?.replace('_', ' ') || '--'}</p>
-                             </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-3 min-w-[200px] border-l border-white/5 pl-4 justify-center">
-                           
-                           {/* AÇÕES DE REPASSE DE DINHEIRO E REEMBOLSO */}
-                           {f.status === AppTripState.ENTREGUE && (
-                             <div className="flex flex-col gap-2">
-                               <button onClick={() => handlePedirChavePix(f)} className="bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all flex items-center justify-center gap-2">
-                                 <MessageCircle size={14} /> Cobrar Chave PIX
-                               </button>
-
-                               <button onClick={() => forceStatus(f.id, 'finalizado')} className="bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all flex flex-col items-center justify-center gap-1 group">
-                                 <span className="flex items-center gap-1"><Wallet size={14} /> Liquidar Repasse</span>
-                                 <span className="text-[10px] font-bold text-purple-200">R$ {Number(f.valorLiquidoMotorista || f.valorMotorista).toFixed(2).replace('.',',')}</span>
-                               </button>
-                             </div>
-                           )}
-
-                           {f.status === AppTripState.CANCELADO && !f.reembolsado && (
-                             <button onClick={() => handleReembolso(f.id)} className="bg-amber-600 hover:bg-amber-500 text-slate-900 py-4 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all flex flex-col items-center justify-center gap-1">
-                               <span className="flex items-center gap-1"><RefreshCcw size={14} /> Estornar PIX (MP)</span>
-                             </button>
-                           )}
-
-                           {f.reembolsado && (
-                             <div className="bg-slate-900 border border-amber-500/30 text-amber-400 py-3 rounded-xl font-black text-[9px] tracking-widest uppercase flex items-center justify-center gap-2">
-                               <CheckCircle size={12} /> Reembolso Feito
-                             </div>
-                           )}
-                           
-                           {[AppTripState.AGUARDANDO_PAGAMENTO, AppTripState.DISPONIVEL, AppTripState.ACEITO, AppTripState.INDO_COLETA].includes(f.status) && (
-                             <button onClick={() => forceStatus(f.id, AppTripState.CANCELADO)} className="bg-transparent hover:bg-red-500/10 text-red-500 py-3 rounded-xl font-black text-[9px] tracking-widest uppercase border border-transparent hover:border-red-500/30 transition-all mt-auto">Abortar Operação</button>
-                           )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-             </div>
-          </div>
-        )}
       </main>
 
       <div className="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-xl border-t border-white/5 p-3 z-40 hidden md:block shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
