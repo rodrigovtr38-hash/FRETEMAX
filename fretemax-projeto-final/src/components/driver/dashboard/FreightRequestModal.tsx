@@ -3,9 +3,10 @@
 // CTO-Log: FASE 3 - Auditoria de Integração.
 // Status: Conversão de distâncias < 1km para metros no Modal.
 // Correção: Volume Removido. Peso Mantido. Nome do Cliente Injetado.
+// CTO FIX: Alerta visual para rotas Multi-Drop.
 // =========================================================
 
-import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info, Scale, Briefcase } from 'lucide-react';
+import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info, Scale, Briefcase, Layers } from 'lucide-react';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
 interface FreightRequestModalProps {
@@ -42,6 +43,8 @@ export default function FreightRequestModal({
   onReject,
 }: FreightRequestModalProps) {
   if (!visible || !freight) return null;
+
+  const isMultiDrop = freight.multiplasEntregas || (freight.pinEntregas && freight.pinEntregas.length > 1);
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/80 px-4 backdrop-blur-xl animate-in fade-in duration-200">
@@ -94,14 +97,26 @@ export default function FreightRequestModal({
                   </h3>
                 </div>
               </div>
-              <div className="bg-slate-900/50 border border-white/5 rounded-xl px-4 py-2 flex items-center gap-2">
-                <Info size={14} className="text-cyan-400" />
-                <span className="text-[10px] font-bold text-slate-300 uppercase">
-                  Percurso total: {formatDistance(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0)}
-                </span>
+              <div className="bg-slate-900/50 border border-white/5 rounded-xl px-4 py-2 flex flex-col items-center gap-1">
+                <div className="flex items-center gap-2">
+                  <Info size={14} className="text-cyan-400" />
+                  <span className="text-[10px] font-bold text-slate-300 uppercase">
+                    Percurso total: {formatDistance(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* 🔥 CTO FIX: ALERTA MULTI-DROP */}
+          {isMultiDrop && (
+            <div className="bg-purple-900/20 border border-purple-500/30 rounded-[1.5rem] p-4 flex items-center justify-center gap-3">
+               <Layers className="text-purple-400 animate-pulse" size={20} />
+               <p className="text-sm font-black text-purple-300 uppercase tracking-widest">
+                 Atenção: Esta é uma Rota Multi-Drop ({freight.pinEntregas.length} Paradas)
+               </p>
+            </div>
+          )}
 
           {/* MAPA MENTAL DA ROTA */}
           <div className="grid gap-4 md:grid-cols-2">
@@ -125,12 +140,11 @@ export default function FreightRequestModal({
               <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Destino Final</p>
               <h3 className="mt-1 text-base md:text-lg font-bold text-white leading-tight line-clamp-3">{freight.enderecoEntregaTexto}</h3>
               <p className="mt-3 text-xs font-bold text-slate-400">
-                Rota até entrega: <span className="text-emerald-400">{formatDistance(freight.distanciaRealKm || freight.distanciaTotalKm || freight.distancia || 0)}</span>
+                {isMultiDrop ? `Roteiro com ${freight.pinEntregas.length} paradas` : 'Destino direto.'}
               </p>
             </div>
           </div>
 
-          {/* 🔥 CTO FIX: ESPECIFICAÇÕES TÉCNICAS E CLIENTE (Volume Removido. Peso Mantido. Cliente Adicionado) */}
           <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
             <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center">
               <Briefcase size={18} className="mx-auto text-blue-400 mb-2" />
