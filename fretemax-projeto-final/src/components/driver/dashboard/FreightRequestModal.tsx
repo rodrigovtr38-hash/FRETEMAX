@@ -43,7 +43,6 @@ export default function FreightRequestModal({
 }: FreightRequestModalProps) {
   if (!visible || !freight) return null;
 
-  // 🔥 CTO FIX: Blindagem contra dados indefinidos (Fim do TypeError 'length')
   const numParadas = freight.pinEntregas?.length || freight.paradas?.length || 1;
   const isMultiDrop = freight.multiplasEntregas || numParadas > 1;
 
@@ -109,7 +108,7 @@ export default function FreightRequestModal({
             </div>
           </div>
 
-          {/* 🔥 ALERTA MULTI-DROP VISUAL PARA O MOTORISTA */}
+          {/* ALERTA MULTI-DROP */}
           {isMultiDrop && (
             <div className="bg-purple-900/20 border border-purple-500/30 rounded-[1.5rem] p-4 flex items-center justify-center gap-3">
                <Layers className="text-purple-400 animate-pulse" size={20} />
@@ -146,33 +145,37 @@ export default function FreightRequestModal({
             </div>
           </div>
 
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center">
-              <Briefcase size={18} className="mx-auto text-blue-400 mb-2" />
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+            <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center flex flex-col justify-center">
+              <Briefcase size={16} className="mx-auto text-blue-400 mb-1" />
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Embarcador</p>
-              <h4 className="mt-1 text-sm font-bold text-white truncate">{freight.clienteNome || 'Empresa Privada'}</h4>
-              {/* 🔥 Mostrando Especificações da Mercadoria */}
-              {freight.tipoMaterial && <p className="text-[9px] text-slate-400 mt-1 uppercase truncate">{freight.tipoMaterial}</p>}
+              <h4 className="mt-1 text-xs font-bold text-white truncate">{freight.clienteNome || 'Empresa Privada'}</h4>
             </div>
 
-            <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center">
-              <Scale size={18} className="mx-auto text-slate-400 mb-2" />
+            <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center flex flex-col justify-center">
+              <Package size={16} className="mx-auto text-purple-400 mb-1" />
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Mercadoria</p>
+              <h4 className="mt-1 text-xs font-bold text-white truncate" title={freight.tipoMaterial}>{freight.tipoMaterial || 'Diversos'}</h4>
+              <p className="text-[9px] font-bold text-slate-400 mt-0.5">{freight.qtdVolumes ? `${freight.qtdVolumes} volumes` : '--'}</p>
+            </div>
+
+            <div className="rounded-2xl border border-white/5 bg-slate-950/60 p-4 text-center flex flex-col justify-center">
+              <Scale size={16} className="mx-auto text-slate-400 mb-1" />
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Peso Bruto</p>
-              <h4 className="mt-1 text-sm font-bold text-white">{(freight.pesoKg || freight.peso || 0)} kg</h4>
+              <h4 className="mt-1 text-xs font-bold text-white">{(freight.pesoKg || freight.peso || '--')} kg</h4>
             </div>
             
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-4 text-center shadow-inner relative overflow-hidden">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-4 text-center shadow-inner relative overflow-hidden flex flex-col justify-center">
               <div className="absolute inset-0 bg-emerald-500/5 animate-pulse"></div>
-              <Zap size={18} className="mx-auto text-emerald-400 mb-2 relative z-10" />
+              <Zap size={16} className="mx-auto text-emerald-400 mb-1 relative z-10" />
               <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 relative z-10">Valor Limpo</p>
               <h4 className="mt-1 text-sm font-black text-emerald-400 relative z-10">R$ {(freight.valorLiquidoMotorista || freight.valorMotorista || 0).toFixed(2).replace('.', ',')}</h4>
             </div>
           </div>
           
-          {/* Se a empresa enviou observações (Formulário Ouro), exibe aqui */}
           {freight.observacoes && (
-             <div className="bg-blue-900/10 border border-blue-500/20 rounded-2xl p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">Instruções do Embarcador:</p>
+             <div className="bg-blue-900/10 border border-blue-500/20 rounded-2xl p-4 mt-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1 flex items-center gap-1"><Info size={12}/> Instruções do Embarcador:</p>
                 <p className="text-xs text-blue-200 font-medium">{freight.observacoes}</p>
              </div>
           )}
