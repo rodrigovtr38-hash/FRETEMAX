@@ -1,12 +1,11 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/AvailableFreights.tsx
 // CTO-Log: FASE 3 - Auditoria UX Feed.
-// Correção: Blindagem contra falta de "pinEntregas".
-// Tag de Multi-Drop agora exibe o número de paradas perfeitamente e claro no Feed.
+// Correção: Remoção do botão de favoritar. Injeção de Tipo de Carga e Volumes.
 // =========================================================
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertOctagon, CheckCircle2, Flame, Package, Zap, ShieldCheck, Ruler, ThumbsUp, Star, Share2, CalendarClock, Scale, Layers } from 'lucide-react';
+import { AlertOctagon, CheckCircle2, Flame, Package, Zap, ShieldCheck, Ruler, CalendarClock, Scale, Layers, FileText } from 'lucide-react';
 import { dispatchRealtimeService } from '../../../services/dispatchRealtimeService';
 import type { OperationalFreight } from './DriverDashboardLayout';
 
@@ -84,13 +83,6 @@ export default function AvailableFreights({
     return (now - timestamp) < FREIGHT_TTL_MS;
   });
 
-  const handleSocialAction = (e: React.MouseEvent, action: string, freightId: string) => {
-    e.stopPropagation();
-    if (action === 'interesse') {
-      dispatchRealtimeService.registrarInteresse(freightId);
-    }
-  };
-
   return (
     <section className="relative w-full pb-20 animate-in fade-in duration-500">
       
@@ -138,7 +130,6 @@ export default function AvailableFreights({
             const ganhoPorKm = (freight.valorLiquidoMotorista || freight.valorMotorista || 0) / km;
             const isAgendado = freight.agendado || freight.tipoFrete === 'agendado';
             
-            // 🔥 CTO FIX: Cálculo seguro de paradas para o Feed
             const numParadas = freight.pinEntregas?.length || freight.paradas?.length || 1;
             const isMultiDrop = freight.multiplasEntregas || numParadas > 1;
 
@@ -181,7 +172,6 @@ export default function AvailableFreights({
                         <CalendarClock size={10} /> Agendado
                       </span>
                     )}
-                    {/* 🔥 ALERTA MULTI-DROP CLARO NO FEED */}
                     {isMultiDrop && (
                       <span className="bg-purple-500/20 text-purple-400 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1 mt-1 shadow-[0_0_10px_rgba(168,85,247,0.3)]">
                         <Layers size={10} /> Multi-Drop ({numParadas})
@@ -205,7 +195,6 @@ export default function AvailableFreights({
                     <div className="mt-1.5 flex h-2.5 w-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Destino Final</p>
-                      {/* 🔥 AVISO VISUAL DE PARADAS EXTRAS */}
                       <p className="text-sm font-bold text-white truncate mt-0.5">
                         {freight.enderecoEntregaTexto} 
                         {isMultiDrop && <span className="text-purple-400 ml-1"> (+ {numParadas - 1} paradas)</span>}
@@ -214,36 +203,29 @@ export default function AvailableFreights({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center shadow-inner">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-center gap-1"><Ruler size={10}/> Renda Bruta</p>
-                    <p className="text-xs font-black text-emerald-400">R$ {ganhoPorKm.toFixed(2)}/km</p>
+                {/* 🔥 CTO FIX: Informações operacionais limpas (Zero botões inúteis) */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex items-center justify-between shadow-inner">
+                    <div className="flex items-center gap-2">
+                       <Ruler size={14} className="text-slate-500" />
+                       <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Renda / Dist.</p>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[10px] font-black text-emerald-400">R$ {ganhoPorKm.toFixed(2)}/km</p>
+                       <p className="text-[9px] font-bold text-white mt-0.5">{formatDistance(km)}</p>
+                    </div>
                   </div>
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
-                    <Ruler size={14} className="text-slate-400 mb-1" />
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Distância</p>
-                    <p className="text-xs font-black text-white mt-1">{formatDistance(km)}</p>
+                  
+                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex items-center justify-between shadow-inner">
+                    <div className="flex items-center gap-2">
+                       <FileText size={14} className="text-slate-500" />
+                       <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Carga</p>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[10px] font-black text-white truncate max-w-[80px]">{freight.tipoMaterial || 'Diversos'}</p>
+                       <p className="text-[9px] font-bold text-slate-400 mt-0.5">{freight.qtdVolumes ? `${freight.qtdVolumes} un / ` : ''}{freight.pesoKg || freight.peso || '--'}kg</p>
+                    </div>
                   </div>
-                  <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex flex-col items-center text-center">
-                    <Scale size={14} className="text-slate-400 mb-1" />
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Peso Bruto</p>
-                    <p className="text-xs font-bold text-slate-300">{freight.pesoKg || freight.peso || '--'} kg</p>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 border-t border-slate-800/50 pt-5 mb-5">
-                   <button onClick={(e) => handleSocialAction(e, 'interesse', freight.id)} className="flex-1 flex flex-col items-center justify-center gap-1.5 text-slate-500 hover:text-blue-400 transition-colors">
-                      <ThumbsUp size={16}/>
-                      <span className="text-[8px] font-black uppercase tracking-widest">Interesse</span>
-                   </button>
-                   <button onClick={(e) => { e.stopPropagation(); }} className="flex-1 flex flex-col items-center justify-center gap-1.5 text-slate-500 hover:text-amber-400 transition-colors">
-                      <Star size={16}/>
-                      <span className="text-[8px] font-black uppercase tracking-widest">Salvar</span>
-                   </button>
-                   <button onClick={(e) => { e.stopPropagation(); }} className="flex-1 flex flex-col items-center justify-center gap-1.5 text-slate-500 hover:text-cyan-400 transition-colors">
-                      <Share2 size={16}/>
-                      <span className="text-[8px] font-black uppercase tracking-widest">Enviar</span>
-                   </button>
                 </div>
 
                 <div className="flex gap-3">
@@ -252,7 +234,7 @@ export default function AvailableFreights({
                       e.stopPropagation();
                       onSelectFreight(freight);
                     }}
-                    className={`flex-[3] flex items-center justify-center gap-2 rounded-[1.5rem] py-4 text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg
+                    className={`w-full flex items-center justify-center gap-2 rounded-[1.5rem] py-4 text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg
                       ${isHot 
                         ? 'bg-orange-500 text-slate-950 hover:bg-orange-400 shadow-[0_5px_20px_rgba(249,115,22,0.2)]' 
                         : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-[0_5px_20px_rgba(16,185,129,0.2)]'
