@@ -438,6 +438,7 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
+      // 🔥 CTO FIX: Adicionando todas as variáveis operacionais ao Payload do Firebase (Single Source of Truth)
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
@@ -457,7 +458,6 @@ export default function Cliente() {
         categoria: vehicle, 
         peso: peso || 'Não informado', 
         
-        // 🔥 CTO FIX: Envio das informações Ouro pro Motorista não ir às cegas.
         tipoMaterial: tipoMaterial,
         qtdVolumes: qtdVolumes,
         valorNF: valorNF,
@@ -667,7 +667,6 @@ export default function Cliente() {
       
       <div className="fixed inset-0 -z-10 bg-slate-50" style={{height: '100dvh'}}></div>
 
-      {/* PWA Install Banner */}
       {isInstallable && step === 'busca' && (
         <div className="sticky top-0 z-[100] w-full bg-cyan-600 px-4 py-3 flex items-center justify-between shadow-md">
           <div>
@@ -926,17 +925,6 @@ export default function Cliente() {
                 <div className="h-14 w-14 rounded-full bg-blue-50 flex items-center justify-center"><MapPin className="h-6 w-6 text-blue-600" /></div>
               </div>
 
-              {/* 🔥 CTO FIX: Checklist de Confiança (Sugerido pela Auditoria) */}
-              <div className="mb-8 bg-blue-50 border border-blue-100 rounded-2xl p-4">
-                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Auditoria de Segurança</p>
-                 <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700">
-                    <span className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500"/> Distância ({distanciaReal.toFixed(1)}km)</span>
-                    <span className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500"/> Escrow (Protegido)</span>
-                    <span className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500"/> Paradas Verificadas</span>
-                    <span className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500"/> Múltiplos PINs Ativos</span>
-                 </div>
-              </div>
-
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Truck size={18} className="text-cyan-400 mb-1" />
@@ -945,14 +933,15 @@ export default function Cliente() {
                  </div>
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Scale size={18} className="text-cyan-400 mb-1" />
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Peso Bruto</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Peso Estimado</p>
                     <p className="text-sm font-bold text-white mt-1">{peso || 'N/A'}</p>
                  </div>
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md col-span-2 md:col-span-1">
                     <Clock3 size={18} className="text-amber-400 mb-1" />
-                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância Total</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância / Paradas</p>
                     <p className="text-sm font-bold text-white mt-1">
                       {distanciaReal.toFixed(1)} km 
+                      {entregas.length > 1 && <span className="text-cyan-400 ml-1">({entregas.length} paradas)</span>}
                     </p>
                  </div>
               </div>
@@ -966,7 +955,7 @@ export default function Cliente() {
                 <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-2">Destino Final</p>
                   <p className="text-lg font-bold text-slate-900">{entregas[entregas.length - 1].rua}, {entregas[entregas.length - 1].num}</p>
-                  <p className="text-sm text-slate-500">{entregas.length > 1 ? `+ ${entregas.length - 1} paradas extras no trajeto` : entregas[0].bairro}</p>
+                  <p className="text-sm text-slate-500">{entregas.length > 1 ? `+ ${entregas.length - 1} paradas no trajeto` : entregas[0].bairro}</p>
                 </div>
               </div>
 
