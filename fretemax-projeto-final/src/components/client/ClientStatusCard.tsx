@@ -1,12 +1,11 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
-// CTO-Log: FASE 3 - Auditoria de Integração.
-// Status: Animações Pulsantes "Vivas" injetadas.
-// Correção: Multi-PIN visual ajustado para clareza na tela do Embarcador.
+// CTO-Log: Auditoria de Polimento (Fase de Escala).
+// Status: Timeline Viva refinada, sistema Multi-PIN estabilizado e exibição das "Informações Ouro".
 // =========================================================
 
 import { useState, useEffect } from 'react';
-import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star, CheckCircle2, DollarSign, Plus, RefreshCw, XCircle, Activity } from 'lucide-react';
+import { Radar, Truck, User, Package, Lock, AlertTriangle, TrendingUp, Timer, Navigation, Star, CheckCircle2, DollarSign, Plus, RefreshCw, XCircle, Activity, FileText } from 'lucide-react';
 
 interface ClientStatusCardProps {
   orderData: any;
@@ -264,7 +263,8 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
           </div>
         )}
 
-        <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-4 flex items-center justify-between transition-colors hover:bg-slate-950/80">
+        {/* 🔥 CTO FIX: Sincronização Ouro. A Especificação da Carga viaja até o acompanhamento do cliente */}
+        <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-4 flex flex-col gap-3 transition-colors hover:bg-slate-950/80">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-yellow-500/10 rounded-xl text-yellow-400 shrink-0">
               <Package size={20} />
@@ -278,9 +278,19 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
               </p>
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-white/5">
+             <div>
+               <p className="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5 flex items-center gap-1"><FileText size={10}/> Tipo Carga</p>
+               <p className="text-xs font-bold text-slate-300">{orderData?.tipoMaterial || '--'}</p>
+             </div>
+             <div>
+               <p className="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Volumes / Peso</p>
+               <p className="text-xs font-bold text-slate-300">{orderData?.qtdVolumes ? `${orderData.qtdVolumes} un - ` : ''}{orderData?.pesoKg || orderData?.peso || '--'}kg</p>
+             </div>
+          </div>
         </div>
 
-        {/* 🔥 CTO FIX: Layout Organizado para Múltiplos PINs de Entrega */}
+        {/* Layout Organizado para Múltiplos PINs de Entrega em cascata */}
         {(pinColeta || (pinEntregas && pinEntregas.length > 0)) && (
           <div className="rounded-[1.5rem] border border-cyan-500/30 bg-cyan-950/30 p-5 mt-6 relative overflow-hidden shadow-inner">
             <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
@@ -289,7 +299,6 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
             </p>
             <div className="flex flex-col gap-3">
               
-              {/* PIN da Coleta */}
               {pinColeta && (
                 <div className="bg-slate-950 px-4 py-3 rounded-2xl border border-white/10 flex items-center justify-between shadow-[0_5px_15px_rgba(0,0,0,0.3)]">
                   <div>
@@ -300,7 +309,6 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
                 </div>
               )}
               
-              {/* PINs das Múltiplas Paradas */}
               {pinEntregas && pinEntregas.map((pin: string, index: number) => {
                  const isActiveDrop = paradaAtualIndex === index && status !== 'coletando';
                  const isCompletedDrop = paradaAtualIndex > index;
