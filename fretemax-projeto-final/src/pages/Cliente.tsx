@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
 // CTO-Log: Auditoria de Polimento (Fase de Escala).
 // Status: "Formulário Enterprise" ativado e Limpeza de Cards "Carga Ativa".
+// Correção: Sincronização do Resumo da Rota com o SSOT antes do Pagamento.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -916,7 +917,8 @@ export default function Cliente() {
                 <div className="h-14 w-14 rounded-full bg-blue-50 flex items-center justify-center"><MapPin className="h-6 w-6 text-blue-600" /></div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+              {/* 🔥 CTO FIX: Resumo da Rota Cego Resolvido */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Truck size={18} className="text-cyan-400 mb-1" />
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Veículo</p>
@@ -927,12 +929,17 @@ export default function Cliente() {
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Peso Estimado</p>
                     <p className="text-sm font-bold text-white mt-1">{peso || 'N/A'}</p>
                  </div>
-                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md col-span-2 md:col-span-1">
+                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
+                    <Package size={18} className="text-emerald-400 mb-1" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Carga</p>
+                    <p className="text-sm font-bold text-white mt-1 truncate w-full px-2" title={tipoMaterial}>{tipoMaterial || 'Diversos'}</p>
+                 </div>
+                 <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Clock3 size={18} className="text-amber-400 mb-1" />
-                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Distância / Paradas</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Paradas/Km</p>
                     <p className="text-sm font-bold text-white mt-1">
                       {distanciaReal.toFixed(1)} km 
-                      {entregas.length > 1 && <span className="text-cyan-400 ml-1">({entregas.length} paradas)</span>}
+                      {entregas.length > 1 && <span className="text-cyan-400 ml-1">({entregas.length} un)</span>}
                     </p>
                  </div>
               </div>
@@ -1018,7 +1025,7 @@ export default function Cliente() {
                       <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">Visualizações</p>
                     </div>
                     
-                    {/* 🔥 CTO FIX: "Interessados e Compatíveis" removidos. Injetado Volume e Tipo, conforme Auditoria. */}
+                    {/* 🔥 CTO FIX: Injetado Volume e Tipo, conforme Auditoria. */}
                     <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
                       <Package className="w-5 h-5 text-emerald-400 mb-2"/>
                       <p className="text-2xl font-black text-white mt-1">{orderData?.qtdVolumes || '--'} un</p>
