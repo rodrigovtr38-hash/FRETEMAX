@@ -1,8 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/driver/dashboard/FreightRequestModal.tsx
-// CTO-Log: FASE 3 - Auditoria de Integração e Resgate de Crash.
+// CTO-Log: Auditoria 10/10.
 // Status: "TypeError: Cannot read properties of undefined" ERADICADO.
-// Correção (Polimento): Tarja Visual de Alerta MULTI-DROP.
+// Correção (Polimento): Tarja Visual MULTI-DROP e injeção de Informação Ouro (Tipo de Carga e Observações).
 // =========================================================
 
 import { Clock3, MapPinned, Package, Truck, X, Check, Zap, ShieldCheck, Info, Scale, Briefcase, Layers } from 'lucide-react';
