@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Admin.tsx
-// CTO-Log: Polimento Nível 10/10 (Gestão e Escala B2B).
-// Status: Reembolso Mercado Pago, Malha Logística Intactos. 
-// Aprimoramento visual e alertas vitais de administração na aba Dashboard.
+// CTO-Log: Torre de Controle Inteligente (Auditoria Fase 4).
+// Status: Dashboard Expandido, Frota Preservada, Informações Ouro Injetadas na Malha Logística.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -13,7 +12,7 @@ import {
   Loader2, CheckCircle, XCircle, Search, ShieldAlert, Truck, Users, 
   DollarSign, Activity, Clock, AlertTriangle, Eye, 
   Map as MapIcon, Wallet, Zap, MessageCircle, ShieldCheck, RefreshCcw, Lock, Target, Key, Radio,
-  Trash2, BrainCircuit, TrendingDown, ArrowUpRight
+  Trash2, BrainCircuit, TrendingDown, ArrowUpRight, PieChart, Package, FileText
 } from 'lucide-react';
 
 import { ftiAnalytics } from '../core/ai/analytics/ia.metrics';
@@ -120,7 +119,7 @@ export default function Admin() {
   }, [tab, authUser]);
 
   // ============================================================================
-  // 2. LÓGICA DE CÁLCULO E FILTROS
+  // 2. LÓGICA DE CÁLCULO E FILTROS (TORRE DE CONTROLE INTELIGENTE)
   // ============================================================================
   const filterByTime = (frete: any, filterType: string) => {
     if (filterType === 'todos') return true;
@@ -159,12 +158,16 @@ export default function Admin() {
 
     const faturado = fretesDoPeriodo.filter(f => [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.COLETANDO, AppTripState.EM_TRANSPORTE, AppTripState.ENTREGUE, 'finalizado'].includes(f.status)).reduce((acc, f) => acc + (Number(f.valorBruto) || Number(f.valorTotal) || 0), 0);
     const lucro = fretesDoPeriodo.filter(f => [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.COLETANDO, AppTripState.EM_TRANSPORTE, AppTripState.ENTREGUE, 'finalizado'].includes(f.status)).reduce((acc, f) => acc + (Number(f.valorComissao) || Number(f.lucroPlataforma) || 0), 0);
+    
+    const escrowRetido = fretes.filter(f => [AppTripState.AGUARDANDO_PAGAMENTO, AppTripState.DISPONIVEL, AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO, AppTripState.EM_TRANSPORTE].includes(f.status)).reduce((acc, f) => acc + (Number(f.valorFreteBruto) || Number(f.valorTotal) || 0), 0);
+
     const entregues = fretesDoPeriodo.filter(f => [AppTripState.ENTREGUE, 'finalizado'].includes(f.status)).length;
     const ticketMedio = entregues > 0 ? (faturado / entregues) : 0;
-    const ativos = fretes.filter(f => [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.COLETANDO, AppTripState.EM_TRANSPORTE].includes(f.status)).length;
-    const aguardando = fretes.filter(f => f.status === AppTripState.DISPONIVEL).length;
-    const repasses = fretes.filter(f => f.status === AppTripState.ENTREGUE).length;
+    
     const cancelados = fretesDoPeriodo.filter(f => f.status === AppTripState.CANCELADO).length;
+    
+    const totalFretesValidos = entregues + cancelados;
+    const taxaConversao = totalFretesValidos > 0 ? ((entregues / totalFretesValidos) * 100).toFixed(1) : 0;
 
     const faturadoHoje = fretes.filter(f => {
       const data = f.createdAt?.toDate ? f.createdAt.toDate() : new Date(f.createdAt);
@@ -178,8 +181,10 @@ export default function Admin() {
       return data && data >= hoje && f.repasseEfetuado;
     }).reduce((acc, f) => acc + (Number(f.valorLiquidoMotorista) || 0), 0);
 
+    const repasses = fretes.filter(f => f.status === AppTripState.ENTREGUE).length;
+
     const motoristasRetorno = motoristasOnline.filter(m => m.modoRetorno === true).length;
-    const timeoutAguardando = fretes.filter(f => f.status === AppTripState.DISPONIVEL && (Date.now() - (f.createdAt?.toMillis ? f.createdAt.toMillis() : Date.now())) > 600000).length;
+    const fretesParados = fretes.filter(f => f.status === AppTripState.DISPONIVEL && (Date.now() - (f.createdAt?.toMillis ? f.createdAt.toMillis() : Date.now())) > 1800000).length;
     const semComprovante = fretes.filter(f => f.status === AppTripState.ENTREGUE && !f.comprovanteUrl).length;
     const motoristasOcupados = motoristasOnline.filter(m => m.status === 'ocupado').length;
     const insucessos = fretes.filter(f => f.alertaInsucesso === true).length;
@@ -192,9 +197,8 @@ export default function Admin() {
     }).length;
 
     return { 
-      faturado, lucro, entregues, ticketMedio, ativos, aguardando, 
-      repasses, cancelados, faturadoHoje, aPagarMotoristas, pagoHoje, 
-      motoristasRetorno, timeoutAguardando, semComprovante, motoristasOcupados, insucessos, alertas24h 
+      faturado, lucro, entregues, ticketMedio, repasses, cancelados, taxaConversao, escrowRetido,
+      faturadoHoje, aPagarMotoristas, pagoHoje, motoristasRetorno, fretesParados, semComprovante, motoristasOcupados, insucessos, alertas24h 
     };
   }, [fretes, motoristasOnline, timeFilter]);
 
@@ -259,7 +263,6 @@ export default function Admin() {
     } catch (e: any) { alert(e.message); }
   };
 
-  // 🔥 REQUISIÇÃO DE REEMBOLSO (MERCADO PAGO) 
   const handleReembolso = async (idPedido: string) => {
     if (!window.confirm("CRÍTICO: Deseja estornar o valor via PIX (Mercado Pago) de volta para o Embarcador?")) return;
     try {
@@ -295,7 +298,6 @@ export default function Admin() {
     window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // 🔥 BOTÃO NUCLEAR DE LIMPEZA (Protegendo Motoristas)
   const handleNuclearReset = async () => {
     const code = window.prompt("⚠️ CUIDADO: Esta ação vai varrer TODOS os fretes de teste e zerar os faturamentos. Suas homologações de motoristas ficarão INTACTAS. Digite 'ZERAR' para prosseguir:");
     if (code !== 'ZERAR') { alert("Ação abortada."); return; }
@@ -367,7 +369,6 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 font-sans pb-24">
       
-      {/* ========================================================================= CABEÇALHO */}
       <header className="bg-slate-950/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-50 shadow-xl">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
@@ -404,11 +405,10 @@ export default function Admin() {
 
       <main className="max-w-7xl mx-auto p-4 md:p-8">
         
-        {/* ========================================================================= ABA DASHBOARD */}
+        {/* ========================================================================= ABA DASHBOARD (NOVA TORRE) */}
         {tab === 'dashboard' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center mb-6">
-               {/* BOTÃO NUCLEAR: Ação Estratégica (Limpa apenas fretes para ir para produção real) */}
                <button onClick={handleNuclearReset} disabled={isCleaning} className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-inner">
                   {isCleaning ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} ZERAR FRETES E FATURAMENTO
                </button>
@@ -432,13 +432,13 @@ export default function Admin() {
                </div>
             </div>
 
-            {/* 🔥 ALERTA OPERACIONAL DE ATENÇÃO MÁXIMA (Baseado na sua Auditoria) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            {/* 🔥 ALERTA OPERACIONAL DE ATENÇÃO MÁXIMA */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                {stats.alertas24h > 0 && (
                  <div className="bg-amber-950/60 border border-amber-500/50 rounded-2xl p-5 flex items-center gap-4 animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.1)]">
                    <div className="bg-amber-500/20 p-3 rounded-full"><AlertTriangle className="text-amber-500" size={24} /></div>
                    <div>
-                     <p className="text-sm font-black text-amber-400 uppercase tracking-widest">Atenção: {stats.alertas24h} Pagamento(s) Pendente(s)</p>
+                     <p className="text-sm font-black text-amber-400 uppercase tracking-widest">Atenção: {stats.alertas24h} Repasse(s) Crítico(s)</p>
                      <p className="text-[10px] text-amber-300/70 font-medium">Fretes entregues aguardando repasse financeiro na aba Corridas.</p>
                    </div>
                  </div>
@@ -449,53 +449,81 @@ export default function Admin() {
                    <div className="bg-red-500/20 p-3 rounded-full"><RefreshCcw className="text-red-500 animate-spin-slow" size={24} /></div>
                    <div>
                      <p className="text-sm font-black text-red-400 uppercase tracking-widest">Ação Necessária: {reembolsosPendentes.length} Estorno(s)</p>
-                     <p className="text-[10px] text-red-300/70 font-medium">Você possui operações canceladas precisando de reembolso no Mercado Pago.</p>
+                     <p className="text-[10px] text-red-300/70 font-medium">Operações canceladas precisando de reembolso urgente no Mercado Pago.</p>
+                   </div>
+                 </div>
+               )}
+
+               {stats.fretesParados > 0 && (
+                 <div className="bg-purple-950/60 border border-purple-500/50 rounded-2xl p-5 flex items-center gap-4 shadow-[0_0_20px_rgba(168,85,247,0.1)]">
+                   <div className="bg-purple-500/20 p-3 rounded-full"><Clock className="text-purple-400 animate-pulse" size={24} /></div>
+                   <div>
+                     <p className="text-sm font-black text-purple-400 uppercase tracking-widest">Gargalo: {stats.fretesParados} Cargas Paradas</p>
+                     <p className="text-[10px] text-purple-300/70 font-medium">Cargas no Radar há mais de 30 min sem aceite. Sugira Auto-Bid.</p>
                    </div>
                  </div>
                )}
             </div>
 
-            {/* ================= DASHBOARD FINANCEIRO (Corações Fretogo) ================= */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
+            {/* ================= DASHBOARD FINANCEIRO E CONVERSÃO ================= */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-6 mb-8">
               
-              <div className="bg-slate-900/60 border border-white/5 p-6 rounded-[2rem] backdrop-blur-md relative overflow-hidden group hover:border-cyan-500/30 transition-all flex flex-col justify-between">
+              <div className="bg-slate-900/60 border border-white/5 p-6 rounded-[2rem] backdrop-blur-md relative overflow-hidden group hover:border-cyan-500/30 transition-all flex flex-col justify-between col-span-2">
                  <div className="absolute right-0 top-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl group-hover:bg-cyan-500/10 transition-colors"></div>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10"><Activity size={14} className="text-cyan-500"/> Volume Transacionado</p>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10"><Activity size={14} className="text-cyan-500"/> Volume Transacionado Bruto</p>
                  <div className="relative z-10">
                    <span className="text-sm font-bold text-slate-500 block mb-1">R$</span>
-                   <h3 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none">{stats.faturado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
+                   <h3 className="text-3xl md:text-5xl font-black text-white tracking-tighter leading-none">{stats.faturado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
                  </div>
               </div>
 
-              <div className="bg-slate-900/60 border border-green-500/20 p-6 rounded-[2rem] backdrop-blur-md relative overflow-hidden group shadow-[0_0_30px_rgba(34,197,94,0.05)] hover:border-green-500/50 transition-all flex flex-col justify-between">
+              <div className="bg-slate-900/60 border border-green-500/20 p-6 rounded-[2rem] backdrop-blur-md relative overflow-hidden group shadow-[0_0_30px_rgba(34,197,94,0.05)] hover:border-green-500/50 transition-all flex flex-col justify-between col-span-2">
                  <div className="absolute right-0 top-0 w-32 h-32 bg-green-500/5 rounded-full blur-3xl group-hover:bg-green-500/10 transition-colors"></div>
-                 <p className="text-[10px] font-black text-green-500/70 uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10"><TrendingDown size={14} className="text-green-500 rotate-180"/> Take Rate (Lucro FretoGo)</p>
+                 <p className="text-[10px] font-black text-green-500/70 uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10"><TrendingDown size={14} className="text-green-500 rotate-180"/> Take Rate (Lucro Plataforma)</p>
                  <div className="relative z-10">
                    <span className="text-sm font-bold text-green-600/50 block mb-1">R$</span>
-                   <h3 className="text-3xl md:text-4xl font-black text-green-400 tracking-tighter leading-none">{stats.lucro.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
+                   <h3 className="text-3xl md:text-5xl font-black text-green-400 tracking-tighter leading-none">{stats.lucro.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
                  </div>
               </div>
 
-              <div className="bg-slate-900/60 border border-white/5 p-6 rounded-[2rem] backdrop-blur-md relative overflow-hidden group hover:border-blue-500/30 transition-all flex flex-col justify-between">
-                 <div className="absolute right-0 top-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl group-hover:bg-blue-500/10 transition-colors"></div>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10"><Users size={14} className="text-blue-500"/> Escudo Frota (Em Operação)</p>
-                 <div className="relative z-10 flex items-end gap-3">
-                   <h3 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none">{motoristasOnline.length}</h3>
-                   <span className="text-[10px] font-black uppercase text-blue-400 bg-blue-500/10 px-2 py-1 rounded mb-1">Online</span>
-                 </div>
-              </div>
-
-              <div className={`p-6 rounded-[2rem] backdrop-blur-md relative overflow-hidden group transition-all border flex flex-col justify-between ${stats.repasses > 0 ? 'bg-amber-950/30 border-amber-500/40 shadow-[0_0_30px_rgba(245,158,11,0.1)]' : 'bg-slate-900/60 border-white/5'}`}>
-                 <div className={`absolute right-0 top-0 w-32 h-32 rounded-full blur-3xl transition-colors ${stats.repasses > 0 ? 'bg-amber-500/10' : 'bg-transparent'}`}></div>
-                 <p className={`text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10 ${stats.repasses > 0 ? 'text-amber-500' : 'text-slate-400'}`}>
-                   <Truck size={14} /> Repasses aos Motoristas
-                 </p>
+              <div className="bg-slate-900/60 border border-white/5 p-6 rounded-[2rem] backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10"><PieChart size={14} className="text-indigo-400"/> Conversão</p>
                  <div className="relative z-10">
-                   <span className={`text-sm font-bold block mb-1 ${stats.repasses > 0 ? 'text-amber-600/50' : 'text-slate-600'}`}>R$</span>
-                   <h3 className={`text-3xl md:text-4xl font-black tracking-tighter leading-none ${stats.repasses > 0 ? 'text-amber-400' : 'text-white'}`}>
-                     {stats.aPagarMotoristas.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                   </h3>
+                   <h3 className="text-3xl font-black text-indigo-400 tracking-tighter leading-none">{stats.taxaConversao}%</h3>
+                   <span className="text-[10px] font-bold text-slate-500 mt-1 block">Entregues: {stats.entregues}</span>
                  </div>
+              </div>
+
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-emerald-950/30 border border-emerald-500/30 p-5 rounded-2xl backdrop-blur-sm flex flex-col justify-between">
+                <p className="text-[10px] font-black text-emerald-500/70 uppercase tracking-widest mb-2 flex items-center gap-1"><ShieldCheck size={12}/> Dinheiro em Custódia (Escrow)</p>
+                <div>
+                  <h3 className="text-2xl font-black text-emerald-400 tracking-tighter">R$ {stats.escrowRetido.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
+                  <p className="text-[9px] text-emerald-500/50 mt-1 font-bold uppercase">Blindado Atualmente</p>
+                </div>
+              </div>
+
+              <div className="bg-amber-950/30 border border-amber-500/30 p-5 rounded-2xl backdrop-blur-sm flex flex-col justify-between">
+                <p className="text-[10px] font-black text-amber-500/70 uppercase tracking-widest mb-2 flex items-center gap-1"><Clock size={12}/> A Pagar (Motoristas)</p>
+                <div>
+                  <h3 className="text-2xl font-black text-amber-400 tracking-tighter">R$ {stats.aPagarMotoristas.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
+                  <p className="text-[9px] text-amber-500/50 mt-1 font-bold uppercase">{stats.repasses} repasses na fila</p>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-white/5 p-5 rounded-2xl backdrop-blur-sm flex flex-col justify-between">
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><MapIcon size={12} className="text-blue-400"/> Frota em Rota Escolta</p>
+                 <div className="flex items-end gap-3">
+                   <h3 className="text-2xl font-black text-white tracking-tighter">{motoristasOnline.length}</h3>
+                   <span className="text-[10px] font-black uppercase text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded mb-1">Online</span>
+                 </div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-white/5 p-5 rounded-2xl backdrop-blur-sm flex flex-col justify-between">
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Truck size={12} className="text-slate-400"/> Ticket Médio</p>
+                 <h3 className="text-2xl font-black text-white tracking-tighter">R$ {stats.ticketMedio.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
               </div>
             </div>
 
@@ -536,8 +564,9 @@ export default function Admin() {
                   <span className="text-[10px] font-black text-white bg-slate-800 px-3 py-1 rounded-lg">TOTAL: {motoristasAprovados.length}</span>
                 </div>
                 
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-                  {CATEGORIAS_FROTA.slice(0, 4).map(cat => {
+                {/* 🔥 A FROTA FOI RESTAURADA E NÃO ESTÁ MAIS OCULTA */}
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                  {CATEGORIAS_FROTA.map(cat => {
                     const qtd = contagemFrota[cat.id] || 0;
                     return (
                       <div key={cat.id} className="bg-slate-950/50 border border-white/5 py-3 rounded-xl flex flex-col items-center justify-center text-center">
@@ -752,25 +781,36 @@ export default function Admin() {
                              </div>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-2 mt-6 bg-slate-950 p-4 rounded-2xl border border-white/5">
-                             <div className="text-center border-r border-white/5">
+                          {/* 🔥 CTO FIX: Informações operacionais ouro puxadas direto do Banco e exibidas na Torre */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-6 bg-slate-950 p-4 rounded-2xl border border-white/5">
+                             <div className="border-r border-white/5 pr-2">
                                <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Distância</p>
                                <p className="text-xs font-bold text-cyan-400">{f.distanciaTotalKm?.toFixed(1) || f.distancia?.toFixed(1) || '--'} km</p>
                              </div>
-                             <div className="text-center border-r border-white/5">
-                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Peso / Qtd</p>
-                               <p className="text-xs font-bold text-slate-300">{f.pesoKg ? `${f.pesoKg} kg` : (f.volumes || f.peso || '--')}</p>
+                             <div className="border-r border-white/5 pr-2">
+                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Volume/Peso</p>
+                               <p className="text-xs font-bold text-slate-300">{f.qtdVolumes ? `${f.qtdVolumes}un / ` : ''}{f.pesoKg || f.peso || '--'}kg</p>
                              </div>
-                             <div className="text-center">
-                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Categoria</p>
+                             <div className="border-r border-white/5 pr-2">
+                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Carga</p>
+                               <p className="text-xs font-bold text-slate-300 truncate max-w-[80px]" title={f.tipoMaterial}>{f.tipoMaterial || 'Diversos'}</p>
+                             </div>
+                             <div>
+                               <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Veículo</p>
                                <p className="text-xs font-bold text-amber-400 capitalize">{(f.veiculo || f.categoria)?.replace('_', ' ') || '--'}</p>
                              </div>
                           </div>
+                          
+                          {f.observacoes && (
+                             <div className="mt-3 bg-slate-800/30 p-3 rounded-xl border border-slate-700/50">
+                               <p className="text-[8px] text-slate-400 uppercase font-black tracking-widest mb-1 flex items-center gap-1"><FileText size={10}/> Instruções da Doca</p>
+                               <p className="text-xs text-slate-300 italic">{f.observacoes}</p>
+                             </div>
+                          )}
                         </div>
 
-                        <div className="flex flex-col gap-3 min-w-[200px] border-l border-white/5 pl-4 justify-center">
+                        <div className="flex flex-col gap-3 min-w-[200px] border-l border-white/5 pl-4 justify-center mt-4 lg:mt-0">
                            
-                           {/* BOTÕES FINANCEIROS - LIQUIDAÇÃO E REEMBOLSO */}
                            {f.status === AppTripState.ENTREGUE && (
                              <div className="flex flex-col gap-2">
                                <button onClick={() => handlePedirChavePix(f)} className="bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-black text-[10px] tracking-widest uppercase shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all flex items-center justify-center gap-2">
