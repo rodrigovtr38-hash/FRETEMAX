@@ -196,7 +196,6 @@ class DispatchRealtimeService {
 
   async atualizarStatusTrip(tripId: string, status: AppTripState) {
     try {
-      // 🔥 CTO FIX: Se for a etapa de ENTREGUE, libera o motorista da corrida para não congelar no Front
       if (status === AppTripState.ENTREGUE && auth.currentUser?.uid) {
         await this.concluirViagemELiberarMotorista(auth.currentUser.uid, tripId);
         return;
@@ -205,7 +204,7 @@ class DispatchRealtimeService {
       await TripLifecycleService.alterarStatusViagem(tripId, status);
     } catch (error) {
       console.error('ERRO STATUS TRIP:', error);
-      throw error; // Lança o erro para a tela parar de girar e avisar o usuário
+      throw error;
     }
   }
 
