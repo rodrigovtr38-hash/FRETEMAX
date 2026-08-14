@@ -203,7 +203,6 @@ export default function AvailableFreights({
                   </div>
                 </div>
 
-                {/* 🔥 CTO FIX: Informações operacionais limpas (Zero botões inúteis) */}
                 <div className="grid grid-cols-2 gap-3 mb-6">
                   <div className="rounded-xl bg-slate-950/80 p-3 border border-white/5 flex items-center justify-between shadow-inner">
                     <div className="flex items-center gap-2">
