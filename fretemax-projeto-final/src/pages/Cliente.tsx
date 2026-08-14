@@ -1,8 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
 // CTO-Log: Auditoria de Polimento (Fase de Escala).
-// Status: "Formulário Enterprise" ativado. Injeção de Tipo de Carga, Volumes, NF e Contato.
-// Correção: Texto da IA alterado para evitar sustos ("Abaixo do Mercado").
+// Status: "Formulário Enterprise" ativado e Limpeza de Cards "Carga Ativa".
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -23,7 +22,7 @@ import { locationService } from '../services/locationService';
 
 interface AddressData { cep: string; bairro: string; rua: string; num: string; cidade?: string; uf?: string; lat?: number; lng?: number; }
 interface Coords { lat: number; lng: number; }
-interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; }
+interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; tipoMaterial?: string; qtdVolumes?: string; peso?: string; pesoKg?: string; }
 type VehicleType = 'moto' | 'carro_pequeno' | 'utilitario' | 'toco' | 'truck' | 'carreta_ls' | 'bi_trem_cegonha';
 
 const VEHICLE_CONFIG: Record<VehicleType, { nome: string; fator: number }> = {
@@ -75,7 +74,6 @@ export default function Cliente() {
   const [dataAgendada, setDataAgendada] = useState('');
   const [valorOferta, setValorOferta] = useState('');
 
-  // 🔥 CTO FIX: Novos campos operacionais (Auditoria Level 10/10)
   const [tipoMaterial, setTipoMaterial] = useState('Caixas Secas');
   const [qtdVolumes, setQtdVolumes] = useState('');
   const [valorNF, setValorNF] = useState('');
@@ -86,8 +84,6 @@ export default function Cliente() {
   const [distanciaReal, setDistanciaReal] = useState(0);
   
   const [simViews, setSimViews] = useState(0);
-  const [simCompat, setSimCompat] = useState(0);
-  const [simInterest, setSimInterest] = useState(0);
   
   const [origemGPS, setOrigemGPS] = useState<Coords | null>(null);
   const [destinoGPS, setDestinoGPS] = useState<Coords | null>(null);
@@ -186,7 +182,6 @@ export default function Cliente() {
     if (diff >= 1.05) return { status: 'Muito Alta', color: 'text-emerald-500', icon: <Flame size={16} className="text-orange-500 animate-pulse" /> };
     if (diff >= 0.95) return { status: 'Alta', color: 'text-blue-500', icon: <CheckCircle size={16} /> };
     
-    // 🔥 CTO FIX: "Risco de Falha" removido. Trocado por "Abaixo do Mercado".
     return { status: 'Abaixo do Mercado', color: 'text-amber-500', icon: <AlertTriangle size={16} /> };
   }, [valorOfertaNum, valorSugeridoCalculado]);
 
@@ -229,9 +224,7 @@ export default function Cliente() {
 
   useEffect(() => {
     if (step === 'busca' && orderData) {
-      setSimCompat(orderData.motoristasNotificados || 0); 
       setSimViews(orderData.visualizacoes || 0);  
-      setSimInterest(orderData.interessados || 0);
     }
   }, [step, orderData]);
 
@@ -260,7 +253,6 @@ export default function Cliente() {
         setEntregas(data.entregas || (data.entrega ? [data.entrega] : [{ cep: '', bairro: '', rua: '', num: '' }]));
         setPeso(data.peso || ''); 
         
-        // CTO FIX: Resgatando os novos campos do cache (se existirem)
         setTipoMaterial(data.tipoMaterial || 'Caixas Secas'); 
         setQtdVolumes(data.qtdVolumes || ''); 
         setValorNF(data.valorNF || ''); 
@@ -438,7 +430,6 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
-      // 🔥 CTO FIX: Adicionando todas as variáveis operacionais ao Payload do Firebase (Single Source of Truth)
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
@@ -998,6 +989,7 @@ export default function Cliente() {
           </div>
         )}
 
+        {/* 🔥 CTO FIX: CARGA ATIVA NO FEED (Visão da Empresa) */}
         {step === 'busca' && orderData && (
           <div className="mx-auto w-full animate-in fade-in slide-in-from-bottom-8 duration-700">
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
@@ -1025,16 +1017,19 @@ export default function Cliente() {
                       <p className="text-3xl font-black text-white">{simViews}</p>
                       <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">Visualizações</p>
                     </div>
+                    
+                    {/* 🔥 CTO FIX: "Interessados e Compatíveis" removidos. Injetado Volume e Tipo, conforme Auditoria. */}
                     <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
-                      <Truck className="w-5 h-5 text-emerald-400 mb-2"/>
-                      <p className="text-3xl font-black text-white">{simCompat}</p>
-                      <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">Compatíveis</p>
+                      <Package className="w-5 h-5 text-emerald-400 mb-2"/>
+                      <p className="text-2xl font-black text-white mt-1">{orderData?.qtdVolumes || '--'} un</p>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">Volumes (Qtd)</p>
                     </div>
                     <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
-                      <Users className="w-5 h-5 text-purple-400 mb-2"/>
-                      <p className="text-3xl font-black text-white">{simInterest}</p>
-                      <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">Interessados</p>
+                      <FileText className="w-5 h-5 text-purple-400 mb-2"/>
+                      <p className="text-sm font-black text-white mt-2 truncate">{orderData?.tipoMaterial || 'Diversos'}</p>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">Especificação</p>
                     </div>
+                    
                     <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
                       <CalendarDays className="w-5 h-5 text-amber-400 mb-2"/>
                       <p className="text-xl font-black text-white mt-2">{formatTimeAgo(orderData.createdAt)}</p>
