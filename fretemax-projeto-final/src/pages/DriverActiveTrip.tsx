@@ -1,16 +1,15 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Auditoria Final - Bloco 2 (UX + Super GPS + Ejeção + Funil POD Multi-Drop)
-// Correção: Blindagem de erro "length" no array de pinEntregas.
-// Motorista OBRIGADO a tirar foto (POD) em CADA parada. PIX no final.
-// NOVO: Limite de 3 erros no PIN + Disparo Automático para o Canal de Chat.
+// CTO-Log: Auditoria Final - Bloco 2 (A Viagem Blindada)
+// Status: Barra de Progresso Viva adicionada, Resumo Fixo na tela, Fotos OBRIGATÓRIAS em cada PIN, 3 Tentativas Antifraude.
+// Correção: Ejeção da função cliente-lado de Chat para evitar duplicações.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from '../firebase'; 
 import { doc, onSnapshot, arrayUnion, DocumentData, addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle } from 'lucide-react';
+import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle, FileText, Check, Package } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import { AppTripState } from '../state/tripStateMachine';
@@ -35,6 +34,11 @@ interface ActiveFreightData extends DocumentData {
   clienteZap?: string;
   fotosPod?: Record<string, string>;
   motoristaNome?: string;
+  tipoMaterial?: string;
+  qtdVolumes?: string;
+  distanciaRealKm?: number;
+  valorLiquidoMotorista?: number;
+  valorMotorista?: number;
 }
 
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
@@ -46,7 +50,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [pinError, setPinError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   
-  // 🔥 CTO FIX: Trava de Segurança Antifraude (Limite de Erros no PIN)
   const [tentativasPin, setTentativasPin] = useState(0);
   const [bloqueioPin, setBloqueioPin] = useState(false);
 
@@ -93,6 +96,18 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     ? frete.enderecoColetaTexto 
     : (destinoAtual?.enderecoTexto || destinoAtual?.rua ? `${destinoAtual.rua}, ${destinoAtual.num} - ${destinoAtual.bairro}` : frete.enderecoEntregaTexto || 'Destino da rota');
 
+  const totalParadas = frete.pinEntregas?.length || paradas.length || 1;
+
+  // Montagem da timeline dinâmica (Multi-Drop)
+  const etapasRoteiro = ['Coleta', ...Array.from({length: totalParadas}).map((_, i) => totalParadas > 1 ? `Entrega ${i+1}` : 'Entrega')];
+  let etapaAtualIndex = 0;
+  if (!isFaseColeta) {
+     etapaAtualIndex = paradaAtualIndex + 1;
+     if (frete.status === AppTripState.FINALIZANDO || frete.status === AppTripState.ENTREGUE || frete.status === 'finalizado') {
+       etapaAtualIndex = etapasRoteiro.length; // Tudo concluído
+     }
+  }
+
   const handleOpenNav = (app: 'waze' | 'google') => {
     let url = '';
     const queryAddr = encodeURIComponent(enderecoAlvoTexto || '');
@@ -113,33 +128,10 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     window.open(url, '_blank');
   };
 
-  // 🔥 CTO FIX: Gatilho Automático para a Torre de Controle
-  const enviarAvisoTorre = async (mensagem: string) => {
-    try {
-      await addDoc(collection(db, 'fretes', frete.id, 'chat'), {
-        texto: mensagem,
-        nome: 'Torre Operacional',
-        tipoUsuario: 'admin',
-        createdAt: serverTimestamp(),
-      });
-    } catch (e) {
-      console.warn("Aviso da Torre falhou, mas operação segue.");
-    }
-  };
-
   const handleStatusUpdate = async (novoStatus: AppTripState) => {
     setActionLoading(true);
     try {
       await dispatchRealtimeService.atualizarStatusTrip(frete.id, novoStatus);
-      
-      // Disparo automático de mensagens baseado no status
-      if (novoStatus === AppTripState.INDO_COLETA) {
-        enviarAvisoTorre("Deslocamento iniciado. Motorista a caminho do Ponto de Coleta.");
-      } else if (novoStatus === AppTripState.CHEGOU_COLETA) {
-        enviarAvisoTorre("Alerta Geográfico: Motorista reportou chegada ao local de coleta.");
-      } else if (novoStatus === AppTripState.COLETANDO) {
-        enviarAvisoTorre("Veículo posicionado. Fase de carregamento na doca iniciada.");
-      }
     } catch (e) { console.error(e); } finally { setActionLoading(false); }
   };
 
@@ -154,14 +146,12 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     setPinError('');
     try {
       if (frete.status === AppTripState.COLETANDO) {
-        // Validação Coleta
         if (pinValue !== frete.pinColeta) { 
           const errosAtuais = tentativasPin + 1;
           setTentativasPin(errosAtuais);
           if (errosAtuais >= 3) {
             setBloqueioPin(true);
             setPinError('SISTEMA BLOQUEADO: Limite de 3 tentativas excedido. Contate a Torre.');
-            enviarAvisoTorre(`⚠️ ALERTA DE SEGURANÇA: Motorista (${frete.motoristaNome}) errou o PIN da Coleta 3 vezes e foi bloqueado pelo sistema.`);
           } else {
             setPinError(`PIN incorreto. Restam ${3 - errosAtuais} tentativas.`); 
           }
@@ -169,13 +159,10 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           return; 
         }
         
-        // PIN Certo
         setTentativasPin(0);
         await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.EM_TRANSPORTE);
-        enviarAvisoTorre("✅ Coleta finalizada (PIN validado). Motorista a caminho do Destino Final.");
       
       } else {
-        // Validação Entrega (Com Foto OBRIGATÓRIA)
         if (!fotoPodBase64) {
           setPinError('A foto do canhoto/mercadoria é OBRIGATÓRIA antes de validar o PIN.');
           setActionLoading(false); 
@@ -189,7 +176,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           if (errosAtuais >= 3) {
             setBloqueioPin(true);
             setPinError('SISTEMA BLOQUEADO: Limite de 3 tentativas excedido. Contate a Torre.');
-            enviarAvisoTorre(`⚠️ ALERTA DE SEGURANÇA: Motorista errou o PIN da Parada ${paradaAtualIndex + 1} por 3 vezes seguidas e o painel foi travado.`);
           } else {
             setPinError(`PIN incorreto. Restam ${3 - errosAtuais} tentativas.`); 
           }
@@ -197,19 +183,15 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           return; 
         }
         
-        // PIN Certo
         setTentativasPin(0);
         const fotosAtuais = frete.fotosPod || {};
         fotosAtuais[`parada_${paradaAtualIndex}`] = fotoPodBase64;
         await dispatchRealtimeService.atualizarTripRealtime(frete.id, { fotosPod: fotosAtuais });
 
-        enviarAvisoTorre(`✅ Entrega na Parada ${paradaAtualIndex + 1} concluída (Foto POD e PIN validados).`);
-
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1 });
         } else {
            await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.FINALIZANDO);
-           enviarAvisoTorre("🏁 Roteiro completo. Motorista aguardando liquidação financeira.");
         }
       }
       setIsPinModalOpen(false); 
@@ -223,7 +205,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     setActionLoading(true);
     try {
       if (frete.status === AppTripState.COLETANDO || frete.status === AppTripState.CHEGOU_COLETA || frete.status === AppTripState.INDO_COLETA || frete.status === AppTripState.ACEITO) {
-        enviarAvisoTorre("🚨 ATENÇÃO: Motorista reportou imprevisto mecânico/operacional antes do carregamento. A carga foi DEVOLVIDA PARA O MURAL.");
         await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
           status: AppTripState.DISPONIVEL, 
           motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
@@ -231,7 +212,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           motivoCancelamento: 'Motorista teve imprevisto e abortou antes da coleta.'
         });
       } else {
-        enviarAvisoTorre(`⚠️ AVISO: Motorista reportou insucesso na Parada ${paradaAtualIndex + 1}. Favor verificar canal de suporte.`);
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1, paradasComInsucesso: arrayUnion(paradaAtualIndex), alertaInsucesso: true });
         } else {
@@ -252,7 +232,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       
       const adminPhone = "5511999999999"; 
       const msg = `Olá, finalizei a corrida #${frete.id.slice(0,8).toUpperCase()}.\nMinha chave PIX é: ${chavePix}\nO canhoto já foi enviado no app. Fico no aguardo do repasse.`;
-      
       window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (error) {
       alert("Falha na comunicação. Tente novamente.");
@@ -276,8 +255,30 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
              <CheckCircle2 size={40} className="text-emerald-400" />
            </div>
          </div>
-         <h2 className="text-center text-3xl font-black text-white uppercase italic tracking-tighter mb-2">Rota Concluída!</h2>
-         <p className="text-center text-slate-400 text-sm mb-8">Todos os comprovantes de entrega foram enviados. Digite seu PIX para solicitar o valor à Torre de Controle.</p>
+         <h2 className="text-center text-3xl font-black text-white uppercase italic tracking-tighter mb-2">Operação Concluída!</h2>
+         <p className="text-center text-slate-400 text-sm mb-6">Todos os {totalParadas} comprovantes de entrega (POD) foram enviados à Torre de Controle.</p>
+
+         <div className="bg-slate-950 p-4 rounded-2xl border border-white/5 mb-8">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 border-b border-white/5 pb-2">Resumo da Execução</p>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+               <div>
+                  <p className="text-[9px] text-slate-500 uppercase font-bold">Carga</p>
+                  <p className="text-white font-bold truncate max-w-[120px]">{frete.qtdVolumes ? `${frete.qtdVolumes} un - ` : ''}{frete.tipoMaterial || 'Diversos'}</p>
+               </div>
+               <div>
+                  <p className="text-[9px] text-slate-500 uppercase font-bold">Distância</p>
+                  <p className="text-white font-bold">{frete.distanciaRealKm?.toFixed(1) || '--'} km</p>
+               </div>
+               <div>
+                  <p className="text-[9px] text-slate-500 uppercase font-bold">Total a Receber</p>
+                  <p className="text-emerald-400 font-black">R$ {Number(frete.valorLiquidoMotorista || frete.valorMotorista || 0).toFixed(2).replace('.',',')}</p>
+               </div>
+               <div>
+                  <p className="text-[9px] text-slate-500 uppercase font-bold">Paradas</p>
+                  <p className="text-white font-bold">{totalParadas} Destino(s)</p>
+               </div>
+            </div>
+         </div>
 
          <div className="space-y-6">
            <div className="bg-slate-950 p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
@@ -304,24 +305,63 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     );
   }
 
-  const totalParadas = frete.pinEntregas?.length || paradas.length || 1;
-
   return (
     <>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] border border-cyan-500/20 bg-slate-900 shadow-2xl p-6">
-        <div className="mb-6 flex items-center justify-between rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 shadow-inner">
+        
+        <div className="mb-6 bg-slate-950 border border-white/5 rounded-2xl p-3 flex justify-between items-center shadow-inner">
+           <div className="flex items-center gap-2">
+              <FileText size={14} className="text-cyan-500" />
+              <div>
+                 <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">Ordem Operacional</p>
+                 <p className="text-[10px] font-bold text-slate-300 truncate w-32">{frete.tipoMaterial || 'Carga Geral'} • {frete.pesoKg || frete.peso}kg</p>
+              </div>
+           </div>
+           <div className="text-right border-l border-white/5 pl-3">
+              <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">Valor Final</p>
+              <p className="text-[10px] font-black text-emerald-400">R$ {Number(frete.valorLiquidoMotorista || frete.valorMotorista || 0).toFixed(2).replace('.',',')}</p>
+           </div>
+        </div>
+
+        <div className="mb-6 py-2 px-1">
+          <div className="flex items-center justify-between relative">
+            <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-800 -translate-y-1/2 z-0"></div>
+            {etapasRoteiro.map((stepNome, idx) => {
+              const isCompleted = idx < etapaAtualIndex;
+              const isActive = idx === etapaAtualIndex;
+              return (
+                <div key={idx} className="relative z-10 flex flex-col items-center gap-1.5 group">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${
+                    isCompleted ? 'bg-emerald-500 border-emerald-400 text-slate-900' :
+                    isActive ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse' :
+                    'bg-slate-900 border-slate-700 text-slate-600'
+                  }`}>
+                    {isCompleted ? <Check size={10} strokeWidth={4} /> : <div className="w-1.5 h-1.5 rounded-full bg-current"></div>}
+                  </div>
+                  <span className={`text-[8px] font-black uppercase tracking-widest whitespace-nowrap absolute -bottom-4 transition-colors ${
+                    isCompleted ? 'text-emerald-500' : isActive ? 'text-blue-400' : 'text-slate-600'
+                  }`}>
+                    {stepNome}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-8 mb-6 flex items-center justify-between rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 shadow-inner">
           <div className="flex items-center gap-3">
             <span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span>
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1"><Radio size={12}/> Rastreamento Ativo</p>
-              <p className="text-xs font-bold text-slate-300">Central Conectada</p>
+              <p className="text-xs font-bold text-slate-300">Sincronizado com a Torre</p>
             </div>
           </div>
         </div>
 
         <div className="mb-6 text-center">
           <h2 className="text-xl font-black text-cyan-400 uppercase tracking-widest">
-            {isFaseColeta ? 'Etapa 1: Coleta' : totalParadas > 1 ? `Etapa 2: Entrega ${paradaAtualIndex + 1} de ${totalParadas}` : 'Etapa 2: Entrega Final'}
+            {etapasRoteiro[etapaAtualIndex]}
           </h2>
           <div className="mt-2 flex flex-col items-center gap-2">
             <p className="text-[10px] uppercase font-black text-slate-500">Embarcador: <span className="text-white">{frete.clienteNome || 'Privado'}</span></p>
@@ -420,7 +460,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
                     {actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar'}
                   </button>
                 </div>
-                <button onClick={handleInsucesso} disabled={actionLoading} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2">
+                <button onClick={handleInsucesso} disabled={actionLoading} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-50 hover:text-white transition-colors flex items-center justify-center gap-2">
                   <AlertTriangle size={16} /> Reportar Imprevisto (Voltar pro Radar)
                 </button>
               </div>
