@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/components/motorista/DriverDashboardLayout.tsx
 // CTO-Log: Container Mestre unificado. Fase 2 Homologada.
 // Status: Auditoria completa. Sem erros de importação ou vazamentos de re-render.
+// Correção: Expansão da Interface OperationalFreight para aceitar SSOT integral.
 // =========================================================
 
 import { useCallback, useState } from 'react';
@@ -17,19 +18,34 @@ export interface OperationalFreight {
   prioridade?: boolean;
   agendado?: boolean;
   categoria?: DriverCategory;
+  veiculo?: string;
+  clienteNome?: string;
+  clienteZap?: string;
   enderecoColetaTexto?: string;
   enderecoEntregaTexto?: string;
   distanciaColetaKm?: number;
   distanciaEntregaKm?: number;
   distanciaTotalKm?: number;
+  distanciaRealKm?: number;
+  distancia?: number;
   valorCliente?: number;
   valorMotorista?: number;
+  valorLiquidoMotorista?: number;
   pesoKg?: number;
+  peso?: string;
   volumes?: number;
   tipoCarga?: string;
+  tipoMaterial?: string;
+  qtdVolumes?: string;
+  observacoes?: string;
+  paradas?: any[];
+  pinColeta?: string;
+  pinEntregas?: string[];
   etaMinutes?: number;
   motoristaId?: string | null;
   createdAt?: unknown;
+  atualizadoEm?: unknown;
+  criadoEm?: unknown;
   updatedAt?: unknown;
   multiplasEntregas?: boolean;
 }
