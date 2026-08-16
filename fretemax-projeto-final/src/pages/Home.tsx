@@ -5,7 +5,7 @@
 // Roteamento SPA e proteção de links externos integrados. Ícone WhatsApp Nativo ajustado.
 // =========================================================
 
-import { Zap, Truck, ShieldCheck, ArrowRight, Smartphone, Building2, MapPin, UserCircle, CheckCircle } from 'lucide-react';
+import { Zap, Truck, ShieldCheck, ArrowRight, Smartphone, Building2, MapPin, UserCircle, CheckCircle, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
 
@@ -165,17 +165,28 @@ export default function Home() {
       </main>
 
       {/* FOOTER */}
-      <footer className="relative z-10 border-t border-slate-200 bg-white py-8">
+      <footer className="relative z-10 border-t border-slate-200 bg-white py-8 mt-auto">
         <div className="mx-auto max-w-7xl px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 fill-slate-400 text-slate-400" />
-            <span className="text-lg font-black italic text-slate-400">FRETOGO</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Zap className="h-5 w-5 fill-slate-400 text-slate-400" />
+              <span className="text-lg font-black italic text-slate-400">FRETOGO</span>
+            </div>
+            {/* O SEGREDO ESTÁ AQUI: Link pro Blog para o AdSense achar os artigos */}
+            <a 
+              href="https://blog.fretogo.com.br" 
+              className="text-xs font-bold text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-1"
+            >
+              Acesse nosso Blog de Notícias <ExternalLink size={12} />
+            </a>
           </div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tecnologia Logística © {new Date().getFullYear()}. Todos os direitos reservados.</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center md:text-right">
+            Tecnologia Logística © {new Date().getFullYear()}. Todos os direitos reservados.
+          </p>
         </div>
       </footer>
 
-      {/* 🔥 CTO FIX: BOTÃO DE WHATSAPP ORIGINAL (MAIOR E NA ESQUERDA PARA NÃO BLOQUEAR A IA) */}
+      {/* BOTÃO DE WHATSAPP ORIGINAL */}
       <button 
         onClick={handleWhatsAppSupport}
         title="Suporte FretoGo B2B"
