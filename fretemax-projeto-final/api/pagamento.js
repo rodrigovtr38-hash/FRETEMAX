@@ -1,5 +1,6 @@
 // api/pagamento.js
 // CTO-Log: Arquivo verificado. Lógica de blindagem financeira mantida.
+// Evolução Fase 5: Agora processa o checkout da "Reserva de Motorista" no momento do Match.
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
