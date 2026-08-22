@@ -3,13 +3,14 @@
 // CTO-Log: Auditoria de Polimento (Fase de Escala).
 // Status: "Formulário Enterprise" ativado e Limpeza de Cards "Carga Ativa".
 // Correção: Sincronização do Resumo da Rota com o SSOT antes do Pagamento.
+// Evolução Fase 5: INVERSÃO DO FUNIL (Pagamento no Match). Publicação gratuita e cobrança apenas na Reserva.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, auth } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, doc, Timestamp, updateDoc } from 'firebase/firestore'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, Users, HeadphonesIcon, RefreshCw, Lock, Scale, Clock3, BrainCircuit, BarChart3, TrendingUp, AlertOctagon, Download, FileText, Phone } from 'lucide-react';
+import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, BrainCircuit, BarChart3, TrendingUp, AlertOctagon, Download, FileText, Lock, Scale, Clock3 } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import ChatFrete from '../components/ChatFrete';
 import ClientStatusCard from '../components/client/ClientStatusCard';
@@ -18,12 +19,10 @@ import ClientCancelModal from '../components/client/ClientCancelModal';
 import { AppTripState as TripState } from '../state/tripStateMachine'; 
 import { mapsLoader } from '../services/mapsLoader'; 
 import { NotificationService } from '../services/notificationService'; 
-import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
-import { locationService } from '../services/locationService';
 
 interface AddressData { cep: string; bairro: string; rua: string; num: string; cidade?: string; uf?: string; lat?: number; lng?: number; }
 interface Coords { lat: number; lng: number; }
-interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; tipoMaterial?: string; qtdVolumes?: string; peso?: string; pesoKg?: string; }
+interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; valorLiquidoMotorista?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; tipoMaterial?: string; qtdVolumes?: string; peso?: string; pesoKg?: string; }
 type VehicleType = 'moto' | 'carro_pequeno' | 'utilitario' | 'toco' | 'truck' | 'carreta_ls' | 'bi_trem_cegonha';
 
 const VEHICLE_CONFIG: Record<VehicleType, { nome: string; fator: number }> = {
@@ -484,53 +483,46 @@ export default function Cliente() {
         motoristasNotificados: 0,
         interessados: 0,
 
-        status: tipoFrete === 'agendado' ? 'agendado' : TripState.AGUARDANDO_PAGAMENTO,
-        dispatchStatus: 'aguardando',
+        // 🔥 CTO FIX: A carga nasce como DISPONIVEL sem amarras de pagamento. O funil foi invertido.
+        status: tipoFrete === 'agendado' ? TripState.AGENDADO : TripState.DISPONIVEL,
+        pagamentoStatus: 'pendente',
+        dispatchStatus: 'mural_aberto',
         createdAt: serverTimestamp(),
       });
 
       localStorage.setItem('fretogo_current_order', docRef.id); setCurrentOrderId(docRef.id);
+      
+      // Avança para a busca onde a Empresa vai aguardar um Motorista.
+      setStep('busca');
+      setLoadingPayment(false); 
+      isProcessingPayment.current = false;
 
-      if (documentoLimpo === '34181118827' || currentUser.uid === "cliente_teste_admin_123") {
-        const dataExpiracao = new Date();
-        dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 15);
-
-        await updateDoc(doc(db, 'fretes', docRef.id), {
-          status: TripState.DISPONIVEL,
-          pagamentoStatus: 'aprovado',
-          dispatchStatus: 'mural',
-          ofertaExpiraEm: Timestamp.fromDate(dataExpiracao) 
-        });
-        
-        setStep('busca');
-        setLoadingPayment(false); 
-        isProcessingPayment.current = false;
-        return; 
-      }
-
-      if (tipoFrete === 'imediato') {
-        try {
-          const res = await fetch('/api/pagamento', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ titulo: `Postagem de Carga - ${VEHICLE_CONFIG[vehicle].nome}`, idPedido: docRef.id }),
-          });
-          if (!res.ok) throw new Error('API indisponível');
-          const data = await res.json();
-          if (data?.url && data.url.startsWith('https://')) {
-             window.location.href = data.url; 
-             return;
-          } else {
-             throw new Error('Link inválido');
-          }
-        } catch (apiError) {
-           showToast("Erro ao processar custódia. Tente novamente.", "error");
-        }
-      } else { 
-        setStep('busca'); 
-      }
     } catch (e: any) {
       showToast(`Falha estrutural: ${e.message}`, 'error'); localStorage.removeItem('fretogo_current_order'); setCurrentOrderId(null);
     } finally { setLoadingPayment(false); isProcessingPayment.current = false; }
+  };
+
+  // 🔥 CTO FIX: NOVA FUNÇÃO - Pagar Reserva. Chamada apenas quando o motorista diz "SIM".
+  const handlePagarReserva = async () => {
+    if (!currentOrderId || !orderData) return;
+    try {
+      setLoadingPayment(true);
+      const res = await fetch('/api/pagamento', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titulo: `Postagem de Carga - ${VEHICLE_CONFIG[vehicle as VehicleType].nome}`, idPedido: currentOrderId }),
+      });
+      if (!res.ok) throw new Error('API indisponível');
+      const data = await res.json();
+      if (data?.url && data.url.startsWith('https://')) {
+         window.location.href = data.url; 
+      } else {
+         throw new Error('Link inválido');
+      }
+    } catch (error) {
+       showToast("Erro ao processar checkout.", "error");
+    } finally {
+       setLoadingPayment(false);
+    }
   };
 
   const handleSmartPricing = async (valorAdicional: number) => {
@@ -900,7 +892,7 @@ export default function Cliente() {
 
             <div className="mt-8">
               <button onClick={calcularDistanciaReal} disabled={loadingRoute || loadingPayment || !isFormValid} className={`flex w-full min-h-[72px] items-center justify-center gap-3 rounded-[2rem] text-lg font-black uppercase tracking-[0.2em] transition-all duration-300 ${!isFormValid ? 'cursor-not-allowed bg-slate-200 text-slate-400' : 'bg-blue-600 text-white shadow-2xl shadow-blue-600/40 hover:scale-[1.01] hover:bg-blue-700'}`}>
-                {loadingRoute ? <><Loader2 className="h-6 w-6 animate-spin"/> {loadingMessages[loadingStep]}</> : <><Zap size={24}/> Validar Rota e Pagamento</>}
+                {loadingRoute ? <><Loader2 className="h-6 w-6 animate-spin"/> {loadingMessages[loadingStep]}</> : <><Zap size={24}/> Validar Rota</>}
               </button>
             </div>
           </div>
@@ -917,7 +909,6 @@ export default function Cliente() {
                 <div className="h-14 w-14 rounded-full bg-blue-50 flex items-center justify-center"><MapPin className="h-6 w-6 text-blue-600" /></div>
               </div>
 
-              {/* 🔥 CTO FIX: Resumo da Rota Cego Resolvido */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
                  <div className="bg-slate-900 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-md">
                     <Truck size={18} className="text-cyan-400 mb-1" />
@@ -967,28 +958,11 @@ export default function Cliente() {
             </div>
 
             <div className="flex flex-col gap-6">
-              <div className="rounded-[2.5rem] border-2 border-emerald-50 bg-emerald-600 p-8 shadow-2xl text-white relative overflow-hidden">
-                <div className="absolute -right-10 -top-10 opacity-10"><ShieldCheck size={200} /></div>
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-6">
-                    <ShieldCheck className="h-6 w-6 text-emerald-300" />
-                    <span className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100">Garantia Escrow FretoGo</span>
-                  </div>
-                  <h3 className="text-5xl font-black mb-2">R$ {valorOferta}</h3>
-                  <p className="text-emerald-100 text-sm font-medium border-b border-emerald-500/50 pb-6 mb-6">Sua oferta oficial para a rede de parceiros.</p>
-                  
-                  <ul className="space-y-4 text-sm font-medium text-emerald-50">
-                    <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-emerald-300 shrink-0"/> O motorista NÃO recebe o valor agora.</li>
-                    <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-emerald-300 shrink-0"/> O dinheiro fica 100% blindado na plataforma.</li>
-                    <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-emerald-300 shrink-0"/> Liberado ao motorista APENAS após você informar o PIN de Entrega.</li>
-                    <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-emerald-300 shrink-0"/> Estorno imediato caso a carga seja cancelada.</li>
-                  </ul>
-                </div>
-              </div>
-
-              <button onClick={handleContratar} disabled={loadingPayment || isProcessingPayment.current} className={`flex min-h-[72px] w-full items-center justify-center gap-3 rounded-[2rem] text-[15px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${loadingPayment ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white shadow-xl hover:bg-black hover:scale-[1.02]'}`}>
-                {loadingPayment ? <><Loader2 className="h-6 w-6 animate-spin" /> {loadingMessages[loadingStep]}</> : <><Lock size={22} /> Pagar e Ativar no Feed</>}
+              
+              <button onClick={handleContratar} disabled={loadingPayment || isProcessingPayment.current} className={`flex min-h-[72px] w-full items-center justify-center gap-3 rounded-[2rem] text-[15px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${loadingPayment ? 'bg-slate-200 text-slate-400' : 'bg-blue-600 text-white shadow-xl shadow-blue-500/40 hover:bg-blue-700 hover:scale-[1.02]'}`}>
+                {loadingPayment ? <><Loader2 className="h-6 w-6 animate-spin" /> Publicando...</> : <><Zap size={22} /> Publicar e Buscar Motorista</>}
               </button>
+              
               <button onClick={() => setStep('form')} className="flex min-h-[54px] w-full items-center justify-center rounded-[2rem] border-2 border-slate-200 bg-white text-xs font-black uppercase tracking-[0.2em] text-slate-600 hover:bg-slate-50">
                 Voltar e Editar Dados
               </button>
@@ -996,12 +970,40 @@ export default function Cliente() {
           </div>
         )}
 
-        {/* 🔥 CTO FIX: CARGA ATIVA NO FEED (Visão da Empresa) */}
         {step === 'busca' && orderData && (
           <div className="mx-auto w-full animate-in fade-in slide-in-from-bottom-8 duration-700">
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
               
               <div className="flex flex-col gap-8">
+                
+                {/* 🔥 CTO FIX: BLOCO DO MATCH - O PAGAMENTO DA RESERVA */}
+                {orderData?.status === 'reservado_aguardando_pagamento' && (
+                  <div className="bg-emerald-600 rounded-[2.5rem] p-8 shadow-2xl text-white relative overflow-hidden mb-2 animate-pulse-slow">
+                    <h3 className="text-3xl font-black mb-2 flex items-center gap-3">
+                       <CheckCircle size={32}/> MOTORISTA ENCONTRADO!
+                    </h3>
+                    <p className="text-emerald-100 mb-6">O parceiro <b className="text-white">{orderData.motoristaNome}</b> aceitou sua carga e está aguardando a liberação. Pague agora para enviar a ele os endereços exatos e os PINs de segurança.</p>
+                    
+                    <div className="bg-slate-900/50 rounded-2xl p-6 border border-emerald-400/30 flex items-center justify-between mb-6">
+                        <div>
+                           <p className="text-[10px] uppercase tracking-widest text-emerald-300">Sua Oferta</p>
+                           <p className="text-3xl font-black">R$ {orderData.valorFreteBruto?.toFixed(2).replace('.',',')}</p>
+                        </div>
+                        <div className="text-right">
+                           <p className="text-[10px] uppercase tracking-widest text-emerald-300">Motorista Recebe</p>
+                           <p className="text-xl font-bold">R$ {orderData.valorLiquidoMotorista?.toFixed(2).replace('.',',')}</p>
+                           <p className="text-[9px] uppercase text-emerald-400/80 mt-1">Taxa FretoGo: R$ {((orderData.valorFreteBruto || 0) - (orderData.valorLiquidoMotorista || 0)).toFixed(2).replace('.',',')}</p>
+                        </div>
+                    </div>
+
+                    <button onClick={handlePagarReserva} disabled={loadingPayment} className="w-full bg-slate-900 hover:bg-black text-white text-lg font-black uppercase tracking-[0.2em] py-5 rounded-[1.5rem] flex items-center justify-center gap-3 transition-all shadow-xl">
+                        {loadingPayment ? <Loader2 className="animate-spin" /> : <Lock size={20}/>}
+                        {loadingPayment ? 'Conectando...' : 'Confirmar e Pagar'}
+                    </button>
+                    <p className="text-center text-[10px] text-emerald-200 mt-4 font-bold uppercase tracking-widest">O valor ficará retido pela garantia Escrow até a entrega.</p>
+                  </div>
+                )}
+
                 <div className="bg-slate-900 rounded-[2.5rem] p-8 md:p-10 shadow-2xl text-white relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-8 opacity-5"><Activity size={150} /></div>
                   <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-800 pb-8 mb-8">
@@ -1012,10 +1014,6 @@ export default function Cliente() {
                       </div>
                       <h2 className="text-3xl md:text-4xl font-black">ID: #{currentOrderId?.slice(0,8).toUpperCase()}</h2>
                     </div>
-                    <div className="md:text-right bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
-                      <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1">Valor Protegido (Escrow)</p>
-                      <p className="text-2xl font-black text-emerald-400 flex items-center gap-2"><ShieldCheck size={20}/> R$ {orderData?.valorFreteBruto?.toFixed(2).replace('.', ',')}</p>
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1025,7 +1023,6 @@ export default function Cliente() {
                       <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">Visualizações</p>
                     </div>
                     
-                    {/* 🔥 CTO FIX: Injetado Volume e Tipo, conforme Auditoria. */}
                     <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
                       <Package className="w-5 h-5 text-emerald-400 mb-2"/>
                       <p className="text-2xl font-black text-white mt-1">{orderData?.qtdVolumes || '--'} un</p>
