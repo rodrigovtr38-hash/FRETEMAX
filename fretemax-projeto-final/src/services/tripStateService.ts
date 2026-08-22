@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/services/tripStateService.ts
 // CTO-Log: API de Consumo Rápido da Máquina de Estados (LOTE 7)
 // Status: Compressão de sintaxe.
+// Evolução Fase 5: Reconhecimento do estado de Reserva.
 // =========================================================
 
 import { AppTripState, canTransition } from '../state/tripStateMachine';
@@ -41,6 +42,7 @@ export class TripStateService {
 
   isActive(): boolean {
     return [
+      AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any, // 🔥 Injetado
       AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.COLETANDO,
       AppTripState.EM_TRANSPORTE, AppTripState.FINALIZANDO
     ].includes(this.currentState);
