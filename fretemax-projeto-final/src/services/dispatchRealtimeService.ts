@@ -3,6 +3,7 @@
 // CTO-Log: FASE 4 - Reconstrução Controlada (Etapa 3).
 // Status: Escritas diretas (Batch/UpdateDoc) e concorrências erradicadas.
 // Correção: Fluxo de descompressão do Motorista ao acionar status ENTREGUE.
+// Evolução Fase 5: Motorista agora assume a Reserva (RESERVADO_AGUARDANDO_PAGAMENTO) antes do Aceite Real.
 // =========================================================
 
 import { increment } from 'firebase/firestore';
@@ -60,23 +61,29 @@ class DispatchRealtimeService {
 
   async aceitarCorrida(driverId: string, freteId: string) {
     try {
+      // 1. TENTA BLOQUEAR A CORRIDA PRIMEIRO (Prevenção de concorrência)
+      // Joga o status para RESERVADO para que o Embarcador possa pagar
+      const sucesso = await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, { 
+        motoristaId: driverId 
+      });
+
+      if (!sucesso) {
+        throw new Error('Falha ao registrar reserva. A carga pode já ter sido assumida ou expirada.');
+      }
+
+      // 2. SE O BLOQUEIO DEU CERTO, ATUALIZA O MOTORISTA
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
-        state: DriverState.ACEITOU,
+        state: DriverState.ACEITOU, // Mantém ACEITOU pois o motorista disse "sim", mas a UI deverá mostrar que ele aguarda o pgto.
         freteAtualId: freteId,
         activeTripId: freteId, 
         disponivel: false,
         atualizadoEm: Date.now(),
       });
 
-      const sucesso = await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.ACEITO, { 
-        motoristaId: driverId 
-      });
+      // 🔥 O MOTORISTA NÃO LIGA O GPS AINDA!
+      // locationRealtimeService.start(driverId, freteId); foi removido daqui propositalmente.
+      // Ele só vai ser acionado quando a empresa realmente pagar.
 
-      if (!sucesso) {
-        throw new Error('Falha ao registrar aceite na Máquina de Estados central.');
-      }
-
-      locationRealtimeService.start(driverId, freteId);
     } catch (error) {
       console.error('ERRO ACEITE DE CORRIDA:', error);
       throw error;
