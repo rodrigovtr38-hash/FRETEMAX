@@ -1,9 +1,9 @@
 // api/webhook.js
 // CTO-Log: Auditoria Etapa 5 (Escrow e Pagamentos) - REVISÃO FINAL.
 // 1. CORREÇÃO CRÍTICA DO BURACO NEGRO DE PAGAMENTO MANTIDA.
-// 2. Injeção do Link de Rastreamento Automático (Link Recovery) via WhatsApp.
-// 3. 🛡️ BLINDAGEM DE ASSINATURA DUPLA (KEY ROTATION BUG FIX) com trava de segurança estrita.
-// 4. 🔥 CTO FIX: Refatoração Serverless com prevenção de Memory Leak no Timeout.
+// 2. 🛡️ BLINDAGEM DE ASSINATURA DUPLA (KEY ROTATION BUG FIX) com trava de segurança estrita.
+// 3. 🔥 CTO FIX: Refatoração Serverless com prevenção de Memory Leak no Timeout.
+// 4. 🔥 CTO FIX (FASE 5): Inversão do Funil. O Webhook agora destrava a "Reserva" e joga o Motorista para a Viagem (ACEITO).
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -46,7 +46,6 @@ async function dispararWhatsAppSeguro(telefone, mensagem) {
   } catch (e) {
     console.error("[WHATSAPP ERRO] Falha na comunicação com o provedor de disparo:", e.message);
   } finally {
-    // 🔥 CTO FIX: O clearTimeout DEVE estar no finally para não causar Memory Leak na Vercel
     clearTimeout(timeoutId);
   }
 }
@@ -59,11 +58,9 @@ export default async function handler(req, res) {
     const xSignature = req.headers['x-signature'];
     const xRequestId = req.headers['x-request-id'];
 
-    // Captura infalível do ID independente da versão do payload do Mercado Pago
     const dataId = req.query.id || req.query['data.id'] || req.body?.data?.id;
     const type = req.query.topic || req.body?.type || req.body?.action;
 
-    // 🔥 CTO FIX: Validação Estrita. Se a chave não existir na Vercel, aborta a operação.
     if (!process.env.MP_WEBHOOK_SECRET) {
       console.error("[ERRO DE INFRAESTRUTURA] MP_WEBHOOK_SECRET não encontrado nas variáveis da Vercel.");
       return res.status(500).send('Configuração de servidor ausente');
@@ -117,21 +114,24 @@ export default async function handler(req, res) {
           
           if (freteData.pagamentoStatus !== 'aprovado') {
             
+            // 🔥 CTO FIX: Libera a operação! Transforma a Reserva em Viagem Ativa (ACEITO)
             await freteRef.update({
-              status: 'disponivel', 
+              status: 'aceito', 
               pagamentoStatus: 'aprovado',
-              dispatchStatus: 'em_andamento',
+              dispatchStatus: 'confirmado', // A carga já tem dono e foi paga. Não precisa mais de rádio.
               pagoEm: FieldValue.serverTimestamp(),
               pagamentoId: paymentId,
               atualizadoEm: FieldValue.serverTimestamp()
             });
             
-            console.log(`[SUCESSO] Operação Comercial Validada. Pagamento ${pedidoId} Aprovado. Frete despachado para o Radar B2B.`);
+            console.log(`[SUCESSO] Escrow Validado. Pagamento ${pedidoId} Aprovado. Viagem Liberada!`);
 
             if (freteData.clienteZap || freteData.telefoneCliente) {
                const zapCliente = freteData.clienteZap || freteData.telefoneCliente;
                const linkRastreio = `https://app.fretogo.com.br/cliente?order=${pedidoId}`;
-               const mensagemZap = `✅ *FretoGo*: Pagamento confirmado!\n\nSua carga já está no Radar dos nossos motoristas.\n\n📍 *Acompanhe em tempo real e pegue seus PINs de Segurança no link abaixo:*\n${linkRastreio}`;
+               
+               // 🔥 Nova mensagem alinhada com o modelo de Escrow Pós-Match
+               const mensagemZap = `✅ *FretoGo*: Pagamento Escrow confirmado!\n\nA operação foi liberada oficialmente. O motorista parceiro já recebeu os endereços exatos e está autorizado a iniciar a rota.\n\n📍 *Acompanhe a viagem em tempo real e pegue seus PINs de Segurança no link abaixo:*\n${linkRastreio}`;
                
                await dispararWhatsAppSeguro(zapCliente, mensagemZap);
             }
