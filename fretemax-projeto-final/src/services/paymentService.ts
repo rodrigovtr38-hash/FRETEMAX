@@ -1,7 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/paymentService.ts
 // CTO-Log: Fase 3 - Homologação Operacional Distribuída.
-// Status: Trava anti-fraude dinâmica homologada e segura para transações com Mercado Pago.
+// Evolução Fase 5: Remoção da sobrescrita otimista do TripState.
+// Apenas o Webhook pode liberar a viagem de RESERVA para ACEITO.
 // =========================================================
 
 import {
@@ -56,7 +57,6 @@ class PaymentService {
       const valorEsperado = Number(freteData.valorTotal || freteData.valorFreteBruto || 0);
       
       // 🔥 CTO FIX: Anti-fraude inteligente.
-      // Barrar se o payload for muito menor que o banco, mas tolerar arredondamentos e permitir o Auto-Bid.
       if (payload.valor < valorEsperado * 0.98) {
         console.error('[CTO-Log] FRAUDE BLOQUEADA - Tentativa de pagar menos. Enviado:', payload.valor, 'Banco:', valorEsperado);
         eventBusService.emit(AppEvents.PAYMENT_FAILED, payload);
@@ -106,22 +106,23 @@ class PaymentService {
           return;
         }
 
+        // 🔥 CTO FIX: Remoção da linha que forçava status: DISPONIVEL
+        // A geração do checkout não libera a viagem, nem re-joga no radar.
         transaction.update(freteRef, {
-          pagamentoStatus: 'confirmado',
+          pagamentoStatus: 'processando',
           pagamentoId: transactionId,
           transactionId: transactionId, 
-          status: AppTripState.DISPONIVEL,
           updatedAt: serverTimestamp(),
         });
       });
 
-      console.log(`[CTO-Log] Pagamento ${transactionId} confirmedo. Iniciando busca de motoristas...`);
+      console.log(`[CTO-Log] Checkout ${transactionId} gerado. Aguardando Webhook do Banco...`);
 
+      // 🔥 CTO FIX: Remoção do status falso para não ejetar a Reserva
       await firebaseRealtimeService.updateTripRealtime(freteId, {
-        pagamentoStatus: 'confirmado',
+        pagamentoStatus: 'processando',
         pagamentoId: transactionId,
         transactionId,
-        status: AppTripState.DISPONIVEL,
       });
       
     } catch (error) {
