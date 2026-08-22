@@ -3,6 +3,7 @@
 // CTO-Log: Auditoria Final - Bloco 2 (Segurança de Cancelamento)
 // Ajuste: Injeção de Transições para 'DISPONIVEL' nas fases ativas.
 // Correção: Se a carga quebrar no meio do caminho, volta para o Radar.
+// Evolução Fase 5: Injeção do estado RESERVADO_AGUARDANDO_PAGAMENTO para o novo fluxo Escrow.
 // =========================================================
 
 export enum AppTripState {
@@ -22,6 +23,7 @@ export enum AppTripState {
   OFERTANDO = 'ofertando',
   MOTORISTA_ENCONTRADO = 'motorista_encontrado',
   AGUARDANDO_ACEITE = 'aguardando_aceite',
+  RESERVADO_AGUARDANDO_PAGAMENTO = 'reservado_aguardando_pagamento', // 🔥 NOVO ESTADO: Trava o Motorista e aguarda o pagamento do Cliente
   ACEITO = 'aceito',
   REDISPATCH = 'redispatch',
   TIMEOUT = 'timeout',
@@ -59,18 +61,23 @@ export const VALID_TRANSITIONS: Record<string, string[]> = {
 
   [AppTripState.AGENDADO]: [AppTripState.DISPONIVEL, AppTripState.ACEITO, AppTripState.CANCELADO],
 
-  [AppTripState.DISPONIVEL]: [AppTripState.ACEITO, AppTripState.BUSCANDO_MOTORISTA, AppTripState.SEM_MOTORISTA, AppTripState.CANCELADO, AppTripState.EXPIRADO],
+  // 🔥 Agora DISPONIVEL também pode ir para RESERVADO
+  [AppTripState.DISPONIVEL]: [AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, AppTripState.ACEITO, AppTripState.BUSCANDO_MOTORISTA, AppTripState.SEM_MOTORISTA, AppTripState.CANCELADO, AppTripState.EXPIRADO],
   [AppTripState.BUSCANDO_MOTORISTA]: [AppTripState.EXPANDINDO_BUSCA, AppTripState.OFERTANDO, AppTripState.SEM_MOTORISTA, AppTripState.CANCELADO],
   [AppTripState.EXPANDINDO_BUSCA]: [AppTripState.OFERTANDO, AppTripState.SEM_MOTORISTA, AppTripState.CANCELADO],
   [AppTripState.SEM_MOTORISTA]: [AppTripState.CANCELADO, AppTripState.DISPONIVEL], 
 
-  [AppTripState.OFERTANDO]: [AppTripState.MOTORISTA_ENCONTRADO, AppTripState.AGUARDANDO_ACEITE, AppTripState.REDISPATCH, AppTripState.TIMEOUT, AppTripState.CANCELADO],
-  [AppTripState.MOTORISTA_ENCONTRADO]: [AppTripState.AGUARDANDO_ACEITE, AppTripState.ACEITO, AppTripState.REDISPATCH],
-  [AppTripState.AGUARDANDO_ACEITE]: [AppTripState.ACEITO, AppTripState.TIMEOUT, AppTripState.REDISPATCH, AppTripState.CANCELADO],
+  // 🔥 OFERTANDO e AGUARDANDO_ACEITE apontam para a Reserva no novo fluxo
+  [AppTripState.OFERTANDO]: [AppTripState.MOTORISTA_ENCONTRADO, AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, AppTripState.AGUARDANDO_ACEITE, AppTripState.REDISPATCH, AppTripState.TIMEOUT, AppTripState.CANCELADO],
+  [AppTripState.MOTORISTA_ENCONTRADO]: [AppTripState.AGUARDANDO_ACEITE, AppTripState.ACEITO, AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, AppTripState.REDISPATCH],
+  [AppTripState.AGUARDANDO_ACEITE]: [AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, AppTripState.ACEITO, AppTripState.TIMEOUT, AppTripState.REDISPATCH, AppTripState.CANCELADO],
   [AppTripState.TIMEOUT]: [AppTripState.REDISPATCH, AppTripState.SEM_MOTORISTA, AppTripState.DISPONIVEL],
   [AppTripState.REDISPATCH]: [AppTripState.DISPONIVEL, AppTripState.BUSCANDO_MOTORISTA, AppTripState.OFERTANDO, AppTripState.SEM_MOTORISTA, AppTripState.CANCELADO],
   
   [AppTripState.EXPIRADO]: [AppTripState.CANCELADO, AppTripState.DISPONIVEL],
+
+  // 🔥 NOVO ESTADO: O que acontece após a Reserva
+  [AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO]: [AppTripState.ACEITO, AppTripState.DISPONIVEL, AppTripState.CANCELADO, AppTripState.EXPIRADO, AppTripState.REDISPATCH],
 
   // 🔥 CTO FIX: Transições autorizadas para o motorista cuspir a carga de volta para o Radar (DISPONIVEL)
   [AppTripState.ACEITO]: [AppTripState.INDO_COLETA, AppTripState.CANCELADO_MOTORISTA, AppTripState.CANCELADO_CLIENTE, AppTripState.REDISPATCH, AppTripState.DISPONIVEL],
@@ -102,7 +109,7 @@ export const isFinalState = (status: string): boolean => {
 };
 
 export const isActiveState = (status: string): boolean => {
-  return [AppTripState.BUSCANDO_MOTORISTA, AppTripState.EXPANDINDO_BUSCA, AppTripState.OFERTANDO, AppTripState.AGUARDANDO_ACEITE, AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO, AppTripState.EM_TRANSPORTE, AppTripState.PARADO_OPERACIONAL, AppTripState.FINALIZANDO, AppTripState.VALIDANDO_COMPROVANTE].includes(status as AppTripState);
+  return [AppTripState.BUSCANDO_MOTORISTA, AppTripState.EXPANDINDO_BUSCA, AppTripState.OFERTANDO, AppTripState.AGUARDANDO_ACEITE, AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO, AppTripState.EM_TRANSPORTE, AppTripState.PARADO_OPERACIONAL, AppTripState.FINALIZANDO, AppTripState.VALIDANDO_COMPROVANTE].includes(status as AppTripState);
 };
 
 export const isOperationalState = (status: string): boolean => {
