@@ -3,6 +3,7 @@
 // CTO-Log: FASE 4 - Correção de Build (Vercel).
 // Status: Importação do DispatchQueueService ajustada (Maiúscula vs Minúscula)
 // para alinhar com os métodos estáticos do serviço de despacho.
+// Evolução Fase 5: Injeção do manuseio de Reserva (RESERVADO_AGUARDANDO_PAGAMENTO).
 // =========================================================
 
 import { doc, serverTimestamp, collection, addDoc, runTransaction } from 'firebase/firestore';
@@ -59,6 +60,10 @@ export class TripLifecycleService {
       let mensagemLog = '';
 
       switch (novoStatus) {
+        // 🔥 NOVO ESTADO: Log da IA avisando que travou a reserva
+        case AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any:
+          mensagemLog = "⏳ [Torre Operacional]: Motorista reservado. Aguardando confirmação financeira do Embarcador para liberar a rota.";
+          break;
         case AppTripState.ACEITO:
           mensagemLog = "🔔 [Torre Operacional]: Vinculação confirmada. Motorista designado para a operação.";
           break;
@@ -123,8 +128,11 @@ export class TripLifecycleService {
 
         const data = snapshot.data() as TripDocumentData;
 
+        // 🔥 CTO FIX: Incluído RESERVADO_AGUARDANDO_PAGAMENTO na lista de ForcedReset.
+        // Se a reserva der timeout e voltar pro DISPONIVEL, limpa o motorista.
         const isForcedReset = novoStatus === AppTripState.DISPONIVEL && 
           [
+            AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any,
             AppTripState.ACEITO, 
             AppTripState.INDO_COLETA, 
             AppTripState.CHEGOU_COLETA, 
@@ -172,7 +180,8 @@ export class TripLifecycleService {
           if (contract.filaTotal !== undefined) payloadUpdate.filaTotal = contract.filaTotal;
           if (contract.motoristaAtualDestaque !== undefined) payloadUpdate.motoristaAtualDestaque = contract.motoristaAtualDestaque;
           
-          if (novoStatus === AppTripState.ACEITO) {
+          // 🔥 CTO FIX: Grava os dados do Motorista LOGO NA RESERVA, e não apenas no Aceite.
+          if (novoStatus === AppTripState.ACEITO || novoStatus === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any) {
              if (contract.motoristaId !== undefined) payloadUpdate.motoristaId = contract.motoristaId;
              if (contract.motoristaNome !== undefined) payloadUpdate.motoristaNome = contract.motoristaNome;
              if (contract.motoristaZap !== undefined) payloadUpdate.motoristaZap = contract.motoristaZap;
