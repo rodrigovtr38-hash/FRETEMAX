@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/matchingEngine.ts
 // CTO-Log: Refatoração de Busca e Sincronia de Coleção (Fase 3).
-// Status: Trava Letal do Auto-Bid removida. Motoristas recebem Matchings seguros.
+// Evolução Fase 6: Normalização de Categorias Canônicas.
 // =========================================================
 
 import {
@@ -9,14 +9,15 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
+// 🔥 CTO FIX: Tipagem Canônica Estrita
 export type CategoriaVeiculo =
   | 'moto'
-  | 'carro_pequeno'
-  | 'utilitario'
+  | 'carro'
+  | 'utilitarios'
   | 'toco'
   | 'truck'
-  | 'carreta_ls'
-  | 'bi_trem_cegonha';
+  | 'carreta'
+  | 'bitrem';
 
 export interface FretePayload {
   id: string;
@@ -69,7 +70,8 @@ function getBoundingBox(lat: number, lng: number, distanceKm: number) {
 export async function buscarMotoristasCompativeis(frete: FretePayload): Promise<MotoristaMatch[]> {
   try {
     const categoriaFrete = frete.categoria.toLowerCase().trim();
-    const isPesado = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(categoriaFrete);
+    // 🔥 CTO FIX: Array atualizado com as nomenclaturas canônicas.
+    const isPesado = ['toco', 'truck', 'carreta', 'bitrem'].includes(categoriaFrete);
     
     const RAIOS_BUSCA = isPesado ? [20, 50, 100] : [10, 30, 50, 100];
 
@@ -137,15 +139,11 @@ export async function buscarMotoristasCompativeis(frete: FretePayload): Promise<
 
 export async function enviarOfertaMotorista(motoristaId: string, frete: FretePayload): Promise<boolean> {
   try {
-    // 🔥 CTO FIX: Sincronizado para a coleção oficial onde o perfil do motorista reside
     const motoristaRef = doc(db, 'motoristas_cadastros', motoristaId);
     
     await runTransaction(db, async (transaction) => {
       const motoristaDoc = await transaction.get(motoristaRef);
       if (!motoristaDoc.exists()) throw new Error("Motorista não existe.");
-
-      // 🔥 CTO FIX: Removido o `if (dados.ofertaAtual) throw new Error...`
-      // Isso permite que o Auto-Bid sobrescreva a oferta antiga com um valor maior na tela do motorista
 
       transaction.update(motoristaRef, {
         ofertaAtual: {
