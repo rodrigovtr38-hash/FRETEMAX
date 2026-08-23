@@ -4,6 +4,7 @@
 // Status: Escritas diretas (Batch/UpdateDoc) e concorrências erradicadas.
 // Correção: Fluxo de descompressão do Motorista ao acionar status ENTREGUE.
 // Evolução Fase 5: Motorista agora assume a Reserva (RESERVADO_AGUARDANDO_PAGAMENTO) antes do Aceite Real.
+// Evolução Fase 6: Realtime sincronizado para travar o motorista em RESERVADO.
 // =========================================================
 
 import { increment } from 'firebase/firestore';
@@ -73,7 +74,8 @@ class DispatchRealtimeService {
 
       // 2. SE O BLOQUEIO DEU CERTO, ATUALIZA O MOTORISTA
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
-        state: DriverState.ACEITOU, // Mantém ACEITOU pois o motorista disse "sim", mas a UI deverá mostrar que ele aguarda o pgto.
+        // 🔥 CTO FIX: Motorista agora assume estado explícito de RESERVADO, barrando o avanço.
+        state: DriverState.RESERVADO, 
         freteAtualId: freteId,
         activeTripId: freteId, 
         disponivel: false,
