@@ -24,6 +24,7 @@ type PaymentPayload = {
 type PaymentResponse = {
   success: boolean;
   transactionId?: string;
+  url?: string; // 🔥 Suporte para redirecionamento do MP
   error?: string;
 };
 
@@ -76,14 +77,17 @@ class PaymentService {
 
       const data = await response.json();
 
-      await this.sincronizarPagamento(payload.freteId, data.transactionId || data.id);
+      const txId = data.transactionId || data.id || 'checkout_gerado';
+
+      await this.sincronizarPagamento(payload.freteId, txId);
 
       eventBusService.emit(AppEvents.PAYMENT_APPROVED, {
         freteId: payload.freteId,
-        transactionId: data.transactionId || data.id,
+        transactionId: txId,
       });
 
-      return { success: true, transactionId: data.transactionId || data.id };
+      // 🔥 Retorna a URL para o Front-end redirecionar
+      return { success: true, transactionId: txId, url: data.url };
     } catch (error) {
       console.error('[CTO-Log] PAYMENT ERROR:', error);
       eventBusService.emit(AppEvents.PAYMENT_FAILED, payload);
