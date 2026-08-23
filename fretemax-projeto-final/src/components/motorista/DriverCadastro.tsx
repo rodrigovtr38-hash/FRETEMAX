@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/components/motorista/DriverCadastro.tsx
 // CTO-Log: FASE 2 - Homologação Operacional.
-// Status: Payload Firestore alinhado para bater 100% com a chave 'veiculo' lida pelo Radar e Admin. Compressão mantida.
+// Evolução Fase 6: Categorias Canônicas 100% Sincronizadas com o Embarcador.
 // =========================================================
 
 import { useState } from 'react';
@@ -155,7 +155,7 @@ export default function DriverCadastro({ onFinish }: DriverCadastroProps) {
       const telefoneLimpo = formData.telefone.replace(/\D/g, '');
       const cpfLimpo = formData.cpf.replace(/\D/g, '');
 
-      // 🔥 CTO FIX: A chave gravada agora é 'veiculo' para casar com a matriz de filtragem da plataforma inteira.
+      // 🔥 CTO FIX: A chave gravada agora é 'veiculo' como texto livre, e 'categoria' é canônica.
       await setDoc(doc(db, 'motoristas_cadastros', user.uid), {
         nome: formData.nome,
         whatsapp: telefoneLimpo,
@@ -248,12 +248,12 @@ export default function DriverCadastro({ onFinish }: DriverCadastroProps) {
           <select name="categoria" value={formData.categoria} onChange={handleChange} className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-white outline-none transition-all focus:border-cyan-400 focus:bg-white/10 [&>option]:bg-slate-900">
             <option value="">Selecione a categoria principal</option>
             <option value="moto">Moto</option>
-            <option value="carro_pequeno">Carro Pequeno / Hatch</option>
-            <option value="utilitario">Utilitário / Van</option>
+            <option value="carro">Carro</option>
+            <option value="utilitarios">Utilitários / Van</option>
             <option value="toco">Caminhão Toco</option>
             <option value="truck">Caminhão Truck</option>
-            <option value="carreta_ls">Carreta LS</option>
-            <option value="bi_trem_cegonha">Bi-trem / Cegonha</option>
+            <option value="carreta">Carreta</option>
+            <option value="bitrem">Bitrem / Cegonha</option>
           </select>
         </div>
 
