@@ -3,7 +3,7 @@
 // CTO-Log: Auditoria de Polimento (Fase de Escala).
 // Status: "Formulário Enterprise" ativado e Limpeza de Cards "Carga Ativa".
 // Correção: Sincronização do Resumo da Rota com o SSOT antes do Pagamento.
-// Evolução Fase 5: INVERSÃO DO FUNIL (Pagamento no Match). Publicação gratuita e cobrança apenas na Reserva.
+// Evolução Fase 5: INVERSÃO DO FUNIL (Pagamento no Match). Conectado ao PaymentService.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -15,6 +15,7 @@ import MapaCliente from '../components/MapaCliente';
 import ChatFrete from '../components/ChatFrete';
 import ClientStatusCard from '../components/client/ClientStatusCard';
 import ClientCancelModal from '../components/client/ClientCancelModal';
+import { paymentService } from '../services/paymentService'; // 🔥 CTO FIX: Serviço Financeiro Importado
 
 import { AppTripState as TripState } from '../state/tripStateMachine'; 
 import { mapsLoader } from '../services/mapsLoader'; 
@@ -483,7 +484,6 @@ export default function Cliente() {
         motoristasNotificados: 0,
         interessados: 0,
 
-        // 🔥 CTO FIX: A carga nasce como DISPONIVEL sem amarras de pagamento. O funil foi invertido.
         status: tipoFrete === 'agendado' ? TripState.AGENDADO : TripState.DISPONIVEL,
         pagamentoStatus: 'pendente',
         dispatchStatus: 'mural_aberto',
@@ -492,7 +492,6 @@ export default function Cliente() {
 
       localStorage.setItem('fretogo_current_order', docRef.id); setCurrentOrderId(docRef.id);
       
-      // Avança para a busca onde a Empresa vai aguardar um Motorista.
       setStep('busca');
       setLoadingPayment(false); 
       isProcessingPayment.current = false;
@@ -502,24 +501,28 @@ export default function Cliente() {
     } finally { setLoadingPayment(false); isProcessingPayment.current = false; }
   };
 
-  // 🔥 CTO FIX: NOVA FUNÇÃO - Pagar Reserva. Chamada apenas quando o motorista diz "SIM".
+  // 🔥 CTO FIX: NOVA FUNÇÃO - Pagar Reserva. Integração com o PaymentService (Antifraude Ativo)
   const handlePagarReserva = async () => {
     if (!currentOrderId || !orderData) return;
     try {
       setLoadingPayment(true);
-      const res = await fetch('/api/pagamento', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ titulo: `Postagem de Carga - ${VEHICLE_CONFIG[vehicle as VehicleType].nome}`, idPedido: currentOrderId }),
-      });
-      if (!res.ok) throw new Error('API indisponível');
-      const data = await res.json();
-      if (data?.url && data.url.startsWith('https://')) {
-         window.location.href = data.url; 
+      
+      const payload = {
+        valor: orderData.valorFreteBruto || 0,
+        descricao: `Postagem de Carga - ${VEHICLE_CONFIG[vehicle as VehicleType].nome}`,
+        clienteId: auth.currentUser?.uid || 'cliente',
+        freteId: currentOrderId
+      };
+
+      const res = await paymentService.processarPagamento(payload);
+      
+      if (res.success && res.url) {
+         window.location.href = res.url; 
       } else {
-         throw new Error('Link inválido');
+         throw new Error(res.error || 'Falha ao gerar link de pagamento seguro.');
       }
-    } catch (error) {
-       showToast("Erro ao processar checkout.", "error");
+    } catch (error: any) {
+       showToast(error.message || "Erro ao processar checkout.", "error");
     } finally {
        setLoadingPayment(false);
     }
