@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/state/driverStateMachine.ts
 // CTO-Log: Auditoria de Transições Válidas (LOTE 7)
 // Status: Leis da física do Motorista blindadas. Permite Offlines após entregas.
+// Evolução Fase 5: Transições autorizadas para RESERVADO (Trava Escrow).
 // =========================================================
 
 export enum DriverState {
@@ -61,6 +62,7 @@ export const DRIVER_ALLOWED_TRANSITIONS: Record<string, string[]> = {
 
   [DriverState.RECEBENDO_OFERTA]: [
     DriverState.ANALISANDO_OFERTA,
+    DriverState.RESERVADO, // 🔥 CTO FIX: Transição direta para Reserva
     DriverState.ACEITOU,
     DriverState.REJEITOU_OFERTA,
     DriverState.OFERTA_EXPIRADA,
@@ -70,6 +72,7 @@ export const DRIVER_ALLOWED_TRANSITIONS: Record<string, string[]> = {
   ],
 
   [DriverState.ANALISANDO_OFERTA]: [
+    DriverState.RESERVADO, // 🔥 CTO FIX: Transição direta para Reserva
     DriverState.ACEITOU,
     DriverState.REJEITOU_OFERTA,
     DriverState.OFERTA_EXPIRADA,
@@ -93,8 +96,10 @@ export const DRIVER_ALLOWED_TRANSITIONS: Record<string, string[]> = {
   ],
 
   [DriverState.RESERVADO]: [
+    DriverState.ACEITOU, // 🔥 CTO FIX: Liberação quando o pagamento for confirmado
     DriverState.INDO_COLETA,
     DriverState.CANCELADO,
+    DriverState.ONLINE, // Retorno ao Radar caso expire a reserva (Timeout de pagamento)
   ],
 
   [DriverState.INDO_COLETA]: [
