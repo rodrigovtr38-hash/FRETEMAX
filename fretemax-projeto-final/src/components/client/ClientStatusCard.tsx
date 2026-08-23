@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/components/client/ClientStatusCard.tsx
 // CTO-Log: Auditoria de Polimento (Fase de Escala).
 // Status: Timeline Viva refinada, sistema Multi-PIN estabilizado e exibição das "Informações Ouro".
+// Evolução Fase 5: Reconhecimento explícito do estado de Reserva (RESERVADO_AGUARDANDO_PAGAMENTO).
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -62,6 +63,8 @@ export default function ClientStatusCard({ orderData, onSmartPricing, onRepublic
 
   if (isTimeExpired) { safeStatus = 'Baixa Procura (Mural)'; statusColor = 'text-amber-400'; bgColor = 'bg-amber-500/10 border-amber-500/30'; isPulsing = false; }
   else if (status === 'aguardando_pagamento') { safeStatus = 'Aguardando Escrow'; isPulsing = true; }
+  // 🔥 CTO FIX: Reconhecimento do status de Reserva
+  else if (status === 'reservado_aguardando_pagamento') { safeStatus = 'Aguardando Seu Pagamento'; statusColor = 'text-emerald-400'; bgColor = 'bg-emerald-500/10 border-emerald-500/30'; isPulsing = true; }
   else if (status === 'disponivel' || status === 'buscando_motorista') { safeStatus = 'Radar Ativo no Feed'; isPulsing = true; }
   else if (status === 'cancelado') { safeStatus = 'Operação Abortada'; statusColor = 'text-red-400'; bgColor = 'bg-red-500/10 border-red-500/30'; isPulsing = false; }
   else if (status === 'aceito') { safeStatus = 'Motorista a Caminho'; statusColor = 'text-blue-400'; bgColor = 'bg-blue-500/10 border-blue-500/30'; }
