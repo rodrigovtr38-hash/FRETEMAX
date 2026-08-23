@@ -4,6 +4,7 @@
 // Status: "Formulário Enterprise" ativado e Limpeza de Cards "Carga Ativa".
 // Correção: Sincronização do Resumo da Rota com o SSOT antes do Pagamento.
 // Evolução Fase 5: INVERSÃO DO FUNIL (Pagamento no Match). Conectado ao PaymentService.
+// Evolução Fase 6: Normalização Canônica de Categorias.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -24,18 +25,20 @@ import { NotificationService } from '../services/notificationService';
 interface AddressData { cep: string; bairro: string; rua: string; num: string; cidade?: string; uf?: string; lat?: number; lng?: number; }
 interface Coords { lat: number; lng: number; }
 interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; valorLiquidoMotorista?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; tipoMaterial?: string; qtdVolumes?: string; peso?: string; pesoKg?: string; }
-type VehicleType = 'moto' | 'carro_pequeno' | 'utilitario' | 'toco' | 'truck' | 'carreta_ls' | 'bi_trem_cegonha';
+
+// 🔥 CTO FIX: Categorias Canônicas Normalizadas
+type VehicleType = 'moto' | 'carro' | 'utilitarios' | 'toco' | 'truck' | 'carreta' | 'bitrem';
 
 const VEHICLE_CONFIG: Record<VehicleType, { nome: string; fator: number }> = {
   moto: { nome: 'Moto', fator: 0.6 }, 
-  carro_pequeno: { nome: 'Carro Pequeno', fator: 1.0 },
-  utilitario: { nome: 'Utilitário', fator: 1.6 }, 
+  carro: { nome: 'Carro', fator: 1.0 },
+  utilitarios: { nome: 'Utilitários', fator: 1.6 }, 
   toco: { nome: 'Caminhão Toco', fator: 2.9 },
   truck: { nome: 'Caminhão Truck', fator: 3.8 }, 
-  carreta_ls: { nome: 'Carreta LS', fator: 5.5 },
-  bi_trem_cegonha: { nome: 'Bi-trem / Cegonha', fator: 7.2 },
+  carreta: { nome: 'Carreta', fator: 5.5 },
+  bitrem: { nome: 'Bitrem / Cegonha', fator: 7.2 },
 };
-const LIMITES_PESO: Record<VehicleType, number> = { moto: 30, carro_pequeno: 250, utilitario: 800, toco: 4000, truck: 12000, carreta_ls: 30000, bi_trem_cegonha: 45000 };
+const LIMITES_PESO: Record<VehicleType, number> = { moto: 30, carro: 250, utilitarios: 800, toco: 4000, truck: 12000, carreta: 30000, bitrem: 45000 };
 
 const callWithRetryAndTimeout = async <T,>(callableName: string, payload: unknown, maxRetries = 2, timeoutMs = 8000): Promise<T> => {
   const functions = getFunctions();
@@ -138,7 +141,8 @@ export default function Cliente() {
   const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? 0.1 : distanciaReal, [distanciaReal]);
 
   const calculoFinanceiro = useMemo(() => {
-    const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
+    // 🔥 CTO FIX: Sincronizado isHeavy com Categorias Canônicas
+    const isHeavy = ['toco', 'truck', 'carreta', 'bitrem'].includes(vehicle);
     const isMOPP = tipoMaterial.toLowerCase().includes('mopp') || 
                    tipoMaterial.toLowerCase().includes('químic') || 
                    tipoMaterial.toLowerCase().includes('perigo');
@@ -148,12 +152,12 @@ export default function Cliente() {
 
     switch (vehicle) {
       case 'moto': valorMotoristaBase = distanciaFinanceira <= 15 ? 30 : 30 + (distanciaFinanceira - 15) * 2; break;
-      case 'carro_pequeno': valorMotoristaBase = distanciaFinanceira <= 15 ? 100 : 100 + (distanciaFinanceira - 15) * 4; break;
-      case 'utilitario': valorMotoristaBase = distanciaFinanceira <= 15 ? 180 : 180 + (distanciaFinanceira - 15) * 6; break;
+      case 'carro': valorMotoristaBase = distanciaFinanceira <= 15 ? 100 : 100 + (distanciaFinanceira - 15) * 4; break;
+      case 'utilitarios': valorMotoristaBase = distanciaFinanceira <= 15 ? 180 : 180 + (distanciaFinanceira - 15) * 6; break;
       case 'toco': valorMotoristaBase = distanciaFinanceira <= 15 ? 350 : 350 + (distanciaFinanceira - 15) * 7; break;
       case 'truck': valorMotoristaBase = distanciaFinanceira <= 15 ? 550 : 550 + (distanciaFinanceira - 15) * 8.5; break;
-      case 'carreta_ls': valorMotoristaBase = Math.max(1200, distanciaFinanceira * 10.5); break;
-      case 'bi_trem_cegonha': valorMotoristaBase = Math.max(1800, distanciaFinanceira * 12.5); break;
+      case 'carreta': valorMotoristaBase = Math.max(1200, distanciaFinanceira * 10.5); break;
+      case 'bitrem': valorMotoristaBase = Math.max(1800, distanciaFinanceira * 12.5); break;
       default: valorMotoristaBase = 100;
     }
 
@@ -165,7 +169,8 @@ export default function Cliente() {
     const divisorMargem = isHeavy ? 0.85 : 0.80;
     const precoFinalClienteCalculado = valorLiquidoMotorista / divisorMargem;
     
-    const precisaPedagio = validDistancia > 40 && ['utilitario', 'toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
+    // 🔥 CTO FIX: Pedágio sincronizado
+    const precisaPedagio = validDistancia > 40 && ['utilitarios', 'toco', 'truck', 'carreta', 'bitrem'].includes(vehicle);
     const valorPedagioCalculado = precisaPedagio ? validDistancia * (isHeavy ? 0.85 : 0.35) : 0;
 
     return {
@@ -398,7 +403,7 @@ export default function Cliente() {
       const agoraTimestamp = Date.now();
       const dataAlvoTimestamp = new Date(dataAgendada).getTime();
       const diferencaHorasJanela = (dataAlvoTimestamp - agoraTimestamp) / (1000 * 60 * 60);
-      const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
+      const isHeavy = ['toco', 'truck', 'carreta', 'bitrem'].includes(vehicle);
 
       if (isHeavy && diferencaHorasJanela < 12) {
         showToast("Janela inválida. Pesados exigem mín. 12 horas de antecedência.", "error");
@@ -425,7 +430,7 @@ export default function Cliente() {
 
       const currentUser = auth.currentUser || { uid: "cliente_teste_admin_123" };
 
-      const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(vehicle);
+      const isHeavy = ['toco', 'truck', 'carreta', 'bitrem'].includes(vehicle);
       const taxaPlataforma = isHeavy ? 0.15 : 0.20;
       const valorFreteBruto = valorOfertaNum; 
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
@@ -501,7 +506,6 @@ export default function Cliente() {
     } finally { setLoadingPayment(false); isProcessingPayment.current = false; }
   };
 
-  // 🔥 CTO FIX: NOVA FUNÇÃO - Pagar Reserva. Integração com o PaymentService (Antifraude Ativo)
   const handlePagarReserva = async () => {
     if (!currentOrderId || !orderData) return;
     try {
@@ -533,7 +537,7 @@ export default function Cliente() {
     try {
       showToast('Recalculando e injetando nova oferta...', 'warning');
       
-      const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'].includes(orderData.veiculo || '');
+      const isHeavy = ['toco', 'truck', 'carreta', 'bitrem'].includes(orderData.veiculo || '');
       const taxaPlataforma = isHeavy ? 0.15 : 0.20;
       
       const novoBruto = (orderData.valorFreteBruto || 0) + valorAdicional;
@@ -763,7 +767,6 @@ export default function Cliente() {
                 </div>
               </div>
 
-              {/* 🔥 CTO FIX: NOVOS CAMPOS OPERACIONAIS (Auditoria) */}
               <div className="bg-slate-50 p-6 md:p-8 rounded-3xl border border-slate-100">
                 <h2 className="mb-6 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
                   <FileText className="h-5 w-5 text-slate-400" /> Detalhes da Mercadoria
@@ -826,7 +829,7 @@ export default function Cliente() {
                             <TrendingUp className="w-5 h-5 text-emerald-500" />
                             <div>
                               <p className="text-[9px] uppercase font-black text-slate-400">Demanda da Região</p>
-                              <p className="text-sm font-bold text-slate-700">{['utilitario', 'toco'].includes(vehicle) ? 'Alta' : 'Estável'}</p>
+                              <p className="text-sm font-bold text-slate-700">{['utilitarios', 'toco'].includes(vehicle) ? 'Alta' : 'Estável'}</p>
                             </div>
                          </div>
                          <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 flex items-center gap-3">
