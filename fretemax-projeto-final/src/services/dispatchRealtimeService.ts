@@ -1,10 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
 // CTO-Log: FASE 4 - Reconstrução Controlada (Etapa 3).
-// Status: Escritas diretas (Batch/UpdateDoc) e concorrências erradicadas.
-// Correção: Fluxo de descompressão do Motorista ao acionar status ENTREGUE.
 // Evolução Fase 5: Motorista agora assume a Reserva (RESERVADO_AGUARDANDO_PAGAMENTO) antes do Aceite Real.
-// Evolução Fase 6: Realtime sincronizado para travar o motorista em RESERVADO.
+// Evolução Fase 6: Liberação do motorista (Destravamento da Reserva + Start GPS) interligada ao Webhook Financeiro.
 // =========================================================
 
 import { increment } from 'firebase/firestore';
@@ -62,8 +60,6 @@ class DispatchRealtimeService {
 
   async aceitarCorrida(driverId: string, freteId: string) {
     try {
-      // 1. TENTA BLOQUEAR A CORRIDA PRIMEIRO (Prevenção de concorrência)
-      // Joga o status para RESERVADO para que o Embarcador possa pagar
       const sucesso = await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, { 
         motoristaId: driverId 
       });
@@ -72,9 +68,7 @@ class DispatchRealtimeService {
         throw new Error('Falha ao registrar reserva. A carga pode já ter sido assumida ou expirada.');
       }
 
-      // 2. SE O BLOQUEIO DEU CERTO, ATUALIZA O MOTORISTA
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
-        // 🔥 CTO FIX: Motorista agora assume estado explícito de RESERVADO, barrando o avanço.
         state: DriverState.RESERVADO, 
         freteAtualId: freteId,
         activeTripId: freteId, 
@@ -82,13 +76,42 @@ class DispatchRealtimeService {
         atualizadoEm: Date.now(),
       });
 
-      // 🔥 O MOTORISTA NÃO LIGA O GPS AINDA!
-      // locationRealtimeService.start(driverId, freteId); foi removido daqui propositalmente.
-      // Ele só vai ser acionado quando a empresa realmente pagar.
-
     } catch (error) {
       console.error('ERRO ACEITE DE CORRIDA:', error);
       throw error;
+    }
+  }
+
+  // 🔥 CTO FIX: Função responsável por destrancar a viagem após o Cliente Pagar
+  async confirmarLiberacaoMotorista(freteId: string, motoristaId?: string) {
+    try {
+      const currentUid = auth.currentUser?.uid;
+      
+      // Validação 1: Há um motorista autenticado escutando isso?
+      if (!currentUid) return;
+
+      // Validação 2: Segurança. Impede que um motorista online aleatório assuma a carga só porque escutou o evento.
+      // Apenas o titular da reserva pode ser destravado para "ACEITOU".
+      if (motoristaId && currentUid !== motoristaId) {
+        console.warn(`[CTO-Log] Liberação ignorada: O motorista local (${currentUid}) não é o titular desta reserva.`);
+        return;
+      }
+
+      // Validação 3: Atualização Idempotente da Máquina do Motorista (RESERVADO -> ACEITOU)
+      await firebaseRealtimeService.updateDriverRealtime(currentUid, {
+        state: DriverState.ACEITOU,
+        freteAtualId: freteId,
+        activeTripId: freteId, 
+        disponivel: false,
+        atualizadoEm: Date.now(),
+      });
+
+      // Validação 4: Rastreamento GPS finalmente ativado após garantia de pagamento
+      locationRealtimeService.start(currentUid, freteId);
+
+      console.log(`[CTO-Log] Operação ${freteId} liberada pelo Escrow! Motorista ${currentUid} destravado (ACEITOU) e GPS Iniciado.`);
+    } catch (error) {
+      console.error('[CTO-Log] ERRO AO CONFIRMAR LIBERAÇÃO DO MOTORISTA:', error);
     }
   }
 
