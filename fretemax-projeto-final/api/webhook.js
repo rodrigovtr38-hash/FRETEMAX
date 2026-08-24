@@ -1,9 +1,9 @@
-// api/webhook.js
 // CTO-Log: Auditoria Etapa 5 (Escrow e Pagamentos) - REVISÃO FINAL.
 // 1. CORREÇÃO CRÍTICA DO BURACO NEGRO DE PAGAMENTO MANTIDA.
 // 2. 🛡️ BLINDAGEM DE ASSINATURA DUPLA (KEY ROTATION BUG FIX) com trava de segurança estrita.
 // 3. 🔥 CTO FIX: Refatoração Serverless com prevenção de Memory Leak no Timeout.
 // 4. 🔥 CTO FIX (FASE 5): Inversão do Funil. O Webhook agora destrava a "Reserva" e joga o Motorista para a Viagem (ACEITO).
+// 5. 🔥 CTO FIX (FASE 8): Distinção semântica de falhas financeiras (Rejected/Cancelled) sem corromper Estado Operacional.
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -110,6 +110,7 @@ export default async function handler(req, res) {
       if (freteSnap.exists) {
         const freteData = freteSnap.data();
 
+        // CASO 1: PAGAMENTO APROVADO (Fluxo de Liberação Logística)
         if (paymentData.status === 'approved') {
           
           if (freteData.pagamentoStatus !== 'aprovado') {
@@ -118,7 +119,7 @@ export default async function handler(req, res) {
             await freteRef.update({
               status: 'aceito', 
               pagamentoStatus: 'aprovado',
-              dispatchStatus: 'confirmado', // A carga já tem dono e foi paga. Não precisa mais de rádio.
+              dispatchStatus: 'confirmado', 
               pagoEm: FieldValue.serverTimestamp(),
               pagamentoId: paymentId,
               atualizadoEm: FieldValue.serverTimestamp()
@@ -130,11 +131,24 @@ export default async function handler(req, res) {
                const zapCliente = freteData.clienteZap || freteData.telefoneCliente;
                const linkRastreio = `https://app.fretogo.com.br/cliente?order=${pedidoId}`;
                
-               // 🔥 Nova mensagem alinhada com o modelo de Escrow Pós-Match
                const mensagemZap = `✅ *FretoGo*: Pagamento Escrow confirmado!\n\nA operação foi liberada oficialmente. O motorista parceiro já recebeu os endereços exatos e está autorizado a iniciar a rota.\n\n📍 *Acompanhe a viagem em tempo real e pegue seus PINs de Segurança no link abaixo:*\n${linkRastreio}`;
                
                await dispararWhatsAppSeguro(zapCliente, mensagemZap);
             }
+          }
+
+        // CASO 2: PAGAMENTO REJEITADO, CANCELADO, ESTORNADO (Falhas Financeiras)
+        } else if (['rejected', 'cancelled', 'refunded', 'charged_back'].includes(paymentData.status)) {
+          
+          // 🔥 CTO FIX: Registramos a falha financeira sem mexer no status operacional da carga (status),
+          // para não jogar a carga no Radar enquanto o Realtime DB do motorista ainda está em RESERVADO.
+          if (freteData.pagamentoStatus !== paymentData.status) {
+            await freteRef.update({
+              pagamentoStatus: paymentData.status,
+              atualizadoEm: FieldValue.serverTimestamp()
+            });
+            
+            console.warn(`[WEBHOOK ALERTA] Pagamento ${paymentId} retornou como '${paymentData.status}'. Motorista ${freteData.motoristaId} requer desvinculação atômica (RTDB) pendente de auditoria operacional.`);
           }
         }
       }
