@@ -1,8 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/tripRealtimeListener.ts
 // CTO-Log: Fase 6 - Homologação Operacional Distribuída (Liberação Financeira)
-// Evolução Fase 6: Integração de gatilho para destravar o motorista (RESERVA -> ACEITO) somente após o Webhook atuar.
 // Evolução Fase 10: Reação Ativa ao Rollback do Servidor (DISPONIVEL).
+// Evolução Fase 18: Sincronismo Atômico de RTDB e Autoridade Logística (Firestore -> RTDB).
 // =========================================================
 
 import {
@@ -15,21 +15,14 @@ import {
   canTransition,
 } from '../state/tripStateMachine';
 
-// 🔥 CTO FIX: Importado o serviço de despacho para orquestrar a liberação
 import { dispatchRealtimeService } from './dispatchRealtimeService'; 
-
-// 🔥 CTO FIX: Obtém identidade do motorista local para cleanup
 import { auth } from '../firebase';
 
 type TripRealtimePayload = {
   id: string;
-
   status: AppTripState;
-
   motoristaId?: string;
-
   clienteId?: string;
-
   tracking?: any;
 };
 
@@ -57,24 +50,12 @@ class TripRealtimeListener {
       const nextState =
         payload.status;
 
-      /*
-      ===================================
-      IGNORA DUPLICADO
-      ===================================
-      */
-
       if (
         this.currentState ===
         nextState
       ) {
         return;
       }
-
-      /*
-      ===================================
-      VALIDAÇÃO STATE MACHINE
-      ===================================
-      */
 
       const isValid =
         canTransition(
@@ -110,36 +91,20 @@ class TripRealtimeListener {
       this.currentState =
         nextState;
 
-      /*
-      ===================================
-      EVENTS
-      ===================================
-      */
+      // 🔥 CTO FIX: Titularidade da Sessão
+      const currentUid = auth.currentUser?.uid;
+      const isOwner = currentUid && currentUid === payload.motoristaId;
 
       switch (nextState) {
 
-        /*
-        ================================
-        RESERVA (ESCROW PENDENTE)
-        ================================
-        */
         case AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any:
           console.log('[CTO-Log] Viagem entrou em RESERVA. Aguardando pagamento do Embarcador.');
           break;
 
-        /*
-        ================================
-        DISPONIVEL (ROLLBACK FINANCEIRO)
-        ================================
-        */
         case AppTripState.DISPONIVEL as any:
-          // 🔥 CTO FIX: Se a carga que estávamos monitorando em RESERVA voltar para DISPONIVEL (Fallback do Webhook).
           if (this.currentState === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any) {
-            const currentUid = auth.currentUser?.uid;
             if (currentUid) {
               console.log('[CTO-Log] Rollback de Servidor detectado. Desvinculando motorista local via Cleanup Canônico.');
-              
-              // Executa a faxina visual e do DB Realtime reaproveitando a função robusta
               dispatchRealtimeService.cancelarViagemMotorista(
                 currentUid,
                 payload.id,
@@ -149,193 +114,72 @@ class TripRealtimeListener {
           }
           break;
 
-        /*
-        ================================
-        OFERTANDO
-        ================================
-        */
-
         case AppTripState.OFERTANDO:
-
-          eventBusService.emit(
-            AppEvents.NEW_TRIP_REQUEST,
-            payload,
-          );
-
-          eventBusService.emit(
-            AppEvents.DISPATCH_STARTED,
-            payload,
-          );
-
+          eventBusService.emit(AppEvents.NEW_TRIP_REQUEST, payload);
+          eventBusService.emit(AppEvents.DISPATCH_STARTED, payload);
           break;
 
-        /*
-        ================================
-        ACEITO (ESCROW APROVADO)
-        ================================
-        */
-
         case AppTripState.ACEITO:
-
-          eventBusService.emit(
-            AppEvents.TRIP_ACCEPTED,
-            payload,
-          );
-
-          // 🔥 CTO FIX: Liberação Oficial Operacional.
-          // Quando a Carga vira ACEITO (via Webhook), o motorista é destravado.
+          eventBusService.emit(AppEvents.TRIP_ACCEPTED, payload);
           if (payload.id) {
             dispatchRealtimeService.confirmarLiberacaoMotorista(payload.id, payload.motoristaId).catch(err => {
               console.error('[CTO-Log] Falha sistêmica ao tentar liberar o motorista:', err);
             });
           }
-
           break;
 
-        /*
-        ================================
-        REDISPATCH
-        ================================
-        */
-
-        case AppTripState.REDISPATCH:
-
-          eventBusService.emit(
-            AppEvents.REDISPATCH_STARTED,
-            payload,
-          );
-
+        // 🔥 CTO FIX BLOCO 18: Mapeamento de Transições Logísticas RTDB
+        case AppTripState.INDO_COLETA as any:
+          if (isOwner) dispatchRealtimeService.iniciarColeta(currentUid);
           break;
 
-        /*
-        ================================
-        SEM MOTORISTA
-        ================================
-        */
-
-        case AppTripState.SEM_MOTORISTA:
-
-          eventBusService.emit(
-            AppEvents.QUEUE_FINISHED,
-            payload,
-          );
-
+        case AppTripState.CHEGOU_COLETA as any:
+          if (isOwner) dispatchRealtimeService.chegouColeta(currentUid);
           break;
-
-        /*
-        ================================
-        COLETANDO
-        ================================
-        */
 
         case AppTripState.COLETANDO:
-
-          eventBusService.emit(
-            AppEvents.TRIP_COLLECTED,
-            payload,
-          );
-
+          eventBusService.emit(AppEvents.TRIP_COLLECTED, payload);
+          if (isOwner) dispatchRealtimeService.iniciouColetando(currentUid);
           break;
-
-        /*
-        ================================
-        TRANSPORTE
-        ================================
-        */
 
         case AppTripState.EM_TRANSPORTE:
-
-          eventBusService.emit(
-            AppEvents.TRIP_IN_PROGRESS,
-            payload,
-          );
-
-          eventBusService.emit(
-            AppEvents.TRIP_STARTED,
-            payload,
-          );
-
+          eventBusService.emit(AppEvents.TRIP_IN_PROGRESS, payload);
+          eventBusService.emit(AppEvents.TRIP_STARTED, payload);
+          if (isOwner) dispatchRealtimeService.iniciarTransporte(currentUid);
           break;
-
-        /*
-        ================================
-        FINALIZANDO
-        ================================
-        */
 
         case AppTripState.FINALIZANDO:
-
-          eventBusService.emit(
-            AppEvents.TRIP_FINISHED,
-            payload,
-          );
-
+          eventBusService.emit(AppEvents.TRIP_FINISHED, payload);
+          if (isOwner) dispatchRealtimeService.finalizarEntrega(currentUid);
           break;
-
-        /*
-        ================================
-        ENTREGUE
-        ================================
-        */
 
         case AppTripState.ENTREGUE:
-
-          eventBusService.emit(
-            AppEvents.TRIP_FINISHED,
-            payload,
-          );
-
+          // A limpeza RTDB no ENTREGUE é comandada pela UI que invoca concluirViagemELiberarMotorista().
+          // Não aplicamos aqui para evitar chamadas cruzadas de limpeza.
+          eventBusService.emit(AppEvents.TRIP_FINISHED, payload);
           break;
 
-        /*
-        ================================
-        CANCELADO
-        ================================
-        */
+        case AppTripState.REDISPATCH:
+          eventBusService.emit(AppEvents.REDISPATCH_STARTED, payload);
+          break;
+
+        case AppTripState.SEM_MOTORISTA:
+          eventBusService.emit(AppEvents.QUEUE_FINISHED, payload);
+          break;
 
         case AppTripState.CANCELADO:
-
-          eventBusService.emit(
-            AppEvents.TRIP_CANCELLED,
-            payload,
-          );
-
+          eventBusService.emit(AppEvents.TRIP_CANCELLED, payload);
           break;
 
-        /*
-        ================================
-        EXPIRADO
-        ================================
-        */
-
         case AppTripState.EXPIRADO:
-
-          eventBusService.emit(
-            AppEvents.DISPATCH_TIMEOUT,
-            payload,
-          );
-
+          eventBusService.emit(AppEvents.DISPATCH_TIMEOUT, payload);
           break;
       }
     } catch (error) {
-
-      console.error(
-        'TRIP REALTIME LISTENER ERROR:',
-        error,
-      );
-
-      eventBusService.emit(
-        AppEvents.SYSTEM_ERROR,
-        {
-          origem:
-            'tripRealtimeListener',
-
-          error,
-        },
-      );
+      console.error('TRIP REALTIME LISTENER ERROR:', error);
+      eventBusService.emit(AppEvents.SYSTEM_ERROR, { origem: 'tripRealtimeListener', error });
     }
   }
 }
 
-export const tripRealtimeListener =
-  new TripRealtimeListener();
+export const tripRealtimeListener = new TripRealtimeListener();
