@@ -4,6 +4,7 @@
 // 3. 🔥 CTO FIX: Refatoração Serverless com prevenção de Memory Leak no Timeout.
 // 4. 🔥 CTO FIX (FASE 5): Inversão do Funil. O Webhook agora destrava a "Reserva" e joga o Motorista para a Viagem (ACEITO).
 // 5. 🔥 CTO FIX (FASE 10): Implementação Atômica do Rollback. Devolução da carga em falha e trava de Late Approval.
+// 6. 🔥 CTO FIX (FASE 12): Validação de Titularidade. Proteção absoluta contra Swap de Motorista e Late Approvals.
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -110,6 +111,9 @@ export default async function handler(req, res) {
       if (freteSnap.exists) {
         const freteData = freteSnap.data();
 
+        // Extrai a assinatura de titularidade (Bloco 11)
+        const paymentMotoristaId = paymentData.metadata?.motorista_id;
+
         // ==========================================
         // CASO 1: PAGAMENTO APROVADO
         // ==========================================
@@ -117,9 +121,22 @@ export default async function handler(req, res) {
           
           if (freteData.pagamentoStatus !== 'aprovado') {
             
-            // 🔥 CTO FIX: Trava de Liberação. Apenas destrava se a carga ainda for uma reserva oficial.
-            // Impede que um "Late Approval" de um cliente libere uma carga que ele já cancelou e voltou ao Radar.
             if (freteData.status === 'reservado_aguardando_pagamento') {
+              
+              // 🔥 CTO FIX BLOCO 12: Proteção Absoluta contra Swap de Motorista
+              if (paymentMotoristaId && paymentMotoristaId !== freteData.motoristaId) {
+                console.error(`[CRÍTICO: SWAP EVITADO] Pagamento ${paymentId} aprovado, mas pertence ao motorista antigo (${paymentMotoristaId}). A reserva atual está com ${freteData.motoristaId}.`);
+                
+                await freteRef.update({
+                  pagamentoStatus: 'aprovado_incompativel',
+                  pagamentoAtrasadoId: paymentId,
+                  atualizadoEm: FieldValue.serverTimestamp()
+                });
+                
+                return res.status(200).send('OK'); // Encerra sem liberar a carga
+              }
+
+              // Fluxo de Liberação Oficial
               await freteRef.update({
                 status: 'aceito', 
                 pagamentoStatus: 'aprovado',
@@ -138,7 +155,7 @@ export default async function handler(req, res) {
                  await dispararWhatsAppSeguro(zapCliente, mensagemZap);
               }
             } else {
-              // Late Approval: A transação foi paga, mas a carga não está mais aguardando.
+              // Late Approval: Carga não está mais aguardando.
               console.warn(`[LATE APPROVAL] Pagamento aprovado, mas frete ${pedidoId} está em status: ${freteData.status}. Rollback Evitado.`);
               await freteRef.update({
                 pagamentoStatus: 'aprovado_atrasado',
@@ -155,8 +172,15 @@ export default async function handler(req, res) {
           
           if (freteData.pagamentoStatus !== paymentData.status) {
             
-            // 🔥 CTO FIX: Apenas executa a devolução ao radar (Rollback Atômico) se estiver em Reserva.
             if (freteData.status === 'reservado_aguardando_pagamento') {
+
+              // 🔥 CTO FIX BLOCO 12: Proteção de Titularidade no Rollback
+              if (paymentMotoristaId && paymentMotoristaId !== freteData.motoristaId) {
+                console.warn(`[ROLLBACK IGNORADO] Rejeição do Pagamento ${paymentId} pertence ao motorista antigo (${paymentMotoristaId}). A reserva atual (${freteData.motoristaId}) não será desfeita.`);
+                return res.status(200).send('OK');
+              }
+
+              // Rollback Atômico Oficial
               console.log(`[ROLLBACK] Pagamento ${paymentId} recusado. Desvinculando motorista e devolvendo ${pedidoId} ao Radar.`);
               await freteRef.update({
                 status: 'disponivel', // Retorna para captação
@@ -169,7 +193,6 @@ export default async function handler(req, res) {
                 atualizadoEm: FieldValue.serverTimestamp()
               });
             } else {
-              // Se a viagem já iniciou ou está disponível, apenas anota a falha financeira por auditoria.
               console.warn(`[WEBHOOK ALERTA] Pagamento ${paymentId} retornou '${paymentData.status}'. Status logístico mantido pois já era '${freteData.status}'.`);
               await freteRef.update({
                 pagamentoStatus: paymentData.status,
