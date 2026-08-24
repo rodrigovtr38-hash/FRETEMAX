@@ -1,18 +1,19 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
 // CTO-Log: Auditoria Final - Bloco 2 (A Viagem Blindada)
-// Status: Barra de Progresso Viva adicionada, Resumo Fixo na tela, Fotos OBRIGATÓRIAS em cada PIN, 3 Tentativas Antifraude.
 // Correção: Ejeção da função cliente-lado de Chat para evitar duplicações.
 // Evolução Fase 6: BLOCO 7 - Sala de Espera Visual (Escrow Lock) injetada.
+// Evolução Fase 14: Integração de Geofence Dinâmico e UI de GPS Real.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from '../firebase'; 
-import { doc, onSnapshot, arrayUnion, DocumentData, addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle, FileText, Check, Package } from 'lucide-react';
+import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
+import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle, FileText, Check } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
+import { locationRealtimeService } from '../services/locationRealtimeService'; // 🔥 CTO FIX: Consumo direto de GPS local
 import { AppTripState } from '../state/tripStateMachine';
 
 interface DriverActiveTripProps { freteId?: string; }
@@ -57,6 +58,17 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [fotoPodBase64, setFotoPodBase64] = useState<string | null>(null);
   const [chavePix, setChavePix] = useState('');
 
+  // 🔥 CTO FIX: Consumo do sinal GPS emitido pelo locationRealtimeService
+  const [currentGps, setCurrentGps] = useState<{lat: number, lng: number} | null>(null);
+
+  useEffect(() => {
+    // Inscreve no Observer de GPS para não criar watchPosition fantasma
+    const unsubscribeGps = locationRealtimeService.onPositionUpdate((pos) => {
+      setCurrentGps(pos);
+    });
+    return () => unsubscribeGps();
+  }, []);
+
   useEffect(() => {
     if (!freteId) { setLoading(false); return; }
     const unsubscribe = onSnapshot(doc(db, 'fretes', freteId), (docSnap) => {
@@ -78,8 +90,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   
   if (!frete) return null;
 
-  // 🔥 CTO FIX: BLOCO 7 - SALA DE ESPERA FINANCEIRA (ESCROW LOCK)
-  // Bloqueia toda a renderização do mapa, Waze e endereços enquanto estiver na Reserva.
+  // BLOCO 7 - SALA DE ESPERA FINANCEIRA (ESCROW LOCK)
   if (frete.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO || String(frete.status) === 'reservado_aguardando_pagamento') {
     return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] border border-emerald-500/20 bg-slate-900 shadow-2xl p-8 text-center flex flex-col items-center justify-center min-h-[50vh]">
@@ -125,16 +136,31 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const paradaAtualIndex = frete.paradaAtualIndex || 0;
   const destinoAtual = paradas[paradaAtualIndex] || (frete.entrega || {});
   
-  const mapOriginGPS = frete.status === AppTripState.EM_TRANSPORTE 
-    ? (paradaAtualIndex === 0 ? { lat: frete.origemLat as number, lng: frete.origemLng as number } : { lat: paradas[paradaAtualIndex-1]?.lat, lng: paradas[paradaAtualIndex-1]?.lng })
-    : null;
-  const mapDestinoGPS = destinoAtual?.lat ? { lat: destinoAtual.lat, lng: destinoAtual.lng } : null;
-
   const isFaseColeta = [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO].includes(frete.status);
   
   const navDestinoGPS = isFaseColeta && frete.origemLat && frete.origemLng 
     ? { lat: frete.origemLat, lng: frete.origemLng } 
-    : mapDestinoGPS;
+    : (destinoAtual?.lat ? { lat: destinoAtual.lat, lng: destinoAtual.lng } : null);
+
+  // 🔥 CTO FIX: Cálculo Dinâmico de Geofence e Map Origin
+  const mapOriginGPS = currentGps || (frete.status === AppTripState.EM_TRANSPORTE 
+    ? (paradaAtualIndex === 0 ? { lat: frete.origemLat as number, lng: frete.origemLng as number } : { lat: paradas[paradaAtualIndex-1]?.lat, lng: paradas[paradaAtualIndex-1]?.lng })
+    : null);
+
+  const distanceToTarget = useMemo(() => {
+    if (!currentGps || !navDestinoGPS?.lat || !navDestinoGPS?.lng) return null;
+    return locationRealtimeService.calculateDistance(
+      currentGps.lat, currentGps.lng, navDestinoGPS.lat, navDestinoGPS.lng
+    );
+  }, [currentGps, navDestinoGPS]);
+
+  // A margem segura (Geofence) para o motorista interagir (Em Metros)
+  const GEOFENCE_METERS = 500;
+  const isWithinGeofence = distanceToTarget !== null && distanceToTarget <= GEOFENCE_METERS;
+  const geofenceBlocked = !isWithinGeofence;
+  
+  const distStr = distanceToTarget !== null ? (distanceToTarget > 1000 ? `${(distanceToTarget / 1000).toFixed(1)}km` : `${Math.round(distanceToTarget)}m`) : '';
+  const geofenceWarning = !currentGps ? "Buscando GPS..." : `Alvo distante (${distStr})`;
 
   const enderecoAlvoTexto = isFaseColeta 
     ? frete.enderecoColetaTexto 
@@ -440,28 +466,28 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
         <div className="space-y-4">
           {frete.status === AppTripState.ACEITO && (
+            // Deslocar para coleta NÃO é travado por geofence (ele aperta isso de casa)
             <button onClick={() => handleStatusUpdate(AppTripState.INDO_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center bg-blue-600 h-16 font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all hover:bg-blue-500 active:scale-95 text-white">
               {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Deslocar p/ Coleta'}
             </button>
           )}
           {frete.status === AppTripState.INDO_COLETA && (
-            <button onClick={() => handleStatusUpdate(AppTripState.CHEGOU_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center bg-indigo-500 h-16 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 transition-all hover:bg-indigo-400 active:scale-95">
-              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Cheguei no Local'}
+            <button onClick={() => handleStatusUpdate(AppTripState.CHEGOU_COLETA)} disabled={actionLoading || geofenceBlocked} className={`w-full flex items-center justify-center h-16 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 transition-all active:scale-95 ${geofenceBlocked ? 'bg-slate-700 text-slate-400' : 'bg-indigo-500 hover:bg-indigo-400'}`}>
+              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : (geofenceBlocked ? geofenceWarning : 'Cheguei no Local')}
             </button>
           )}
           {frete.status === AppTripState.CHEGOU_COLETA && (
-            <button onClick={() => handleStatusUpdate(AppTripState.COLETANDO)} disabled={actionLoading} className="w-full flex items-center justify-center bg-amber-500 h-16 font-black uppercase tracking-widest rounded-xl text-black disabled:opacity-50 transition-all hover:bg-amber-400 active:scale-95">
-              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Iniciar Coleta'}
+            <button onClick={() => handleStatusUpdate(AppTripState.COLETANDO)} disabled={actionLoading || geofenceBlocked} className={`w-full flex items-center justify-center h-16 font-black uppercase tracking-widest rounded-xl text-black disabled:opacity-50 transition-all active:scale-95 ${geofenceBlocked ? 'bg-slate-700 text-slate-400' : 'bg-amber-500 hover:bg-amber-400'}`}>
+              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : (geofenceBlocked ? geofenceWarning : 'Iniciar Coleta')}
             </button>
           )}
           {[AppTripState.COLETANDO, AppTripState.EM_TRANSPORTE].includes(frete.status) && (
-            <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading} className="w-full flex items-center justify-center bg-cyan-500 h-16 font-black uppercase tracking-widest rounded-xl text-black disabled:opacity-50 transition-all hover:bg-cyan-400 active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)]">
-              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : `Validar PIN para ${frete.status === AppTripState.COLETANDO ? 'Sair com Carga' : 'Finalizar'}`}
+            <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading || geofenceBlocked} className={`w-full flex items-center justify-center h-16 font-black uppercase tracking-widest rounded-xl text-black disabled:opacity-50 transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)] ${geofenceBlocked ? 'bg-slate-700 text-slate-400 shadow-none' : 'bg-cyan-500 hover:bg-cyan-400'}`}>
+              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : (geofenceBlocked ? geofenceWarning : `Validar PIN para ${frete.status === AppTripState.COLETANDO ? 'Sair com Carga' : 'Finalizar'}`)}
             </button>
           )}
         </div>
         
-        {/* CTO FIX: Waze and Google Maps moved below to ensure they are fully hidden by Early Return when on Reserva */}
         {frete.status !== AppTripState.ACEITO && frete.status !== AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO && (
            <div className="grid grid-cols-2 gap-3 mt-4">
              <button onClick={() => handleOpenNav('waze')} className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors">
