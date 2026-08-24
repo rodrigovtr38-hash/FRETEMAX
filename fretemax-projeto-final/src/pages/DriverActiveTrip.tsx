@@ -3,6 +3,7 @@
 // CTO-Log: Auditoria Final - Bloco 2 (A Viagem Blindada)
 // Status: Barra de Progresso Viva adicionada, Resumo Fixo na tela, Fotos OBRIGATÓRIAS em cada PIN, 3 Tentativas Antifraude.
 // Correção: Ejeção da função cliente-lado de Chat para evitar duplicações.
+// Evolução Fase 6: BLOCO 7 - Sala de Espera Visual (Escrow Lock) injetada.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -76,6 +77,49 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   );
   
   if (!frete) return null;
+
+  // 🔥 CTO FIX: BLOCO 7 - SALA DE ESPERA FINANCEIRA (ESCROW LOCK)
+  // Bloqueia toda a renderização do mapa, Waze e endereços enquanto estiver na Reserva.
+  if (frete.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO || String(frete.status) === 'reservado_aguardando_pagamento') {
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] border border-emerald-500/20 bg-slate-900 shadow-2xl p-8 text-center flex flex-col items-center justify-center min-h-[50vh]">
+        <div className="w-24 h-24 bg-emerald-500/10 rounded-full border border-emerald-500/30 flex items-center justify-center mb-6 mx-auto shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+          <LockKeyhole size={40} className="text-emerald-400 animate-pulse" />
+        </div>
+        <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Reserva Confirmada!</h2>
+        <p className="text-slate-400 text-sm max-w-sm mx-auto leading-relaxed mb-8 font-medium">
+          Aguardando a confirmação do pagamento do embarcador para liberar a rota, os endereços exatos e a navegação.
+        </p>
+        <div className="flex items-center gap-3 bg-slate-950 px-6 py-4 rounded-2xl border border-white/5 w-full max-w-xs mx-auto justify-center mb-8 shadow-inner">
+          <Loader2 className="animate-spin text-cyan-500" size={18} />
+          <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Aguardando Escrow...</span>
+        </div>
+        
+        <button 
+          onClick={async () => {
+            if (!window.confirm("Deseja cancelar esta reserva? O frete voltará para o Radar.")) return;
+            setActionLoading(true);
+            try {
+              await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
+                status: AppTripState.DISPONIVEL, 
+                motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
+                alertaInsucesso: true,
+                motivoCancelamento: 'Motorista desistiu durante a reserva.'
+              });
+            } catch (e) {
+              console.error(e);
+            } finally {
+              setActionLoading(false);
+            }
+          }} 
+          disabled={actionLoading} 
+          className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center gap-2 mx-auto w-full py-4"
+        >
+          <AlertTriangle size={14} /> Desistir da Reserva
+        </button>
+      </motion.div>
+    );
+  }
 
   const paradas = frete.paradas || [];
   const paradaAtualIndex = frete.paradaAtualIndex || 0;
@@ -204,7 +248,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     if (!window.confirm("ATENÇÃO: Deseja reportar problema no local? O frete voltará para o Radar.")) return;
     setActionLoading(true);
     try {
-      if (frete.status === AppTripState.COLETANDO || frete.status === AppTripState.CHEGOU_COLETA || frete.status === AppTripState.INDO_COLETA || frete.status === AppTripState.ACEITO) {
+      if (frete.status === AppTripState.COLETANDO || frete.status === AppTripState.CHEGOU_COLETA || frete.status === AppTripState.INDO_COLETA || frete.status === AppTripState.ACEITO || frete.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO || String(frete.status) === 'reservado_aguardando_pagamento') {
         await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
           status: AppTripState.DISPONIVEL, 
           motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
@@ -354,14 +398,17 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             <span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span>
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1"><Radio size={12}/> Rastreamento Ativo</p>
-              <p className="text-xs font-bold text-slate-300">Sincronizado com a Torre</p>
+              <p className="text-xs font-bold text-slate-300">Central Conectada</p>
             </div>
+          </div>
+          <div className="rounded-lg bg-emerald-500/20 px-3 py-1 border border-emerald-500/30">
+            <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest">No Prazo</p>
           </div>
         </div>
 
         <div className="mb-6 text-center">
           <h2 className="text-xl font-black text-cyan-400 uppercase tracking-widest">
-            {etapasRoteiro[etapaAtualIndex]}
+            {isFaseColeta ? 'Etapa 1: Coleta' : frete.pinEntregas && frete.pinEntregas.length > 1 ? `Etapa 2: Entrega ${paradaAtualIndex + 1} de ${frete.pinEntregas.length}` : 'Etapa 2: Entrega Final'}
           </h2>
           <div className="mt-2 flex flex-col items-center gap-2">
             <p className="text-[10px] uppercase font-black text-slate-500">Embarcador: <span className="text-white">{frete.clienteNome || 'Privado'}</span></p>
@@ -383,15 +430,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           <MapaCliente origem={mapOriginGPS} destino={mapDestinoGPS} operationalMessage="Navegando..." />
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <button onClick={() => handleOpenNav('waze')} className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors">
-            <Navigation size={14} className="text-cyan-400" /> Abrir no Waze
-          </button>
-          <button onClick={() => handleOpenNav('google')} className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors">
-            <MapPin size={14} className="text-emerald-400" /> Google Maps
-          </button>
-        </div>
-        
         <div className="mb-6 flex items-start gap-3 bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
           <div className="mt-1 shrink-0"><MapPin size={18} className="text-cyan-400" /></div>
           <div>
@@ -418,50 +456,45 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           )}
           {[AppTripState.COLETANDO, AppTripState.EM_TRANSPORTE].includes(frete.status) && (
             <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading} className="w-full flex items-center justify-center bg-cyan-500 h-16 font-black uppercase tracking-widest rounded-xl text-black disabled:opacity-50 transition-all hover:bg-cyan-400 active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)]">
-              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : `Validar PIN ${frete.status === AppTripState.COLETANDO ? 'da Coleta' : `da Parada ${paradaAtualIndex + 1}`}`}
+              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : `Validar PIN para ${frete.status === AppTripState.COLETANDO ? 'Sair com Carga' : 'Finalizar'}`}
             </button>
           )}
         </div>
+        
+        {/* CTO FIX: Waze and Google Maps moved below to ensure they are fully hidden by Early Return when on Reserva */}
+        {frete.status !== AppTripState.ACEITO && frete.status !== AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO && (
+           <div className="grid grid-cols-2 gap-3 mt-4">
+             <button onClick={() => handleOpenNav('waze')} className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors">
+               <Navigation size={14} className="text-cyan-400" /> Abrir no Waze
+             </button>
+             <button onClick={() => handleOpenNav('google')} className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 transition-colors">
+               <MapPin size={14} className="text-emerald-400" /> Google Maps
+             </button>
+           </div>
+        )}
       </motion.div>
 
       <AnimatePresence>
         {isPinModalOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-cyan-500/50 shadow-2xl my-auto">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-cyan-500/50 shadow-2xl">
               <div className="flex justify-center mb-4"><div className="bg-cyan-500/10 p-4 rounded-full border border-cyan-500/20"><LockKeyhole size={32} className="text-cyan-400" /></div></div>
-              <h3 className="text-white text-center font-black mb-2 uppercase text-xl tracking-tight">{frete.status === AppTripState.COLETANDO ? 'Validar Coleta' : 'Validar Entrega'}</h3>
-              <p className="text-slate-400 text-xs text-center mb-6 leading-relaxed">
-                {frete.status === AppTripState.COLETANDO ? 'Verifique a mercadoria e insira o PIN da doca.' : 'Registre a foto do local/canhoto ANTES de pedir o PIN.'}
-              </p>
-              
-              {frete.status !== AppTripState.COLETANDO && (
-                <div className="mb-6 p-4 bg-slate-950 rounded-2xl border border-white/5 text-center">
-                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-3">Foto Obrigatória da Entrega</p>
-                   {fotoPodBase64 ? (
-                     <div className="flex items-center justify-center gap-2 text-emerald-400 bg-emerald-500/10 py-3 rounded-xl border border-emerald-500/20">
-                       <CheckCircle2 size={16} /> <span className="font-bold text-xs uppercase">Foto Registrada</span>
-                     </div>
-                   ) : (
-                     <button onClick={handleSimularTirarFoto} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex justify-center items-center gap-2 border border-white/10">
-                       <Camera size={18} /> Acionar Câmera
-                     </button>
-                   )}
-                </div>
-              )}
+              <h3 className="text-white text-center font-black mb-2 uppercase text-xl tracking-tight">{frete.status === AppTripState.COLETANDO ? 'PIN de Coleta' : 'PIN de Entrega'}</h3>
+              <p className="text-slate-400 text-xs text-center mb-6 leading-relaxed">Peça os 4 dígitos ao responsável no local para liberar o sistema.</p>
 
-              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pinValue} disabled={bloqueioPin} onChange={(e) => { setPinValue(e.target.value.replace(/\D/g, '')); setPinError(''); }} className="w-full p-5 text-center text-5xl font-black tracking-[0.5em] bg-slate-950 text-cyan-400 border-2 border-cyan-500/30 rounded-2xl mb-4 focus:outline-none focus:border-cyan-400 placeholder:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="0000" />
-              
+              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pinValue} onChange={(e) => { setPinValue(e.target.value.replace(/\D/g, '')); setPinError(''); }} className="w-full p-5 text-center text-5xl font-black tracking-[0.5em] bg-slate-950 text-cyan-400 border-2 border-cyan-500/30 rounded-2xl mb-4 focus:outline-none focus:border-cyan-400 placeholder:text-slate-800" placeholder="0000" autoFocus />
+
               {pinError && <p className="text-red-400 text-[10px] font-black text-center mb-4 uppercase tracking-widest">{pinError}</p>}
-              
+
               <div className="flex flex-col gap-3 mt-4">
                 <div className="flex gap-2">
-                  <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); setFotoPodBase64(null); setTentativasPin(0); setBloqueioPin(false); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
-                  <button onClick={handlePinSubmit} disabled={actionLoading || pinValue.length < 4 || bloqueioPin} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
+                  <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
+                  <button onClick={handlePinSubmit} disabled={actionLoading || pinValue.length < 4} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
                     {actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar'}
                   </button>
                 </div>
-                <button onClick={handleInsucesso} disabled={actionLoading} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-50 hover:text-white transition-colors flex items-center justify-center gap-2">
-                  <AlertTriangle size={16} /> Reportar Imprevisto (Voltar pro Radar)
+                <button onClick={handleInsucesso} disabled={actionLoading} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2">
+                  <AlertTriangle size={16} /> Problema no Local (Recusa)
                 </button>
               </div>
             </motion.div>
