@@ -3,6 +3,7 @@
 // CTO-Log: Fase 6 - Homologação Operacional Distribuída (Liberação Financeira)
 // Evolução Fase 10: Reação Ativa ao Rollback do Servidor (DISPONIVEL).
 // Evolução Fase 18: Sincronismo Atômico de RTDB e Autoridade Logística (Firestore -> RTDB).
+// Evolução Fase 23: Hydration Bug Fix (F5), Correção de PreviousState e Ghost Driver Fix.
 // =========================================================
 
 import {
@@ -27,8 +28,7 @@ type TripRealtimePayload = {
 };
 
 class TripRealtimeListener {
-  private currentState =
-    AppTripState.AGUARDANDO_PAGAMENTO;
+  private currentState: AppTripState | null = null; // 🔥 CTO FIX: Removido Hardcode. Permite Hydration dinâmica.
 
   initialize() {
     eventBusService.on(
@@ -41,27 +41,25 @@ class TripRealtimeListener {
     payload: TripRealtimePayload,
   ) {
     try {
-      if (
-        !payload?.status
-      ) {
+      if (!payload?.status) {
         return;
       }
 
-      const nextState =
-        payload.status;
+      const nextState = payload.status;
 
-      if (
-        this.currentState ===
-        nextState
-      ) {
+      // 🔥 CTO FIX: Hydration Bypass.
+      // Se for a primeira vez que o listener roda após um F5/Abertura, ele adota o estado atual do Firestore
+      // sem passar pelo validador de transição.
+      if (this.currentState === null) {
+        console.log(`[CTO-Log] Hydration Inicial. Adotando estado logístico: ${nextState}`);
+        this.currentState = nextState;
+      }
+
+      if (this.currentState === nextState) {
         return;
       }
 
-      const isValid =
-        canTransition(
-          this.currentState,
-          nextState,
-        );
+      const isValid = canTransition(this.currentState, nextState);
 
       if (!isValid) {
         console.warn(
@@ -71,12 +69,8 @@ class TripRealtimeListener {
         eventBusService.emit(
           AppEvents.SYSTEM_ERROR,
           {
-            origem:
-              'tripRealtimeListener',
-
-            currentState:
-              this.currentState,
-
+            origem: 'tripRealtimeListener',
+            currentState: this.currentState,
             nextState,
           },
         );
@@ -84,14 +78,13 @@ class TripRealtimeListener {
         return;
       }
 
-      console.log(
-        `TRIP STATE: ${this.currentState} -> ${nextState}`,
-      );
+      console.log(`TRIP STATE: ${this.currentState} -> ${nextState}`);
 
-      this.currentState =
-        nextState;
+      // 🔥 CTO FIX: Preservação segura do estado anterior ANTES de sobrescrever
+      const previousState = this.currentState;
+      this.currentState = nextState;
 
-      // 🔥 CTO FIX: Titularidade da Sessão
+      // Titularidade da Sessão
       const currentUid = auth.currentUser?.uid;
       const isOwner = currentUid && currentUid === payload.motoristaId;
 
@@ -102,15 +95,16 @@ class TripRealtimeListener {
           break;
 
         case AppTripState.DISPONIVEL as any:
-          if (this.currentState === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any) {
-            if (currentUid) {
-              console.log('[CTO-Log] Rollback de Servidor detectado. Desvinculando motorista local via Cleanup Canônico.');
-              dispatchRealtimeService.cancelarViagemMotorista(
-                currentUid,
-                payload.id,
-                'Reserva cancelada pelo sistema devido à falha no pagamento do Embarcador.'
-              ).catch(err => console.error('[CTO-Log] Erro no cleanup de rollback:', err));
-            }
+          // 🔥 CTO FIX: Ghost Driver Fix.
+          // Se a carga foi para DISPONIVEL e o usuário atual era o dono, ele DEVE ser limpo,
+          // independentemente se ele estava na Reserva, Indo pra Coleta ou em Transporte.
+          if (isOwner) {
+            console.log(`[CTO-Log] Cancelamento Operacional/Financeiro detectado (Origem: ${previousState}). Desvinculando motorista local via Cleanup Canônico.`);
+            dispatchRealtimeService.cancelarViagemMotorista(
+              currentUid,
+              payload.id,
+              'Operação cancelada ou abortada. Frete retornou ao Radar.'
+            ).catch(err => console.error('[CTO-Log] Erro no cleanup de cancelamento:', err));
           }
           break;
 
@@ -128,7 +122,6 @@ class TripRealtimeListener {
           }
           break;
 
-        // 🔥 CTO FIX BLOCO 18: Mapeamento de Transições Logísticas RTDB
         case AppTripState.INDO_COLETA as any:
           if (isOwner) dispatchRealtimeService.iniciarColeta(currentUid);
           break;
@@ -154,8 +147,6 @@ class TripRealtimeListener {
           break;
 
         case AppTripState.ENTREGUE:
-          // A limpeza RTDB no ENTREGUE é comandada pela UI que invoca concluirViagemELiberarMotorista().
-          // Não aplicamos aqui para evitar chamadas cruzadas de limpeza.
           eventBusService.emit(AppEvents.TRIP_FINISHED, payload);
           break;
 
