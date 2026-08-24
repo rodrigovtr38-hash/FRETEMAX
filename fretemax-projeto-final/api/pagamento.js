@@ -1,6 +1,6 @@
-// api/pagamento.js
 // CTO-Log: Arquivo verificado. Lógica de blindagem financeira mantida.
 // Evolução Fase 5: Agora processa o checkout da "Reserva de Motorista" no momento do Match.
+// Evolução Fase 8: Trava dura de estado. Só gera cobrança para reservas ativas e motoristas vinculados.
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -38,6 +38,19 @@ export default async function handler(req, res) {
     }
 
     const freteData = freteSnap.data();
+    
+    // 🔥 CTO FIX: Proteção de Estado da Reserva (Bloco 8)
+    if (freteData.status !== 'reservado_aguardando_pagamento') {
+      console.error(`[FRAUDE/BLOQUEIO] Tentativa de checkout para frete fora de reserva. Status atual: ${freteData.status}`);
+      return res.status(403).json({ error: 'O frete não está disponível para pagamento neste momento.' });
+    }
+
+    // 🔥 CTO FIX: Proteção de Motorista Fantasma
+    if (!freteData.motoristaId) {
+      console.error(`[FRAUDE/BLOQUEIO] Tentativa de checkout para frete sem motorista vinculado. ID: ${idPedido}`);
+      return res.status(403).json({ error: 'Nenhum motorista vinculado a esta reserva.' });
+    }
+
     const valorReal = Number(freteData.valorTotal);
 
     if (isNaN(valorReal) || valorReal <= 0) {
