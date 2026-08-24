@@ -3,7 +3,7 @@
 // 2. 🛡️ BLINDAGEM DE ASSINATURA DUPLA (KEY ROTATION BUG FIX) com trava de segurança estrita.
 // 3. 🔥 CTO FIX: Refatoração Serverless com prevenção de Memory Leak no Timeout.
 // 4. 🔥 CTO FIX (FASE 5): Inversão do Funil. O Webhook agora destrava a "Reserva" e joga o Motorista para a Viagem (ACEITO).
-// 5. 🔥 CTO FIX (FASE 8): Distinção semântica de falhas financeiras (Rejected/Cancelled) sem corromper Estado Operacional.
+// 5. 🔥 CTO FIX (FASE 10): Implementação Atômica do Rollback. Devolução da carga em falha e trava de Late Approval.
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -110,45 +110,72 @@ export default async function handler(req, res) {
       if (freteSnap.exists) {
         const freteData = freteSnap.data();
 
-        // CASO 1: PAGAMENTO APROVADO (Fluxo de Liberação Logística)
+        // ==========================================
+        // CASO 1: PAGAMENTO APROVADO
+        // ==========================================
         if (paymentData.status === 'approved') {
           
           if (freteData.pagamentoStatus !== 'aprovado') {
             
-            // 🔥 CTO FIX: Libera a operação! Transforma a Reserva em Viagem Ativa (ACEITO)
-            await freteRef.update({
-              status: 'aceito', 
-              pagamentoStatus: 'aprovado',
-              dispatchStatus: 'confirmado', 
-              pagoEm: FieldValue.serverTimestamp(),
-              pagamentoId: paymentId,
-              atualizadoEm: FieldValue.serverTimestamp()
-            });
-            
-            console.log(`[SUCESSO] Escrow Validado. Pagamento ${pedidoId} Aprovado. Viagem Liberada!`);
+            // 🔥 CTO FIX: Trava de Liberação. Apenas destrava se a carga ainda for uma reserva oficial.
+            // Impede que um "Late Approval" de um cliente libere uma carga que ele já cancelou e voltou ao Radar.
+            if (freteData.status === 'reservado_aguardando_pagamento') {
+              await freteRef.update({
+                status: 'aceito', 
+                pagamentoStatus: 'aprovado',
+                dispatchStatus: 'confirmado', 
+                pagoEm: FieldValue.serverTimestamp(),
+                pagamentoId: paymentId,
+                atualizadoEm: FieldValue.serverTimestamp()
+              });
+              
+              console.log(`[SUCESSO] Escrow Validado. Pagamento ${pedidoId} Aprovado. Viagem Liberada!`);
 
-            if (freteData.clienteZap || freteData.telefoneCliente) {
-               const zapCliente = freteData.clienteZap || freteData.telefoneCliente;
-               const linkRastreio = `https://app.fretogo.com.br/cliente?order=${pedidoId}`;
-               
-               const mensagemZap = `✅ *FretoGo*: Pagamento Escrow confirmado!\n\nA operação foi liberada oficialmente. O motorista parceiro já recebeu os endereços exatos e está autorizado a iniciar a rota.\n\n📍 *Acompanhe a viagem em tempo real e pegue seus PINs de Segurança no link abaixo:*\n${linkRastreio}`;
-               
-               await dispararWhatsAppSeguro(zapCliente, mensagemZap);
+              if (freteData.clienteZap || freteData.telefoneCliente) {
+                 const zapCliente = freteData.clienteZap || freteData.telefoneCliente;
+                 const linkRastreio = `https://app.fretogo.com.br/cliente?order=${pedidoId}`;
+                 const mensagemZap = `✅ *FretoGo*: Pagamento Escrow confirmado!\n\nA operação foi liberada oficialmente. O motorista parceiro já recebeu os endereços exatos e está autorizado a iniciar a rota.\n\n📍 *Acompanhe a viagem em tempo real e pegue seus PINs de Segurança no link abaixo:*\n${linkRastreio}`;
+                 await dispararWhatsAppSeguro(zapCliente, mensagemZap);
+              }
+            } else {
+              // Late Approval: A transação foi paga, mas a carga não está mais aguardando.
+              console.warn(`[LATE APPROVAL] Pagamento aprovado, mas frete ${pedidoId} está em status: ${freteData.status}. Rollback Evitado.`);
+              await freteRef.update({
+                pagamentoStatus: 'aprovado_atrasado',
+                pagamentoAtrasadoId: paymentId,
+                atualizadoEm: FieldValue.serverTimestamp()
+              });
             }
           }
 
-        // CASO 2: PAGAMENTO REJEITADO, CANCELADO, ESTORNADO (Falhas Financeiras)
+        // ==========================================
+        // CASO 2: PAGAMENTO REJEITADO, CANCELADO, ESTORNADO (ROLLBACK)
+        // ==========================================
         } else if (['rejected', 'cancelled', 'refunded', 'charged_back'].includes(paymentData.status)) {
           
-          // 🔥 CTO FIX: Registramos a falha financeira sem mexer no status operacional da carga (status),
-          // para não jogar a carga no Radar enquanto o Realtime DB do motorista ainda está em RESERVADO.
           if (freteData.pagamentoStatus !== paymentData.status) {
-            await freteRef.update({
-              pagamentoStatus: paymentData.status,
-              atualizadoEm: FieldValue.serverTimestamp()
-            });
             
-            console.warn(`[WEBHOOK ALERTA] Pagamento ${paymentId} retornou como '${paymentData.status}'. Motorista ${freteData.motoristaId} requer desvinculação atômica (RTDB) pendente de auditoria operacional.`);
+            // 🔥 CTO FIX: Apenas executa a devolução ao radar (Rollback Atômico) se estiver em Reserva.
+            if (freteData.status === 'reservado_aguardando_pagamento') {
+              console.log(`[ROLLBACK] Pagamento ${paymentId} recusado. Desvinculando motorista e devolvendo ${pedidoId} ao Radar.`);
+              await freteRef.update({
+                status: 'disponivel', // Retorna para captação
+                pagamentoStatus: paymentData.status,
+                motoristaId: null,
+                motoristaNome: null,
+                motoristaZap: null,
+                motoristaLat: null,
+                motoristaLng: null,
+                atualizadoEm: FieldValue.serverTimestamp()
+              });
+            } else {
+              // Se a viagem já iniciou ou está disponível, apenas anota a falha financeira por auditoria.
+              console.warn(`[WEBHOOK ALERTA] Pagamento ${paymentId} retornou '${paymentData.status}'. Status logístico mantido pois já era '${freteData.status}'.`);
+              await freteRef.update({
+                pagamentoStatus: paymentData.status,
+                atualizadoEm: FieldValue.serverTimestamp()
+              });
+            }
           }
         }
       }
