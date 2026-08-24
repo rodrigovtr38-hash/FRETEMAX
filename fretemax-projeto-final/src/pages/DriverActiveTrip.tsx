@@ -4,9 +4,10 @@
 // Correção: Ejeção da função cliente-lado de Chat para evitar duplicações.
 // Evolução Fase 6: BLOCO 7 - Sala de Espera Visual (Escrow Lock) injetada.
 // Evolução Fase 14: Integração de Geofence Dinâmico e UI de GPS Real.
+// Evolução Fase #310: Correção de Rules of Hooks (Remoção do useMemo pós-early return).
 // =========================================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth } from '../firebase'; 
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
@@ -147,12 +148,10 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     ? (paradaAtualIndex === 0 ? { lat: frete.origemLat as number, lng: frete.origemLng as number } : { lat: paradas[paradaAtualIndex-1]?.lat, lng: paradas[paradaAtualIndex-1]?.lng })
     : null);
 
-  const distanceToTarget = useMemo(() => {
-    if (!currentGps || !navDestinoGPS?.lat || !navDestinoGPS?.lng) return null;
-    return locationRealtimeService.calculateDistance(
-      currentGps.lat, currentGps.lng, navDestinoGPS.lat, navDestinoGPS.lng
-    );
-  }, [currentGps, navDestinoGPS]);
+  // 🔥 CTO FIX: Remoção do useMemo (React #310 Rule of Hooks Error Avoidance)
+  const distanceToTarget = (!currentGps || !navDestinoGPS?.lat || !navDestinoGPS?.lng) 
+    ? null 
+    : locationRealtimeService.calculateDistance(currentGps.lat, currentGps.lng, navDestinoGPS.lat, navDestinoGPS.lng);
 
   // A margem segura (Geofence) para o motorista interagir (Em Metros)
   const GEOFENCE_METERS = 500;
@@ -466,7 +465,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
         <div className="space-y-4">
           {frete.status === AppTripState.ACEITO && (
-            // Deslocar para coleta NÃO é travado por geofence (ele aperta isso de casa)
             <button onClick={() => handleStatusUpdate(AppTripState.INDO_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center bg-blue-600 h-16 font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all hover:bg-blue-500 active:scale-95 text-white">
               {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Deslocar p/ Coleta'}
             </button>
