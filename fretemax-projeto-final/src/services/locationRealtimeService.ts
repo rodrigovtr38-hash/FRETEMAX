@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/services/locationRealtimeService.ts
 // CTO-Log: Auditoria de Telemetria de Satélite (LOTE 4.1)
 // Status: Validação de Background Tracking, Fallback de Túneis e Bateria confirmada.
+// Evolução Fase 14: Observer Pattern injetado para UI consumir GPS local sem duplicar watchPosition.
 // =========================================================
 
 import { firebaseRealtimeService } from './firebaseRealtimeService';
@@ -34,6 +35,9 @@ class LocationRealtimeService {
   private reconnectTimeout: number | null = null;
   private gpsWatchdogInterval: number | null = null; 
 
+  // 🔥 CTO FIX: Observer local para o Geofence na UI
+  private positionListeners: Set<(pos: Coordinates | null) => void> = new Set();
+
   private readonly MIN_DISTANCE_METERS = 35;
   private readonly MIN_UPDATE_INTERVAL = 12000;
   private readonly MAX_BACKGROUND_INTERVAL = 30000;
@@ -48,6 +52,17 @@ class LocationRealtimeService {
       window.addEventListener('online', this.handleReconnect);
       window.addEventListener('offline', this.handleOffline);
     }
+  }
+
+  // 🔥 CTO FIX: Método seguro para a UI assinar atualizações de GPS sem recriar tracking
+  public onPositionUpdate(callback: (pos: Coordinates | null) => void) {
+    this.positionListeners.add(callback);
+    if (this.lastPosition) {
+      callback(this.lastPosition);
+    }
+    return () => {
+      this.positionListeners.delete(callback);
+    };
   }
 
   private handleVisibilityChange = () => {
@@ -91,7 +106,8 @@ class LocationRealtimeService {
     }, 30000); 
   }
 
-  private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
+  // 🔥 CTO FIX: Transformado de "private" para "public" para a UI conseguir calcular a Geofence
+  public calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
     const R = 6371000;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
     const dLng = ((lng2 - lng1) * Math.PI) / 180;
@@ -164,9 +180,13 @@ class LocationRealtimeService {
           if (accuracy > this.MAX_GPS_ACCURACY) return;
 
           const current: Coordinates = { lat: position.coords.latitude, lng: position.coords.longitude };
+          
+          // 🔥 CTO FIX: Informa a UI imediatamente, independente do Throttling do Banco
+          this.lastPosition = current;
+          this.positionListeners.forEach(cb => cb(current));
+
           if (!this.shouldUpdatePosition(current, now)) return;
 
-          this.lastPosition = current;
           this.lastSentAt = now;
           this.trackingStatus = 'tracking';
 
@@ -202,6 +222,9 @@ class LocationRealtimeService {
     this.queuedPayload = null;
     this.trackingStatus = 'stopped';
     window.__FRETOGO_TRACKING_ACTIVE__ = false;
+    
+    // 🔥 CTO FIX: Avisa a UI que o rastreamento foi finalizado
+    this.positionListeners.forEach(cb => cb(null));
   }
 
   isTracking() { return this.watchId !== null; }
