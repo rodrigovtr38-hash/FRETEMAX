@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/services/tripRealtimeListener.ts
 // CTO-Log: Fase 6 - Homologação Operacional Distribuída (Liberação Financeira)
 // Evolução Fase 6: Integração de gatilho para destravar o motorista (RESERVA -> ACEITO) somente após o Webhook atuar.
+// Evolução Fase 10: Reação Ativa ao Rollback do Servidor (DISPONIVEL).
 // =========================================================
 
 import {
@@ -16,6 +17,9 @@ import {
 
 // 🔥 CTO FIX: Importado o serviço de despacho para orquestrar a liberação
 import { dispatchRealtimeService } from './dispatchRealtimeService'; 
+
+// 🔥 CTO FIX: Obtém identidade do motorista local para cleanup
+import { auth } from '../firebase';
 
 type TripRealtimePayload = {
   id: string;
@@ -121,7 +125,28 @@ class TripRealtimeListener {
         */
         case AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any:
           console.log('[CTO-Log] Viagem entrou em RESERVA. Aguardando pagamento do Embarcador.');
-          // A interface reage de forma passiva via onSnapshot ou useTripRealtime, não requer AppEvent isolado aqui.
+          break;
+
+        /*
+        ================================
+        DISPONIVEL (ROLLBACK FINANCEIRO)
+        ================================
+        */
+        case AppTripState.DISPONIVEL as any:
+          // 🔥 CTO FIX: Se a carga que estávamos monitorando em RESERVA voltar para DISPONIVEL (Fallback do Webhook).
+          if (this.currentState === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any) {
+            const currentUid = auth.currentUser?.uid;
+            if (currentUid) {
+              console.log('[CTO-Log] Rollback de Servidor detectado. Desvinculando motorista local via Cleanup Canônico.');
+              
+              // Executa a faxina visual e do DB Realtime reaproveitando a função robusta
+              dispatchRealtimeService.cancelarViagemMotorista(
+                currentUid,
+                payload.id,
+                'Reserva cancelada pelo sistema devido à falha no pagamento do Embarcador.'
+              ).catch(err => console.error('[CTO-Log] Erro no cleanup de rollback:', err));
+            }
+          }
           break;
 
         /*
