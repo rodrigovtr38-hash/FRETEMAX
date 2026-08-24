@@ -1,6 +1,7 @@
 // CTO-Log: Arquivo verificado. Lógica de blindagem financeira mantida.
 // Evolução Fase 5: Agora processa o checkout da "Reserva de Motorista" no momento do Match.
 // Evolução Fase 8: Trava dura de estado. Só gera cobrança para reservas ativas e motoristas vinculados.
+// Evolução Fase 11: Blindagem de Late Approval. Injeção de Metadata com motorista_id na Preferência MP.
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -92,6 +93,10 @@ export default async function handler(req, res) {
         ],
         payer: payerData,
         external_reference: idPedido, 
+        // 🔥 CTO FIX: BLINDAGEM BLOCO 11 (Contra Late Approval / Swap de Motoristas)
+        metadata: {
+          motorista_id: freteData.motoristaId
+        },
         notification_url: `https://${req.headers.host}/api/webhook`, 
         payment_methods: {
           excluded_payment_types: [], 
