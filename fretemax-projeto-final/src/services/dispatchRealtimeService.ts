@@ -3,6 +3,7 @@
 // CTO-Log: FASE 4 - Reconstrução Controlada (Etapa 3).
 // Evolução Fase 5: Motorista agora assume a Reserva (RESERVADO_AGUARDANDO_PAGAMENTO) antes do Aceite Real.
 // Evolução Fase 6: Liberação do motorista (Destravamento da Reserva + Start GPS) interligada ao Webhook Financeiro.
+// Evolução Fase 18: Correção das Primitivas de RTDB (Limpeza Prematura evitada e Salto de Estados corrigido).
 // =========================================================
 
 import { increment } from 'firebase/firestore';
@@ -82,22 +83,17 @@ class DispatchRealtimeService {
     }
   }
 
-  // 🔥 CTO FIX: Função responsável por destrancar a viagem após o Cliente Pagar
   async confirmarLiberacaoMotorista(freteId: string, motoristaId?: string) {
     try {
       const currentUid = auth.currentUser?.uid;
       
-      // Validação 1: Há um motorista autenticado escutando isso?
       if (!currentUid) return;
 
-      // Validação 2: Segurança. Impede que um motorista online aleatório assuma a carga só porque escutou o evento.
-      // Apenas o titular da reserva pode ser destravado para "ACEITOU".
       if (motoristaId && currentUid !== motoristaId) {
         console.warn(`[CTO-Log] Liberação ignorada: O motorista local (${currentUid}) não é o titular desta reserva.`);
         return;
       }
 
-      // Validação 3: Atualização Idempotente da Máquina do Motorista (RESERVADO -> ACEITOU)
       await firebaseRealtimeService.updateDriverRealtime(currentUid, {
         state: DriverState.ACEITOU,
         freteAtualId: freteId,
@@ -106,9 +102,7 @@ class DispatchRealtimeService {
         atualizadoEm: Date.now(),
       });
 
-      // Validação 4: Rastreamento GPS finalmente ativado após garantia de pagamento
       locationRealtimeService.start(currentUid, freteId);
-
       console.log(`[CTO-Log] Operação ${freteId} liberada pelo Escrow! Motorista ${currentUid} destravado (ACEITOU) e GPS Iniciado.`);
     } catch (error) {
       console.error('[CTO-Log] ERRO AO CONFIRMAR LIBERAÇÃO DO MOTORISTA:', error);
@@ -183,11 +177,23 @@ class DispatchRealtimeService {
   async chegouColeta(driverId: string) {
     try {
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
-        state: DriverState.COLETANDO,
+        state: DriverState.CHEGOU_COLETA, // 🔥 CTO FIX: Corrigido o salto de Estado (Bloco 18)
         atualizadoEm: Date.now(),
       });
     } catch (error) {
       console.error('ERRO CHEGADA COLETA:', error);
+    }
+  }
+
+  // 🔥 CTO FIX: Adicionada rotina atômica faltante (Bloco 18)
+  async iniciouColetando(driverId: string) {
+    try {
+      await firebaseRealtimeService.updateDriverRealtime(driverId, {
+        state: DriverState.COLETANDO,
+        atualizadoEm: Date.now(),
+      });
+    } catch (error) {
+      console.error('ERRO COLETANDO:', error);
     }
   }
 
@@ -206,8 +212,7 @@ class DispatchRealtimeService {
     try {
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
         state: DriverState.FINALIZANDO,
-        disponivel: true,
-        freteAtualId: null,
+        // 🔥 CTO FIX: Removida a limpeza prematura de freteAtualId/disponivel (Bloco 18)
         atualizadoEm: Date.now(),
       });
     } catch (error) {
