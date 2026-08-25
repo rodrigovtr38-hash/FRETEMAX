@@ -4,7 +4,7 @@
 // Correção: Sincronização do Resumo da Rota com o SSOT antes do Pagamento.
 // Evolução Fase 5: INVERSÃO DO FUNIL (Pagamento no Match). Conectado ao PaymentService.
 // Evolução Fase 6: Normalização Canônica de Categorias.
-// CTO-Log (EXECUÇÃO ATUAL): Bypass de pagamento estático removido. Garantia do fluxo Mercado Pago -> Webhook como via única.
+// CTO-Log (EXECUÇÃO ATUAL): Limpeza estrita de variáveis estáticas/bypass de pagamento.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -433,9 +433,6 @@ export default function Cliente() {
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
-      // 🔥 CTO FIX: Extirpado o Bypass "documentoLimpo == 341..." que fingia o Gateway MP
-      const isTestMode = import.meta.env.VITE_QA_PAYMENT_BYPASS === 'true';
-
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
         clienteId: currentUser.uid, 
@@ -489,7 +486,6 @@ export default function Cliente() {
         motoristasNotificados: 0,
         interessados: 0,
 
-        // Carga nasce no Radar em DISPONIVEL (Seja modo teste ou produção, para inverter o funil)
         status: tipoFrete === 'agendado' ? TripState.AGENDADO : TripState.DISPONIVEL,
         pagamentoStatus: 'pendente',
         dispatchStatus: 'mural_aberto',
@@ -1061,7 +1057,7 @@ export default function Cliente() {
                       operationalMessage={orderData?.status ? orderData.status.replace('_', ' ') : undefined}
                     />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center bg-slate-100"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-blue-500"><Loader2 className="h-8 w-8 animate-spin mb-3"/></div>
                   )}
                   
                   {['aguardando_pagamento', 'disponivel', 'buscando_motorista'].includes(orderData?.status || '') && (
