@@ -7,7 +7,7 @@
 // Evolução Fase #310: Correção de Rules of Hooks (Remoção do useMemo pós-early return).
 // Hotfix: Restauração da variável mapDestinoGPS (ReferenceError Fix).
 // Hotfix 2: Proteção de Nulos (Optional Chaining) nas variáveis Top-Level.
-// Bloco GPS-01: Desacoplamento do Geofence e Rastreamento Opt-in amarrado à Navegação.
+// Bloco GPS-01: Navegação Externa Inteligente. Telemetria amarrada à navegação com Injeção de Origem Exata.
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -17,7 +17,8 @@ import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
 import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle, FileText, Check } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
-import { locationRealtimeService } from '../services/locationRealtimeService';
+import { locationRealtimeService } from '../services/locationRealtimeService'; 
+import { locationService } from '../services/locationService'; // 🔥 CTO FIX: Localização de precisão nativa
 import { AppTripState } from '../state/tripStateMachine';
 
 interface DriverActiveTripProps { freteId?: string; }
@@ -178,31 +179,49 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
      }
   }
 
-  const handleOpenNav = (app: 'waze' | 'google') => {
-    let url = '';
-    const queryAddr = encodeURIComponent(enderecoAlvoTexto || '');
-    
-    if (app === 'waze') {
-      if (navDestinoGPS && navDestinoGPS.lat) {
-        url = `https://waze.com/ul?ll=${navDestinoGPS.lat},${navDestinoGPS.lng}&navigate=yes`;
-      } else {
-        url = `https://waze.com/ul?q=${queryAddr}&navigate=yes`;
-      }
-    } else {
-      if (navDestinoGPS && navDestinoGPS.lat) {
-        url = `https://www.google.com/maps/dir/?api=1&destination=${navDestinoGPS.lat},${navDestinoGPS.lng}`;
-      } else {
-        url = `https://www.google.com/maps/dir/?api=1&destination=${queryAddr}`;
-      }
-    }
+  // 🔥 CTO FIX BLOCO GPS-01: Roteirização Externa Inteligente. 
+  // Usa o Posição do Motorista como Origem da URL do Maps (se disponível) e liga Telemetria.
+  const handleOpenNav = async (app: 'waze' | 'google') => {
+    setActionLoading(true);
+    try {
+      let originCoords = currentGps;
 
-    // 🔥 CTO FIX BLOCO GPS-01: Ativação Opt-in do Rastreamento ao usar navegação externa
-    const driverId = auth.currentUser?.uid;
-    if (driverId && frete?.id) {
-      locationRealtimeService.start(driverId, frete.id);
-    }
+      // Se GPS for nulo (não ligado ainda), tentamos obter de forma one-shot (prompt ao usuário)
+      if (!originCoords) {
+         originCoords = await locationService.getCurrentLocation();
+      }
 
-    window.open(url, '_blank');
+      // Start do Rastreamento passivo Opt-in da FretoGo
+      const driverId = auth.currentUser?.uid;
+      if (driverId && frete?.id) {
+        locationRealtimeService.start(driverId, frete.id);
+      }
+
+      let url = '';
+      const queryAddr = encodeURIComponent(enderecoAlvoTexto || '');
+      // Google Maps suporta origin por param. O Waze não, mas já ganhou permissão acima.
+      const originParam = originCoords ? `&origin=${originCoords.lat},${originCoords.lng}` : '';
+
+      if (app === 'waze') {
+        if (navDestinoGPS && navDestinoGPS.lat) {
+          url = `https://waze.com/ul?ll=${navDestinoGPS.lat},${navDestinoGPS.lng}&navigate=yes`;
+        } else {
+          url = `https://waze.com/ul?q=${queryAddr}&navigate=yes`;
+        }
+      } else {
+        if (navDestinoGPS && navDestinoGPS.lat) {
+          url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${navDestinoGPS.lat},${navDestinoGPS.lng}`;
+        } else {
+          url = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${queryAddr}`;
+        }
+      }
+
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('[CTO-Log] Falha na abertura da navegação.', error);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleStatusUpdate = async (novoStatus: AppTripState) => {
