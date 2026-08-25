@@ -7,7 +7,7 @@
 // Evolução Fase #310: Correção de Rules of Hooks (Remoção do useMemo pós-early return).
 // Hotfix: Restauração da variável mapDestinoGPS (ReferenceError Fix).
 // Hotfix 2: Proteção de Nulos (Optional Chaining) nas variáveis Top-Level.
-// Bloco 1 (Execução): Desacoplamento do Geofence. O GPS passa a ser Telemetria Passiva e não bloqueia os botões logísticos.
+// Bloco GPS-01: Desacoplamento do Geofence e Rastreamento Opt-in amarrado à Navegação.
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -17,7 +17,7 @@ import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
 import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle, FileText, Check } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
-import { locationRealtimeService } from '../services/locationRealtimeService'; // 🔥 CTO FIX: Consumo direto de GPS local
+import { locationRealtimeService } from '../services/locationRealtimeService';
 import { AppTripState } from '../state/tripStateMachine';
 
 interface DriverActiveTripProps { freteId?: string; }
@@ -62,11 +62,9 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [fotoPodBase64, setFotoPodBase64] = useState<string | null>(null);
   const [chavePix, setChavePix] = useState('');
 
-  // 🔥 CTO FIX: Consumo do sinal GPS emitido pelo locationRealtimeService
   const [currentGps, setCurrentGps] = useState<{lat: number, lng: number} | null>(null);
 
   useEffect(() => {
-    // Inscreve no Observer de GPS para não criar watchPosition fantasma
     const unsubscribeGps = locationRealtimeService.onPositionUpdate((pos) => {
       setCurrentGps(pos);
     });
@@ -87,7 +85,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   }, [freteId]);
 
   // ==========================================
-  // TOP-LEVEL DECLARATIONS (Protegidos por Optional Chaining)
+  // TOP-LEVEL DECLARATIONS
   // ==========================================
   const paradas = frete?.paradas || [];
   const paradaAtualIndex = frete?.paradaAtualIndex || 0;
@@ -107,7 +105,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     ? (paradaAtualIndex === 0 ? { lat: frete?.origemLat as number, lng: frete?.origemLng as number } : { lat: paradas[paradaAtualIndex-1]?.lat, lng: paradas[paradaAtualIndex-1]?.lng })
     : null);
 
-  // O cálculo continua ativo para gerar dados de telemetria visual passiva.
   const distanceToTarget = (!currentGps || !navDestinoGPS?.lat || !navDestinoGPS?.lng) 
     ? null 
     : locationRealtimeService.calculateDistance(currentGps.lat, currentGps.lng, navDestinoGPS.lat, navDestinoGPS.lng);
@@ -115,7 +112,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const distStr = distanceToTarget !== null ? (distanceToTarget > 1000 ? `${(distanceToTarget / 1000).toFixed(1)}km` : `${Math.round(distanceToTarget)}m`) : '';
 
   // ==========================================
-  // EARLY RETURNS E RENDERS CONDICIONAIS
+  // EARLY RETURNS
   // ==========================================
   if (loading) return (
     <div className="flex h-64 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5">
@@ -125,7 +122,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   
   if (!frete) return null;
 
-  // BLOCO 7 - SALA DE ESPERA FINANCEIRA (ESCROW LOCK)
   if (frete.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO || String(frete.status) === 'reservado_aguardando_pagamento') {
     return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] border border-emerald-500/20 bg-slate-900 shadow-2xl p-8 text-center flex flex-col items-center justify-center min-h-[50vh]">
@@ -173,13 +169,12 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
   const totalParadas = frete.pinEntregas?.length || paradas.length || 1;
 
-  // Montagem da timeline dinâmica (Multi-Drop)
   const etapasRoteiro = ['Coleta', ...Array.from({length: totalParadas}).map((_, i) => totalParadas > 1 ? `Entrega ${i+1}` : 'Entrega')];
   let etapaAtualIndex = 0;
   if (!isFaseColeta) {
      etapaAtualIndex = paradaAtualIndex + 1;
      if (frete.status === AppTripState.FINALIZANDO || frete.status === AppTripState.ENTREGUE || frete.status === 'finalizado') {
-       etapaAtualIndex = etapasRoteiro.length; // Tudo concluído
+       etapaAtualIndex = etapasRoteiro.length;
      }
   }
 
@@ -200,6 +195,13 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         url = `https://www.google.com/maps/dir/?api=1&destination=${queryAddr}`;
       }
     }
+
+    // 🔥 CTO FIX BLOCO GPS-01: Ativação Opt-in do Rastreamento ao usar navegação externa
+    const driverId = auth.currentUser?.uid;
+    if (driverId && frete?.id) {
+      locationRealtimeService.start(driverId, frete.id);
+    }
+
     window.open(url, '_blank');
   };
 
@@ -425,7 +427,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1"><Radio size={12}/> Rastreamento Ativo</p>
               <p className="text-xs font-bold text-slate-300">
-                {/* 🔥 CTO FIX: Telemetria visual independente, mostra a distância se o GPS existir, sem bloquear botões */}
                 {distStr ? `Alvo a ${distStr}` : 'Central Conectada'}
               </p>
             </div>
@@ -468,9 +469,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         </div>
 
         <div className="space-y-4">
-          {/* 🔥 CTO FIX: Todos os botões logísticos tiveram 'geofenceBlocked' e 'geofenceWarning' 
-              removidos do disabled, do texto e das classes CSS. 
-              Agora progridem livremente sem travar o motorista. */}
           {frete.status === AppTripState.ACEITO && (
             <button onClick={() => handleStatusUpdate(AppTripState.INDO_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center bg-blue-600 h-16 font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all hover:bg-blue-500 active:scale-95 text-white">
               {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Deslocar p/ Coleta'}
