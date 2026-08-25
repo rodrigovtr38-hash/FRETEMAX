@@ -9,12 +9,14 @@
 // Hotfix 2: Proteção de Nulos (Optional Chaining) nas variáveis Top-Level.
 // Bloco GPS-01: Navegação Externa Inteligente. Telemetria amarrada à navegação com Injeção de Origem Exata.
 // Bloco 23: Fix POD/Foto Real obrigatória antes do PIN. Fix Problema no Local (Evita Falso ENTREGUE).
+// Bloco 24.1: POD Migration. Upload fotográfico via Firebase Storage (URL HTTPS), extirpando Base64 pesada do Firestore.
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db, auth } from '../firebase'; 
+import { db, auth, storage } from '../firebase'; // 🔥 CTO FIX BLOCO 24.1: Instância do Storage plugada
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage'; // 🔥 CTO FIX BLOCO 24.1: SDK Storage injetado
 import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle, FileText, Check } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
@@ -61,11 +63,12 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [tentativasPin, setTentativasPin] = useState(0);
   const [bloqueioPin, setBloqueioPin] = useState(false);
 
-  // 🔥 CTO FIX: Estado da foto preenchida pelo motorista
+  // Estado que armazena momentaneamente a Base64 apenas na memória para dar feedback de tela ao usuário
   const [fotoPodBase64, setFotoPodBase64] = useState<string | null>(null);
+  const [uploadingPod, setUploadingPod] = useState(false); // Controle de UI do Firebase Storage
+  
   const [chavePix, setChavePix] = useState('');
 
-  // Interface para o "Problema no Local"
   const [isOcorrenciaOpen, setIsOcorrenciaOpen] = useState(false);
   const [ocorrenciaMotivo, setOcorrenciaMotivo] = useState('');
 
@@ -91,9 +94,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     return () => unsubscribe();
   }, [freteId]);
 
-  // ==========================================
-  // TOP-LEVEL DECLARATIONS
-  // ==========================================
   const paradas = frete?.paradas || [];
   const paradaAtualIndex = frete?.paradaAtualIndex || 0;
   const destinoAtual = paradas[paradaAtualIndex] || (frete?.entrega || {});
@@ -118,9 +118,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
   const distStr = distanceToTarget !== null ? (distanceToTarget > 1000 ? `${(distanceToTarget / 1000).toFixed(1)}km` : `${Math.round(distanceToTarget)}m`) : '';
 
-  // ==========================================
-  // EARLY RETURNS
-  // ==========================================
   if (loading) return (
     <div className="flex h-64 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5">
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div>
@@ -232,25 +229,27 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     } catch (e) { console.error(e); } finally { setActionLoading(false); }
   };
 
-  // 🔥 CTO FIX: Captura nativa da Foto/POD codificando para Base64.
   const handleCapturePhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFotoPodBase64(reader.result as string);
-        setPinError(''); // Limpa o aviso de "Foto obrigatória"
+        setPinError(''); 
       };
       reader.readAsDataURL(file);
     }
   };
 
+  // 🔥 CTO FIX BLOCO 24.1: UPLOAD DO POD NO CLIQUE DO PIN
   const handlePinSubmit = async () => {
-    if (bloqueioPin) return;
+    if (bloqueioPin || uploadingPod) return;
     setActionLoading(true);
     setPinError('');
+
     try {
       if (frete.status === AppTripState.COLETANDO) {
+        // Fluxo Coleta
         if (pinValue !== frete.pinColeta) { 
           const errosAtuais = tentativasPin + 1;
           setTentativasPin(errosAtuais);
@@ -263,18 +262,18 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           setActionLoading(false); 
           return; 
         }
-        
         setTentativasPin(0);
         await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.EM_TRANSPORTE);
       
       } else {
-        // 🔥 CTO FIX: Validação Rígida. Rejeita o Submit se não houver foto (Nas Entregas)
+        // Fluxo Entrega (POD Obrigatório)
         if (!fotoPodBase64) {
           setPinError('A foto do canhoto/mercadoria é OBRIGATÓRIA antes de validar o PIN.');
           setActionLoading(false); 
           return;
         }
 
+        // Validação da Senha/PIN antes do Upload
         const pinEntregas = frete.pinEntregas || [];
         if (pinEntregas.length > 0 && pinValue !== pinEntregas[paradaAtualIndex]) { 
           const errosAtuais = tentativasPin + 1;
@@ -290,24 +289,49 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         }
         
         setTentativasPin(0);
+        setUploadingPod(true); // Trava o botão e avisa a UI que o upload começou
+
+        let finalUrl = '';
+        
+        try {
+          // Inicia o Upload para o Firebase Storage
+          const fileRef = ref(storage, `pods/${frete.id}/parada_${paradaAtualIndex}.jpg`);
+          await uploadString(fileRef, fotoPodBase64, 'data_url');
+          finalUrl = await getDownloadURL(fileRef);
+        } catch (uploadError) {
+          console.error('[CTO-Log] Erro no upload da foto POD:', uploadError);
+          setPinError('Falha no upload do comprovante. Verifique a conexão e tente novamente.');
+          setUploadingPod(false);
+          setActionLoading(false);
+          return; // Aborta e não avança a máquina de estados, o motorista não se livra da foto.
+        }
+
+        // Transmissão da URL Segura para o Firestore (Preservando Compatibilidade Antiga)
         const fotosAtuais = frete.fotosPod || {};
-        fotosAtuais[`parada_${paradaAtualIndex}`] = fotoPodBase64;
+        fotosAtuais[`parada_${paradaAtualIndex}`] = finalUrl;
+        
         await dispatchRealtimeService.atualizarTripRealtime(frete.id, { fotosPod: fotosAtuais });
 
+        // Avanço Logístico
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1 });
         } else {
            await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.FINALIZANDO);
         }
       }
+      
+      // Cleanup pós-sucesso
       setIsPinModalOpen(false); 
       setPinValue('');
-      setFotoPodBase64(null); // Reseta a foto para a próxima parada se houver
-    } catch (e) { setPinError('Erro. Tente novamente.'); } finally { setActionLoading(false); }
+      setFotoPodBase64(null);
+    } catch (e) { 
+      setPinError('Erro sistêmico ao validar. Tente novamente.'); 
+    } finally { 
+      setUploadingPod(false);
+      setActionLoading(false); 
+    }
   };
 
-  // 🔥 CTO FIX BLOCO 23: Problema no Local (Ghost Driver Fix & Cancelamento Canônico).
-  // Nunca grava ENTREGUE. Aborta a carga para DISPONIVEL (Radar) e notifica ocorrência.
   const handleConfirmInsucesso = async () => {
     if (!ocorrenciaMotivo) {
        alert("Selecione um motivo para registrar o problema.");
@@ -545,7 +569,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         {isPinModalOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             
-            {/* 🔥 CTO FIX: Modal Dividido (Ocorrência vs PIN) */}
             {isOcorrenciaOpen ? (
                <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-red-500/50 shadow-2xl">
                  <div className="flex justify-center mb-4"><div className="bg-red-500/10 p-4 rounded-full border border-red-500/20"><AlertTriangle size={32} className="text-red-400" /></div></div>
@@ -583,7 +606,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
                     <p className="text-slate-400 text-xs text-center mb-4 leading-relaxed">Tire a foto do canhoto assinado ou da mercadoria deixada no local ANTES de digitar o PIN.</p>
                  )}
 
-                 {/* 🔥 CTO FIX: Captura fotográfica obrigatória apenas nas fases de entrega */}
                  {frete.status !== AppTripState.COLETANDO && (
                     <div className="mb-6">
                       <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${fotoPodBase64 ? 'border-emerald-500 bg-emerald-500/10' : 'border-cyan-500/30 bg-slate-950 hover:bg-slate-900 focus:border-cyan-400'}`}>
@@ -609,12 +631,12 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
                  <div className="flex flex-col gap-3 mt-4">
                    <div className="flex gap-2">
-                     <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
-                     <button onClick={handlePinSubmit} disabled={actionLoading || pinValue.length < 4} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
-                       {actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar PIN'}
+                     <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); setFotoPodBase64(null); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
+                     <button onClick={handlePinSubmit} disabled={actionLoading || uploadingPod || pinValue.length < 4} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
+                       {uploadingPod ? <><Loader2 className="animate-spin text-black" size={18}/> Enviando</> : actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar PIN'}
                      </button>
                    </div>
-                   <button onClick={() => setIsOcorrenciaOpen(true)} disabled={actionLoading} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2">
+                   <button onClick={() => setIsOcorrenciaOpen(true)} disabled={actionLoading || uploadingPod} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-50 hover:text-white transition-colors flex items-center justify-center gap-2">
                      <AlertTriangle size={16} /> Problema no Local (Recusa)
                    </button>
                  </div>
