@@ -4,7 +4,7 @@
 // Evolução Fase 5: Motorista agora assume a Reserva (RESERVADO_AGUARDANDO_PAGAMENTO) antes do Aceite Real.
 // Evolução Fase 6: Liberação do motorista (Destravamento da Reserva + Start GPS) interligada ao Webhook Financeiro.
 // Evolução Fase 18: Correção das Primitivas de RTDB (Limpeza Prematura evitada e Salto de Estados corrigido).
-// Evolução Bloco GPS-01: Remoção do GPS automático compulsório. Telemetria agora é Opt-in.
+// Bloco GPS-01: Remoção do disparo automático de GPS na liberação. O Rastreamento agora é estritamente Opt-In.
 // =========================================================
 
 import { increment } from 'firebase/firestore';
@@ -103,9 +103,9 @@ class DispatchRealtimeService {
         atualizadoEm: Date.now(),
       });
 
-      // 🔥 CTO FIX (GPS-01): Removido "locationRealtimeService.start()" daqui. 
-      // Telemetria agora é ativada por intenção (Opt-in) via botões de navegação na UI.
-      console.log(`[CTO-Log] Operação ${freteId} liberada pelo Escrow! Motorista ${currentUid} destravado (ACEITOU). Aguardando ativação opt-in de telemetria.`);
+      // 🔥 CTO FIX BLOCO GPS-01: Comentado locationRealtimeService.start() para obedecer regra de Opt-In.
+      // O GPS NÃO começa automaticamente ao liberar a carga.
+      console.log(`[CTO-Log] Operação ${freteId} liberada pelo Escrow! Motorista ${currentUid} destravado (ACEITOU).`);
     } catch (error) {
       console.error('[CTO-Log] ERRO AO CONFIRMAR LIBERAÇÃO DO MOTORISTA:', error);
     }
