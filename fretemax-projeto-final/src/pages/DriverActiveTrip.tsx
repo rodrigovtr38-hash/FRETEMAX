@@ -8,6 +8,7 @@
 // Hotfix: Restauração da variável mapDestinoGPS (ReferenceError Fix).
 // Hotfix 2: Proteção de Nulos (Optional Chaining) nas variáveis Top-Level.
 // Bloco GPS-01: Navegação Externa Inteligente. Telemetria amarrada à navegação com Injeção de Origem Exata.
+// Bloco 23: Fix POD/Foto Real obrigatória antes do PIN. Fix Problema no Local (Evita Falso ENTREGUE).
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -18,7 +19,7 @@ import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, 
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import { locationRealtimeService } from '../services/locationRealtimeService'; 
-import { locationService } from '../services/locationService'; // 🔥 CTO FIX: Localização de precisão nativa
+import { locationService } from '../services/locationService'; 
 import { AppTripState } from '../state/tripStateMachine';
 
 interface DriverActiveTripProps { freteId?: string; }
@@ -60,8 +61,13 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [tentativasPin, setTentativasPin] = useState(0);
   const [bloqueioPin, setBloqueioPin] = useState(false);
 
+  // 🔥 CTO FIX: Estado da foto preenchida pelo motorista
   const [fotoPodBase64, setFotoPodBase64] = useState<string | null>(null);
   const [chavePix, setChavePix] = useState('');
+
+  // Interface para o "Problema no Local"
+  const [isOcorrenciaOpen, setIsOcorrenciaOpen] = useState(false);
+  const [ocorrenciaMotivo, setOcorrenciaMotivo] = useState('');
 
   const [currentGps, setCurrentGps] = useState<{lat: number, lng: number} | null>(null);
 
@@ -179,19 +185,15 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
      }
   }
 
-  // 🔥 CTO FIX BLOCO GPS-01: Roteirização Externa Inteligente. 
-  // Usa o Posição do Motorista como Origem da URL do Maps (se disponível) e liga Telemetria.
   const handleOpenNav = async (app: 'waze' | 'google') => {
     setActionLoading(true);
     try {
       let originCoords = currentGps;
 
-      // Se GPS for nulo (não ligado ainda), tentamos obter de forma one-shot (prompt ao usuário)
       if (!originCoords) {
          originCoords = await locationService.getCurrentLocation();
       }
 
-      // Start do Rastreamento passivo Opt-in da FretoGo
       const driverId = auth.currentUser?.uid;
       if (driverId && frete?.id) {
         locationRealtimeService.start(driverId, frete.id);
@@ -199,7 +201,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
       let url = '';
       const queryAddr = encodeURIComponent(enderecoAlvoTexto || '');
-      // Google Maps suporta origin por param. O Waze não, mas já ganhou permissão acima.
       const originParam = originCoords ? `&origin=${originCoords.lat},${originCoords.lng}` : '';
 
       if (app === 'waze') {
@@ -231,6 +232,19 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     } catch (e) { console.error(e); } finally { setActionLoading(false); }
   };
 
+  // 🔥 CTO FIX: Captura nativa da Foto/POD codificando para Base64.
+  const handleCapturePhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFotoPodBase64(reader.result as string);
+        setPinError(''); // Limpa o aviso de "Foto obrigatória"
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handlePinSubmit = async () => {
     if (bloqueioPin) return;
     setActionLoading(true);
@@ -254,6 +268,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.EM_TRANSPORTE);
       
       } else {
+        // 🔥 CTO FIX: Validação Rígida. Rejeita o Submit se não houver foto (Nas Entregas)
         if (!fotoPodBase64) {
           setPinError('A foto do canhoto/mercadoria é OBRIGATÓRIA antes de validar o PIN.');
           setActionLoading(false); 
@@ -287,30 +302,34 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       }
       setIsPinModalOpen(false); 
       setPinValue('');
-      setFotoPodBase64(null);
+      setFotoPodBase64(null); // Reseta a foto para a próxima parada se houver
     } catch (e) { setPinError('Erro. Tente novamente.'); } finally { setActionLoading(false); }
   };
 
-  const handleInsucesso = async () => {
-    if (!window.confirm("ATENÇÃO: Deseja reportar problema no local? O frete voltará para o Radar.")) return;
+  // 🔥 CTO FIX BLOCO 23: Problema no Local (Ghost Driver Fix & Cancelamento Canônico).
+  // Nunca grava ENTREGUE. Aborta a carga para DISPONIVEL (Radar) e notifica ocorrência.
+  const handleConfirmInsucesso = async () => {
+    if (!ocorrenciaMotivo) {
+       alert("Selecione um motivo para registrar o problema.");
+       return;
+    }
     setActionLoading(true);
     try {
-      if (frete.status === AppTripState.COLETANDO || frete.status === AppTripState.CHEGOU_COLETA || frete.status === AppTripState.INDO_COLETA || frete.status === AppTripState.ACEITO || frete.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO || String(frete.status) === 'reservado_aguardando_pagamento') {
-        await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
-          status: AppTripState.DISPONIVEL, 
-          motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
-          alertaInsucesso: true,
-          motivoCancelamento: 'Motorista teve imprevisto e abortou antes da coleta.'
-        });
-      } else {
-        if (paradaAtualIndex + 1 < paradas.length) {
-           await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1, paradasComInsucesso: arrayUnion(paradaAtualIndex), alertaInsucesso: true });
-        } else {
-           await dispatchRealtimeService.atualizarTripRealtime(frete.id, { status: AppTripState.ENTREGUE, paradasComInsucesso: arrayUnion(paradaAtualIndex), alertaInsucesso: true });
-        }
-      }
-      setIsPinModalOpen(false); setPinValue('');
-    } catch (e) { setPinError('Erro ao abortar carga.'); } finally { setActionLoading(false); }
+      await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
+        status: AppTripState.DISPONIVEL, 
+        motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
+        alertaInsucesso: true,
+        motivoCancelamento: `Ocorrência: ${ocorrenciaMotivo}. Etapa interrompida.`,
+        paradasComInsucesso: isFaseColeta ? [] : arrayUnion(paradaAtualIndex)
+      });
+      setIsPinModalOpen(false); 
+      setIsOcorrenciaOpen(false);
+      setPinValue('');
+    } catch (e) { 
+      alert('Erro ao abortar carga.'); 
+    } finally { 
+      setActionLoading(false); 
+    }
   };
 
   const handleLiquidacaoSubmit = async () => {
@@ -525,27 +544,82 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       <AnimatePresence>
         {isPinModalOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-cyan-500/50 shadow-2xl">
-              <div className="flex justify-center mb-4"><div className="bg-cyan-500/10 p-4 rounded-full border border-cyan-500/20"><LockKeyhole size={32} className="text-cyan-400" /></div></div>
-              <h3 className="text-white text-center font-black mb-2 uppercase text-xl tracking-tight">{frete.status === AppTripState.COLETANDO ? 'PIN de Coleta' : 'PIN de Entrega'}</h3>
-              <p className="text-slate-400 text-xs text-center mb-6 leading-relaxed">Peça os 4 dígitos ao responsável no local para liberar o sistema.</p>
+            
+            {/* 🔥 CTO FIX: Modal Dividido (Ocorrência vs PIN) */}
+            {isOcorrenciaOpen ? (
+               <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-red-500/50 shadow-2xl">
+                 <div className="flex justify-center mb-4"><div className="bg-red-500/10 p-4 rounded-full border border-red-500/20"><AlertTriangle size={32} className="text-red-400" /></div></div>
+                 <h3 className="text-white text-center font-black mb-2 uppercase text-xl tracking-tight">Reportar Problema</h3>
+                 <p className="text-slate-400 text-xs text-center mb-6 leading-relaxed">A viagem será suspensa e retornará para a Central.</p>
+                 
+                 <select 
+                   value={ocorrenciaMotivo} 
+                   onChange={(e) => setOcorrenciaMotivo(e.target.value)}
+                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white text-sm mb-6 outline-none focus:border-red-400"
+                 >
+                   <option value="" disabled>Selecione o motivo...</option>
+                   <option value="Destinatário ausente">Destinatário ausente</option>
+                   <option value="Local inacessível / Endereço não existe">Local inacessível / Endereço incorreto</option>
+                   <option value="Carga recusada pelo cliente">Carga recusada pelo cliente</option>
+                   <option value="Problema mecânico no veículo">Problema mecânico no veículo</option>
+                   <option value="Acidente / Imprevisto Grave">Acidente / Imprevisto Grave</option>
+                 </select>
 
-              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pinValue} onChange={(e) => { setPinValue(e.target.value.replace(/\D/g, '')); setPinError(''); }} className="w-full p-5 text-center text-5xl font-black tracking-[0.5em] bg-slate-950 text-cyan-400 border-2 border-cyan-500/30 rounded-2xl mb-4 focus:outline-none focus:border-cyan-400 placeholder:text-slate-800" placeholder="0000" autoFocus />
+                 <div className="flex gap-2">
+                   <button onClick={() => setIsOcorrenciaOpen(false)} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
+                   <button onClick={handleConfirmInsucesso} disabled={actionLoading || !ocorrenciaMotivo} className="w-2/3 flex items-center justify-center bg-red-500 py-4 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 hover:bg-red-600 shadow-lg shadow-red-500/20">
+                     {actionLoading ? <Loader2 className="animate-spin" size={18}/> : 'Reportar'}
+                   </button>
+                 </div>
+               </motion.div>
+            ) : (
+               <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-cyan-500/50 shadow-2xl">
+                 <div className="flex justify-center mb-4"><div className="bg-cyan-500/10 p-4 rounded-full border border-cyan-500/20"><LockKeyhole size={32} className="text-cyan-400" /></div></div>
+                 <h3 className="text-white text-center font-black mb-2 uppercase text-xl tracking-tight">{frete.status === AppTripState.COLETANDO ? 'PIN de Coleta' : 'Comprovante & PIN'}</h3>
+                 
+                 {frete.status === AppTripState.COLETANDO ? (
+                    <p className="text-slate-400 text-xs text-center mb-6 leading-relaxed">Peça os 4 dígitos ao responsável no local para liberar o sistema.</p>
+                 ) : (
+                    <p className="text-slate-400 text-xs text-center mb-4 leading-relaxed">Tire a foto do canhoto assinado ou da mercadoria deixada no local ANTES de digitar o PIN.</p>
+                 )}
 
-              {pinError && <p className="text-red-400 text-[10px] font-black text-center mb-4 uppercase tracking-widest">{pinError}</p>}
+                 {/* 🔥 CTO FIX: Captura fotográfica obrigatória apenas nas fases de entrega */}
+                 {frete.status !== AppTripState.COLETANDO && (
+                    <div className="mb-6">
+                      <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${fotoPodBase64 ? 'border-emerald-500 bg-emerald-500/10' : 'border-cyan-500/30 bg-slate-950 hover:bg-slate-900 focus:border-cyan-400'}`}>
+                         {fotoPodBase64 ? (
+                           <div className="flex flex-col items-center">
+                             <CheckCircle2 size={32} className="text-emerald-400 mb-2" />
+                             <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Foto Capturada!</span>
+                           </div>
+                         ) : (
+                           <div className="flex flex-col items-center">
+                             <Camera size={32} className="text-cyan-400 mb-2" />
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Abrir Câmera</span>
+                           </div>
+                         )}
+                         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCapturePhoto} />
+                      </label>
+                    </div>
+                 )}
 
-              <div className="flex flex-col gap-3 mt-4">
-                <div className="flex gap-2">
-                  <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
-                  <button onClick={handlePinSubmit} disabled={actionLoading || pinValue.length < 4} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
-                    {actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar'}
-                  </button>
-                </div>
-                <button onClick={handleInsucesso} disabled={actionLoading} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2">
-                  <AlertTriangle size={16} /> Problema no Local (Recusa)
-                </button>
-              </div>
-            </motion.div>
+                 <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pinValue} onChange={(e) => { setPinValue(e.target.value.replace(/\D/g, '')); setPinError(''); }} className="w-full p-5 text-center text-5xl font-black tracking-[0.5em] bg-slate-950 text-cyan-400 border-2 border-cyan-500/30 rounded-2xl mb-4 focus:outline-none focus:border-cyan-400 placeholder:text-slate-800" placeholder="0000" autoFocus />
+
+                 {pinError && <p className="text-red-400 text-[10px] font-black text-center mb-4 uppercase tracking-widest">{pinError}</p>}
+
+                 <div className="flex flex-col gap-3 mt-4">
+                   <div className="flex gap-2">
+                     <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
+                     <button onClick={handlePinSubmit} disabled={actionLoading || pinValue.length < 4} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
+                       {actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar PIN'}
+                     </button>
+                   </div>
+                   <button onClick={() => setIsOcorrenciaOpen(true)} disabled={actionLoading} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2">
+                     <AlertTriangle size={16} /> Problema no Local (Recusa)
+                   </button>
+                 </div>
+               </motion.div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
