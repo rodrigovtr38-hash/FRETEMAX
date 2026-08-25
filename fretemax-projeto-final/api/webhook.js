@@ -1,3 +1,5 @@
+// =========================================================
+// NOME DO ARQUIVO: api/webhook.js
 // CTO-Log: Auditoria Etapa 5 (Escrow e Pagamentos) - REVISÃO FINAL.
 // 1. CORREÇÃO CRÍTICA DO BURACO NEGRO DE PAGAMENTO MANTIDA.
 // 2. 🛡️ BLINDAGEM DE ASSINATURA DUPLA (KEY ROTATION BUG FIX) com trava de segurança estrita.
@@ -5,16 +7,20 @@
 // 4. 🔥 CTO FIX (FASE 5): Inversão do Funil. O Webhook agora destrava a "Reserva" e joga o Motorista para a Viagem (ACEITO).
 // 5. 🔥 CTO FIX (FASE 10): Implementação Atômica do Rollback. Devolução da carga em falha e trava de Late Approval.
 // 6. 🔥 CTO FIX (FASE 12): Validação de Titularidade. Proteção absoluta contra Swap de Motorista e Late Approvals.
+// 7. 🔥 CTO FIX (BLOCO 24): Destravamento Cirúrgico do RTDB. Webhook agora liberta o motorista (ACEITOU) via firebase-admin/database.
+// =========================================================
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getDatabase } from 'firebase-admin/database'; // 🔥 CTO FIX (BLOCO 24): Injeção do SDK Realtime Database
 import crypto from 'crypto';
 
 // 1. INICIALIZAÇÃO BLINDADA DO FIREBASE
 if (!getApps().length) {
   if (process.env.FIREBASE_ADMIN_CREDENTIAL) {
     initializeApp({
-      credential: cert(JSON.parse(process.env.FIREBASE_ADMIN_CREDENTIAL))
+      credential: cert(JSON.parse(process.env.FIREBASE_ADMIN_CREDENTIAL)),
+      databaseURL: process.env.FIREBASE_RTDB_URL || `https://${JSON.parse(process.env.FIREBASE_ADMIN_CREDENTIAL).project_id}-default-rtdb.firebaseio.com` // 🔥 CTO FIX: Resolução dinâmica da URL do RTDB
     });
   } else {
     console.error("[ERRO CRÍTICO SERVERLESS] FIREBASE_ADMIN_CREDENTIAL não configurado na Vercel.");
@@ -22,6 +28,7 @@ if (!getApps().length) {
 }
 
 const db = getFirestore();
+const rtdb = getDatabase(); // 🔥 Instância Global do RTDB para manipular o Motorista
 
 // 2. MÓDULO DE NOTIFICAÇÃO (Com Prevenção de Memory Leak)
 async function dispararWhatsAppSeguro(telefone, mensagem) {
@@ -114,6 +121,12 @@ export default async function handler(req, res) {
         // Extrai a assinatura de titularidade (Bloco 11)
         const paymentMotoristaId = paymentData.metadata?.motorista_id;
 
+        // 🔥 CTO FIX (BLOCO 24): Idempotência - Impede processamento duplicado
+        if (freteData.pagamentoStatus === paymentData.status && freteData.pagamentoId === paymentId) {
+           console.log(`[IDEMPOTÊNCIA] Pagamento ${paymentId} já processado com status ${paymentData.status}. Ignorando duplicata.`);
+           return res.status(200).send('Já processado');
+        }
+
         // ==========================================
         // CASO 1: PAGAMENTO APROVADO
         // ==========================================
@@ -136,7 +149,7 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK'); // Encerra sem liberar a carga
               }
 
-              // Fluxo de Liberação Oficial
+              // Fluxo de Liberação Oficial (Firestore)
               await freteRef.update({
                 status: 'aceito', 
                 pagamentoStatus: 'aprovado',
@@ -145,6 +158,14 @@ export default async function handler(req, res) {
                 pagamentoId: paymentId,
                 atualizadoEm: FieldValue.serverTimestamp()
               });
+
+              // 🔥 CTO FIX (BLOCO 24): DESTRAVAMENTO DO MOTORISTA NO RTDB
+              if (freteData.motoristaId) {
+                 await rtdb.ref(`drivers/${freteData.motoristaId}`).update({
+                    state: 'aceitou',
+                    atualizadoEm: Date.now()
+                 });
+              }
               
               console.log(`[SUCESSO] Escrow Validado. Pagamento ${pedidoId} Aprovado. Viagem Liberada!`);
 
@@ -180,7 +201,7 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK');
               }
 
-              // Rollback Atômico Oficial
+              // Rollback Atômico Oficial (Firestore)
               console.log(`[ROLLBACK] Pagamento ${paymentId} recusado. Desvinculando motorista e devolvendo ${pedidoId} ao Radar.`);
               await freteRef.update({
                 status: 'disponivel', // Retorna para captação
@@ -192,6 +213,18 @@ export default async function handler(req, res) {
                 motoristaLng: null,
                 atualizadoEm: FieldValue.serverTimestamp()
               });
+
+              // 🔥 CTO FIX (BLOCO 24): LIMPEZA DO MOTORISTA FANTASMA NO RTDB
+              if (freteData.motoristaId) {
+                 await rtdb.ref(`drivers/${freteData.motoristaId}`).update({
+                    state: 'online',
+                    freteAtualId: null,
+                    activeTripId: null,
+                    disponivel: true,
+                    atualizadoEm: Date.now()
+                 });
+              }
+
             } else {
               console.warn(`[WEBHOOK ALERTA] Pagamento ${paymentId} retornou '${paymentData.status}'. Status logístico mantido pois já era '${freteData.status}'.`);
               await freteRef.update({
