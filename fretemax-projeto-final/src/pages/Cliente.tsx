@@ -1,10 +1,10 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Cliente.tsx (PAINEL DO EMBARCADOR / B2B)
 // CTO-Log: Auditoria de Polimento (Fase de Escala).
-// Status: "Formulário Enterprise" ativado e Limpeza de Cards "Carga Ativa".
 // Correção: Sincronização do Resumo da Rota com o SSOT antes do Pagamento.
 // Evolução Fase 5: INVERSÃO DO FUNIL (Pagamento no Match). Conectado ao PaymentService.
 // Evolução Fase 6: Normalização Canônica de Categorias.
+// CTO-Log (EXECUÇÃO ATUAL): Bypass de pagamento estático removido. Garantia do fluxo Mercado Pago -> Webhook como via única.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -16,7 +16,7 @@ import MapaCliente from '../components/MapaCliente';
 import ChatFrete from '../components/ChatFrete';
 import ClientStatusCard from '../components/client/ClientStatusCard';
 import ClientCancelModal from '../components/client/ClientCancelModal';
-import { paymentService } from '../services/paymentService'; // 🔥 CTO FIX: Serviço Financeiro Importado
+import { paymentService } from '../services/paymentService'; 
 
 import { AppTripState as TripState } from '../state/tripStateMachine'; 
 import { mapsLoader } from '../services/mapsLoader'; 
@@ -26,7 +26,6 @@ interface AddressData { cep: string; bairro: string; rua: string; num: string; c
 interface Coords { lat: number; lng: number; }
 interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; valorLiquidoMotorista?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; tipoMaterial?: string; qtdVolumes?: string; peso?: string; pesoKg?: string; }
 
-// 🔥 CTO FIX: Categorias Canônicas Normalizadas
 type VehicleType = 'moto' | 'carro' | 'utilitarios' | 'toco' | 'truck' | 'carreta' | 'bitrem';
 
 const VEHICLE_CONFIG: Record<VehicleType, { nome: string; fator: number }> = {
@@ -141,7 +140,6 @@ export default function Cliente() {
   const validDistancia = useMemo(() => Number.isNaN(distanciaReal) || distanciaReal <= 0 ? 0.1 : distanciaReal, [distanciaReal]);
 
   const calculoFinanceiro = useMemo(() => {
-    // 🔥 CTO FIX: Sincronizado isHeavy com Categorias Canônicas
     const isHeavy = ['toco', 'truck', 'carreta', 'bitrem'].includes(vehicle);
     const isMOPP = tipoMaterial.toLowerCase().includes('mopp') || 
                    tipoMaterial.toLowerCase().includes('químic') || 
@@ -169,7 +167,6 @@ export default function Cliente() {
     const divisorMargem = isHeavy ? 0.85 : 0.80;
     const precoFinalClienteCalculado = valorLiquidoMotorista / divisorMargem;
     
-    // 🔥 CTO FIX: Pedágio sincronizado
     const precisaPedagio = validDistancia > 40 && ['utilitarios', 'toco', 'truck', 'carreta', 'bitrem'].includes(vehicle);
     const valorPedagioCalculado = precisaPedagio ? validDistancia * (isHeavy ? 0.85 : 0.35) : 0;
 
@@ -428,13 +425,16 @@ export default function Cliente() {
       const parsedDate = tipoFrete === 'agendado' && dataAgendada ? new Date(dataAgendada) : null;
       const firebaseTimestamp = parsedDate ? Timestamp.fromDate(parsedDate) : null;
 
-      const currentUser = auth.currentUser || { uid: "cliente_teste_admin_123" };
+      const currentUser = auth.currentUser || { uid: "cliente_anonimo_fallback" };
 
       const isHeavy = ['toco', 'truck', 'carreta', 'bitrem'].includes(vehicle);
       const taxaPlataforma = isHeavy ? 0.15 : 0.20;
       const valorFreteBruto = valorOfertaNum; 
       const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
+
+      // 🔥 CTO FIX: Extirpado o Bypass "documentoLimpo == 341..." que fingia o Gateway MP
+      const isTestMode = import.meta.env.VITE_QA_PAYMENT_BYPASS === 'true';
 
       const docRef = await addDoc(collection(db, 'fretes'), {
         empresaId: currentUser.uid, 
@@ -489,6 +489,7 @@ export default function Cliente() {
         motoristasNotificados: 0,
         interessados: 0,
 
+        // Carga nasce no Radar em DISPONIVEL (Seja modo teste ou produção, para inverter o funil)
         status: tipoFrete === 'agendado' ? TripState.AGENDADO : TripState.DISPONIVEL,
         pagamentoStatus: 'pendente',
         dispatchStatus: 'mural_aberto',
