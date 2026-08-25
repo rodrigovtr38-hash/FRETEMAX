@@ -6,6 +6,8 @@
 // Evolução Fase 14: Integração de Geofence Dinâmico e UI de GPS Real.
 // Evolução Fase #310: Correção de Rules of Hooks (Remoção do useMemo pós-early return).
 // Hotfix: Restauração da variável mapDestinoGPS (ReferenceError Fix).
+// Hotfix 2: Proteção de Nulos (Optional Chaining) nas variáveis Top-Level.
+// Bloco 1 (Execução): Desacoplamento do Geofence. O GPS passa a ser Telemetria Passiva e não bloqueia os botões logísticos.
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -85,29 +87,32 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   }, [freteId]);
 
   // ==========================================
-  // TOP-LEVEL DECLARATIONS (Abaixo de Hooks, acima de Returns Condicionais)
+  // TOP-LEVEL DECLARATIONS (Protegidos por Optional Chaining)
   // ==========================================
   const paradas = frete?.paradas || [];
   const paradaAtualIndex = frete?.paradaAtualIndex || 0;
   const destinoAtual = paradas[paradaAtualIndex] || (frete?.entrega || {});
 
-  const isFaseColeta = frete && [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO].includes(frete.status);
+  const isFaseColeta = frete?.status 
+    ? [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO].includes(frete.status) 
+    : false;
   
-  // 🔥 HOTFIX: Restauração canônica da variável desaparecida
   const mapDestinoGPS = destinoAtual?.lat ? { lat: destinoAtual.lat, lng: destinoAtual.lng } : null;
 
   const navDestinoGPS = isFaseColeta && frete?.origemLat && frete?.origemLng 
     ? { lat: frete.origemLat, lng: frete.origemLng } 
     : mapDestinoGPS;
 
-  // 🔥 CTO FIX: Cálculo Dinâmico de Geofence e Map Origin
   const mapOriginGPS = currentGps || (frete?.status === AppTripState.EM_TRANSPORTE 
-    ? (paradaAtualIndex === 0 ? { lat: frete.origemLat as number, lng: frete.origemLng as number } : { lat: paradas[paradaAtualIndex-1]?.lat, lng: paradas[paradaAtualIndex-1]?.lng })
+    ? (paradaAtualIndex === 0 ? { lat: frete?.origemLat as number, lng: frete?.origemLng as number } : { lat: paradas[paradaAtualIndex-1]?.lat, lng: paradas[paradaAtualIndex-1]?.lng })
     : null);
 
+  // O cálculo continua ativo para gerar dados de telemetria visual passiva.
   const distanceToTarget = (!currentGps || !navDestinoGPS?.lat || !navDestinoGPS?.lng) 
     ? null 
     : locationRealtimeService.calculateDistance(currentGps.lat, currentGps.lng, navDestinoGPS.lat, navDestinoGPS.lng);
+
+  const distStr = distanceToTarget !== null ? (distanceToTarget > 1000 ? `${(distanceToTarget / 1000).toFixed(1)}km` : `${Math.round(distanceToTarget)}m`) : '';
 
   // ==========================================
   // EARLY RETURNS E RENDERS CONDICIONAIS
@@ -162,14 +167,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     );
   }
 
-  // A margem segura (Geofence) para o motorista interagir (Em Metros)
-  const GEOFENCE_METERS = 500;
-  const isWithinGeofence = distanceToTarget !== null && distanceToTarget <= GEOFENCE_METERS;
-  const geofenceBlocked = !isWithinGeofence;
-  
-  const distStr = distanceToTarget !== null ? (distanceToTarget > 1000 ? `${(distanceToTarget / 1000).toFixed(1)}km` : `${Math.round(distanceToTarget)}m`) : '';
-  const geofenceWarning = !currentGps ? "Buscando GPS..." : `Alvo distante (${distStr})`;
-
   const enderecoAlvoTexto = isFaseColeta 
     ? frete.enderecoColetaTexto 
     : (destinoAtual?.enderecoTexto || destinoAtual?.rua ? `${destinoAtual.rua}, ${destinoAtual.num} - ${destinoAtual.bairro}` : frete.enderecoEntregaTexto || 'Destino da rota');
@@ -211,11 +208,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     try {
       await dispatchRealtimeService.atualizarStatusTrip(frete.id, novoStatus);
     } catch (e) { console.error(e); } finally { setActionLoading(false); }
-  };
-
-  const handleSimularTirarFoto = () => {
-    setFotoPodBase64("data:image/jpeg;base64,/9j/4AAQSkZJRgABAAAAAQABAAD...");
-    alert("Câmera ativada. Foto da mercadoria registrada com sucesso!");
   };
 
   const handlePinSubmit = async () => {
@@ -432,7 +424,10 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             <span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span>
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1"><Radio size={12}/> Rastreamento Ativo</p>
-              <p className="text-xs font-bold text-slate-300">Central Conectada</p>
+              <p className="text-xs font-bold text-slate-300">
+                {/* 🔥 CTO FIX: Telemetria visual independente, mostra a distância se o GPS existir, sem bloquear botões */}
+                {distStr ? `Alvo a ${distStr}` : 'Central Conectada'}
+              </p>
             </div>
           </div>
           <div className="rounded-lg bg-emerald-500/20 px-3 py-1 border border-emerald-500/30">
@@ -473,24 +468,27 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         </div>
 
         <div className="space-y-4">
+          {/* 🔥 CTO FIX: Todos os botões logísticos tiveram 'geofenceBlocked' e 'geofenceWarning' 
+              removidos do disabled, do texto e das classes CSS. 
+              Agora progridem livremente sem travar o motorista. */}
           {frete.status === AppTripState.ACEITO && (
             <button onClick={() => handleStatusUpdate(AppTripState.INDO_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center bg-blue-600 h-16 font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all hover:bg-blue-500 active:scale-95 text-white">
               {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Deslocar p/ Coleta'}
             </button>
           )}
           {frete.status === AppTripState.INDO_COLETA && (
-            <button onClick={() => handleStatusUpdate(AppTripState.CHEGOU_COLETA)} disabled={actionLoading || geofenceBlocked} className={`w-full flex items-center justify-center h-16 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 transition-all active:scale-95 ${geofenceBlocked ? 'bg-slate-700 text-slate-400' : 'bg-indigo-500 hover:bg-indigo-400'}`}>
-              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : (geofenceBlocked ? geofenceWarning : 'Cheguei no Local')}
+            <button onClick={() => handleStatusUpdate(AppTripState.CHEGOU_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center h-16 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 transition-all active:scale-95 bg-indigo-500 hover:bg-indigo-400">
+              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Cheguei no Local'}
             </button>
           )}
           {frete.status === AppTripState.CHEGOU_COLETA && (
-            <button onClick={() => handleStatusUpdate(AppTripState.COLETANDO)} disabled={actionLoading || geofenceBlocked} className={`w-full flex items-center justify-center h-16 font-black uppercase tracking-widest rounded-xl text-black disabled:opacity-50 transition-all active:scale-95 ${geofenceBlocked ? 'bg-slate-700 text-slate-400' : 'bg-amber-500 hover:bg-amber-400'}`}>
-              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : (geofenceBlocked ? geofenceWarning : 'Iniciar Coleta')}
+            <button onClick={() => handleStatusUpdate(AppTripState.COLETANDO)} disabled={actionLoading} className="w-full flex items-center justify-center h-16 font-black uppercase tracking-widest rounded-xl text-black disabled:opacity-50 transition-all active:scale-95 bg-amber-500 hover:bg-amber-400">
+              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Iniciar Coleta'}
             </button>
           )}
           {[AppTripState.COLETANDO, AppTripState.EM_TRANSPORTE].includes(frete.status) && (
-            <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading || geofenceBlocked} className={`w-full flex items-center justify-center h-16 font-black uppercase tracking-widest rounded-xl text-black disabled:opacity-50 transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)] ${geofenceBlocked ? 'bg-slate-700 text-slate-400 shadow-none' : 'bg-cyan-500 hover:bg-cyan-400'}`}>
-              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : (geofenceBlocked ? geofenceWarning : `Validar PIN para ${frete.status === AppTripState.COLETANDO ? 'Sair com Carga' : 'Finalizar'}`)}
+            <button onClick={() => setIsPinModalOpen(true)} disabled={actionLoading} className="w-full flex items-center justify-center h-16 font-black uppercase tracking-widest rounded-xl text-black disabled:opacity-50 transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.4)] bg-cyan-500 hover:bg-cyan-400">
+              {actionLoading ? <Loader2 className="animate-spin" size={24}/> : `Validar PIN para ${frete.status === AppTripState.COLETANDO ? 'Sair com Carga' : 'Finalizar'}`}
             </button>
           )}
         </div>
