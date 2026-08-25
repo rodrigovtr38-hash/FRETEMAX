@@ -3,6 +3,7 @@
 // CTO-Log: Fase 3 - Homologação Operacional Distribuída.
 // Evolução Fase 5: Remoção da sobrescrita otimista do TripState.
 // Apenas o Webhook pode liberar a viagem de RESERVA para ACEITO.
+// Bloco Pagamento Real: Remoção da falsa aprovação. Evento de sucesso delegado estritamente ao Webhook.
 // =========================================================
 
 import {
@@ -12,7 +13,6 @@ import {
 import { db } from '../firebase';
 import { eventBusService, AppEvents } from './eventBusService';
 import { firebaseRealtimeService } from './firebaseRealtimeService';
-import { AppTripState } from '../state/tripStateMachine';
 
 type PaymentPayload = {
   valor: number;
@@ -24,7 +24,7 @@ type PaymentPayload = {
 type PaymentResponse = {
   success: boolean;
   transactionId?: string;
-  url?: string; // 🔥 Suporte para redirecionamento do MP
+  url?: string; 
   error?: string;
 };
 
@@ -57,7 +57,6 @@ class PaymentService {
       const freteData = freteSnap.data();
       const valorEsperado = Number(freteData.valorTotal || freteData.valorFreteBruto || 0);
       
-      // 🔥 CTO FIX: Anti-fraude inteligente.
       if (payload.valor < valorEsperado * 0.98) {
         console.error('[CTO-Log] FRAUDE BLOQUEADA - Tentativa de pagar menos. Enviado:', payload.valor, 'Banco:', valorEsperado);
         eventBusService.emit(AppEvents.PAYMENT_FAILED, payload);
@@ -76,18 +75,15 @@ class PaymentService {
       }
 
       const data = await response.json();
-
       const txId = data.transactionId || data.id || 'checkout_gerado';
 
       await this.sincronizarPagamento(payload.freteId, txId);
 
-      eventBusService.emit(AppEvents.PAYMENT_APPROVED, {
-        freteId: payload.freteId,
-        transactionId: txId,
-      });
-
-      // 🔥 Retorna a URL para o Front-end redirecionar
+      // 🔥 CTO FIX: REMOVIDA FALSA APROVAÇÃO FRONTAL (PAYMENT_APPROVED).
+      // A UI apenas redireciona para o MP. Quem aprova é o Webhook.
+      console.log(`[CTO-Log] Redirecionando para Mercado Pago...`);
       return { success: true, transactionId: txId, url: data.url };
+      
     } catch (error) {
       console.error('[CTO-Log] PAYMENT ERROR:', error);
       eventBusService.emit(AppEvents.PAYMENT_FAILED, payload);
@@ -110,8 +106,6 @@ class PaymentService {
           return;
         }
 
-        // 🔥 CTO FIX: Remoção da linha que forçava status: DISPONIVEL
-        // A geração do checkout não libera a viagem, nem re-joga no radar.
         transaction.update(freteRef, {
           pagamentoStatus: 'processando',
           pagamentoId: transactionId,
@@ -122,7 +116,6 @@ class PaymentService {
 
       console.log(`[CTO-Log] Checkout ${transactionId} gerado. Aguardando Webhook do Banco...`);
 
-      // 🔥 CTO FIX: Remoção do status falso para não ejetar a Reserva
       await firebaseRealtimeService.updateTripRealtime(freteId, {
         pagamentoStatus: 'processando',
         pagamentoId: transactionId,
