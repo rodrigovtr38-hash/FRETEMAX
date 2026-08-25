@@ -5,6 +5,7 @@
 // Evolução Fase 6: BLOCO 7 - Sala de Espera Visual (Escrow Lock) injetada.
 // Evolução Fase 14: Integração de Geofence Dinâmico e UI de GPS Real.
 // Evolução Fase #310: Correção de Rules of Hooks (Remoção do useMemo pós-early return).
+// Hotfix: Restauração da variável mapDestinoGPS (ReferenceError Fix).
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -83,6 +84,34 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     return () => unsubscribe();
   }, [freteId]);
 
+  // ==========================================
+  // TOP-LEVEL DECLARATIONS (Abaixo de Hooks, acima de Returns Condicionais)
+  // ==========================================
+  const paradas = frete?.paradas || [];
+  const paradaAtualIndex = frete?.paradaAtualIndex || 0;
+  const destinoAtual = paradas[paradaAtualIndex] || (frete?.entrega || {});
+
+  const isFaseColeta = frete && [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO].includes(frete.status);
+  
+  // 🔥 HOTFIX: Restauração canônica da variável desaparecida
+  const mapDestinoGPS = destinoAtual?.lat ? { lat: destinoAtual.lat, lng: destinoAtual.lng } : null;
+
+  const navDestinoGPS = isFaseColeta && frete?.origemLat && frete?.origemLng 
+    ? { lat: frete.origemLat, lng: frete.origemLng } 
+    : mapDestinoGPS;
+
+  // 🔥 CTO FIX: Cálculo Dinâmico de Geofence e Map Origin
+  const mapOriginGPS = currentGps || (frete?.status === AppTripState.EM_TRANSPORTE 
+    ? (paradaAtualIndex === 0 ? { lat: frete.origemLat as number, lng: frete.origemLng as number } : { lat: paradas[paradaAtualIndex-1]?.lat, lng: paradas[paradaAtualIndex-1]?.lng })
+    : null);
+
+  const distanceToTarget = (!currentGps || !navDestinoGPS?.lat || !navDestinoGPS?.lng) 
+    ? null 
+    : locationRealtimeService.calculateDistance(currentGps.lat, currentGps.lng, navDestinoGPS.lat, navDestinoGPS.lng);
+
+  // ==========================================
+  // EARLY RETURNS E RENDERS CONDICIONAIS
+  // ==========================================
   if (loading) return (
     <div className="flex h-64 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5">
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div>
@@ -132,26 +161,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       </motion.div>
     );
   }
-
-  const paradas = frete.paradas || [];
-  const paradaAtualIndex = frete.paradaAtualIndex || 0;
-  const destinoAtual = paradas[paradaAtualIndex] || (frete.entrega || {});
-  
-  const isFaseColeta = [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO].includes(frete.status);
-  
-  const navDestinoGPS = isFaseColeta && frete.origemLat && frete.origemLng 
-    ? { lat: frete.origemLat, lng: frete.origemLng } 
-    : (destinoAtual?.lat ? { lat: destinoAtual.lat, lng: destinoAtual.lng } : null);
-
-  // 🔥 CTO FIX: Cálculo Dinâmico de Geofence e Map Origin
-  const mapOriginGPS = currentGps || (frete.status === AppTripState.EM_TRANSPORTE 
-    ? (paradaAtualIndex === 0 ? { lat: frete.origemLat as number, lng: frete.origemLng as number } : { lat: paradas[paradaAtualIndex-1]?.lat, lng: paradas[paradaAtualIndex-1]?.lng })
-    : null);
-
-  // 🔥 CTO FIX: Remoção do useMemo (React #310 Rule of Hooks Error Avoidance)
-  const distanceToTarget = (!currentGps || !navDestinoGPS?.lat || !navDestinoGPS?.lng) 
-    ? null 
-    : locationRealtimeService.calculateDistance(currentGps.lat, currentGps.lng, navDestinoGPS.lat, navDestinoGPS.lng);
 
   // A margem segura (Geofence) para o motorista interagir (Em Metros)
   const GEOFENCE_METERS = 500;
