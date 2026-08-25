@@ -4,6 +4,7 @@
 // Evolução Fase 5: Motorista agora assume a Reserva (RESERVADO_AGUARDANDO_PAGAMENTO) antes do Aceite Real.
 // Evolução Fase 6: Liberação do motorista (Destravamento da Reserva + Start GPS) interligada ao Webhook Financeiro.
 // Evolução Fase 18: Correção das Primitivas de RTDB (Limpeza Prematura evitada e Salto de Estados corrigido).
+// Evolução Bloco GPS-01: Remoção do GPS automático compulsório. Telemetria agora é Opt-in.
 // =========================================================
 
 import { increment } from 'firebase/firestore';
@@ -102,8 +103,9 @@ class DispatchRealtimeService {
         atualizadoEm: Date.now(),
       });
 
-      locationRealtimeService.start(currentUid, freteId);
-      console.log(`[CTO-Log] Operação ${freteId} liberada pelo Escrow! Motorista ${currentUid} destravado (ACEITOU) e GPS Iniciado.`);
+      // 🔥 CTO FIX (GPS-01): Removido "locationRealtimeService.start()" daqui. 
+      // Telemetria agora é ativada por intenção (Opt-in) via botões de navegação na UI.
+      console.log(`[CTO-Log] Operação ${freteId} liberada pelo Escrow! Motorista ${currentUid} destravado (ACEITOU). Aguardando ativação opt-in de telemetria.`);
     } catch (error) {
       console.error('[CTO-Log] ERRO AO CONFIRMAR LIBERAÇÃO DO MOTORISTA:', error);
     }
@@ -177,7 +179,7 @@ class DispatchRealtimeService {
   async chegouColeta(driverId: string) {
     try {
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
-        state: DriverState.CHEGOU_COLETA, // 🔥 CTO FIX: Corrigido o salto de Estado (Bloco 18)
+        state: DriverState.CHEGOU_COLETA,
         atualizadoEm: Date.now(),
       });
     } catch (error) {
@@ -185,7 +187,6 @@ class DispatchRealtimeService {
     }
   }
 
-  // 🔥 CTO FIX: Adicionada rotina atômica faltante (Bloco 18)
   async iniciouColetando(driverId: string) {
     try {
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
@@ -212,7 +213,6 @@ class DispatchRealtimeService {
     try {
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
         state: DriverState.FINALIZANDO,
-        // 🔥 CTO FIX: Removida a limpeza prematura de freteAtualId/disponivel (Bloco 18)
         atualizadoEm: Date.now(),
       });
     } catch (error) {
