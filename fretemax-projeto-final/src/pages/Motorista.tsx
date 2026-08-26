@@ -2,11 +2,12 @@
 // NOME DO ARQUIVO: src/pages/Motorista.tsx
 // CTO-Log: Auditoria Concluída - FASE 3 (Integração).
 // Status: "Vírus dos 15km" e "Buraco Negro da Recusa" erradicados pela raiz da leitura do Firestore.
+// Evolução Fase 12 (Escrow): Transação manual removida. Lock atômico centralizado no TripLifecycle.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { auth, db } from '../firebase';
-import { collection, doc, limit, onSnapshot, query, serverTimestamp, runTransaction, updateDoc, where, increment } from 'firebase/firestore'; 
+import { collection, doc, limit, onSnapshot, query, serverTimestamp, updateDoc, where, increment } from 'firebase/firestore'; 
 import { motion, AnimatePresence } from 'framer-motion';
 import DriverApp from '../components/DriverApp';
 import ChatFrete from '../components/ChatFrete';
@@ -316,29 +317,12 @@ export default function Motorista() {
     if (!user?.uid || !driverData) return;
     
     try {
-      const freteRef = doc(db, 'fretes', freight.id);
-      await runTransaction(db, async (transaction) => {
-        const freteSnap = await transaction.get(freteRef);
-        if (!freteSnap.exists()) throw new Error('FRETE_NAO_ENCONTRADO');
-        
-        const data = freteSnap.data();
-        if (data.motoristaId || !['disponivel', 'buscando_motorista'].includes(data.status)) {
-          throw new Error('FRETE_JA_ATRIBUIDO');
-        }
-
-        transaction.update(freteRef, {
-          status: 'aceito', 
-          motoristaId: user.uid, 
-          motoristaNome: driverData.nome || 'Motorista',
-          motoristaZap: driverData.whatsapp || '', 
-          acceptedAt: serverTimestamp(), 
-          atualizadoEm: serverTimestamp(),
-        });
-      });
-
-      await dispatchRealtimeService.aceitarCorrida(user.uid, freight.id);
+      // 🔥 CTO FIX: Transação centralizada e atômica via dispatchRealtimeService.
+      // Impede corrida de estados e cumpre as regras do Firestore para Escrow (5 min).
+      await dispatchRealtimeService.aceitarCorrida(user.uid, freight.id, driverData);
+      
       setSelectedFreight(null);
-      showToast('Carga aceita! Dirija-se à coleta.', 'success');
+      showToast('Carga reservada! Aguardando confirmação do pagamento (5 min).', 'success');
       
     } catch (error: any) { 
       showToast(error.message === 'FRETE_JA_ATRIBUIDO' ? "Esta carga já foi fechada por outro parceiro." : "Erro ao aceitar frete.", 'warning');
