@@ -4,6 +4,7 @@
 // 6. 🔥 CTO FIX (FASE 12): Validação de Titularidade. Proteção absoluta contra Swap de Motorista e Late Approvals.
 // 7. 🔥 CTO FIX (BLOCO 24): Destravamento Cirúrgico do RTDB. Webhook liberta o motorista via firebase-admin/database.
 // 8. 🔥 CTO FIX (PAGAMENTO REAL): Idempotência de String corrigida (aprovado === approved).
+// 9. 🔥 CTO FIX (BUSINESS): Rejeição não devolve ao radar automaticamente, vira EXPIRADO.
 // =========================================================
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
@@ -140,8 +141,8 @@ export default async function handler(req, res) {
             // Liberação RTDB (Motorista)
             if (freteData.motoristaId) {
                await rtdb.ref(`drivers/${freteData.motoristaId}`).update({
-                  state: 'aceitou',
-                  atualizadoEm: Date.now()
+                 state: 'aceitou',
+                 atualizadoEm: Date.now()
                });
             }
             
@@ -174,9 +175,11 @@ export default async function handler(req, res) {
               return res.status(200).send('OK');
             }
 
-            console.log(`[ROLLBACK] Pagamento recusado. Devolvendo ao Radar.`);
+            console.log(`[ROLLBACK] Pagamento recusado. Expirando reserva (NÃO VOLTA AO FEED).`);
+            
+            // 🔥 CTO FIX: Status alterado para expirado em vez de disponivel, conforme regra comercial.
             await freteRef.update({
-              status: 'disponivel', 
+              status: 'expirado', 
               pagamentoStatus: paymentData.status,
               motoristaId: null,
               motoristaNome: null,
@@ -188,11 +191,11 @@ export default async function handler(req, res) {
 
             if (freteData.motoristaId) {
                await rtdb.ref(`drivers/${freteData.motoristaId}`).update({
-                  state: 'online',
-                  freteAtualId: null,
-                  activeTripId: null,
-                  disponivel: true,
-                  atualizadoEm: Date.now()
+                 state: 'online',
+                 freteAtualId: null,
+                 activeTripId: null,
+                 disponivel: true,
+                 atualizadoEm: Date.now()
                });
             }
 
