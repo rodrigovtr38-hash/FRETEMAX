@@ -49,6 +49,7 @@ interface ActiveFreightData extends DocumentData {
   distanciaRealKm?: number;
   valorLiquidoMotorista?: number;
   valorMotorista?: number;
+  reservadoEm?: number; // 🔥 INJEÇÃO PARA O CRONÔMETRO DE 5 MINUTOS
 }
 
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
@@ -74,6 +75,9 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
   const [currentGps, setCurrentGps] = useState<{lat: number, lng: number} | null>(null);
 
+  // 🔥 ESTADO DO CRONÔMETRO
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
   useEffect(() => {
     const unsubscribeGps = locationRealtimeService.onPositionUpdate((pos) => {
       setCurrentGps(pos);
@@ -93,6 +97,41 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     });
     return () => unsubscribe();
   }, [freteId]);
+
+  // 🔥 LÓGICA DE REGRESSÃO DOS 5 MINUTOS
+  useEffect(() => {
+    if (frete?.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO && frete?.reservadoEm) {
+      const interval = setInterval(() => {
+        const agora = Date.now();
+        const expiracao = frete.reservadoEm! + (5 * 60 * 1000); // 5 minutos de trava
+        const restante = Math.max(0, expiracao - agora);
+        
+        setTimeLeft(restante);
+
+        if (restante === 0) {
+          clearInterval(interval);
+          // O tempo esgotou. O motorista desiste automaticamente para se libertar.
+          alert("O tempo de pagamento do cliente esgotou. Você foi liberado para buscar novos fretes no Radar.");
+          dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
+            status: AppTripState.DISPONIVEL, 
+            motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
+            alertaInsucesso: true,
+            motivoCancelamento: 'O cliente não pagou no prazo de 5 minutos.'
+          }).catch(console.error);
+        }
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setTimeLeft(null);
+    }
+  }, [frete?.status, frete?.reservadoEm, frete?.id]);
+
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   const paradas = frete?.paradas || [];
   const paradaAtualIndex = frete?.paradaAtualIndex || 0;
@@ -133,12 +172,15 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           <LockKeyhole size={40} className="text-emerald-400 animate-pulse" />
         </div>
         <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Reserva Confirmada!</h2>
-        <p className="text-slate-400 text-sm max-w-sm mx-auto leading-relaxed mb-8 font-medium">
-          Aguardando a confirmação do pagamento do embarcador para liberar a rota, os endereços exatos e a navegação.
+        <p className="text-slate-400 text-sm max-w-sm mx-auto leading-relaxed mb-6 font-medium">
+          Aguardando o embarcador concluir o Pix para liberar a rota e os endereços.
         </p>
-        <div className="flex items-center gap-3 bg-slate-950 px-6 py-4 rounded-2xl border border-white/5 w-full max-w-xs mx-auto justify-center mb-8 shadow-inner">
-          <Loader2 className="animate-spin text-cyan-500" size={18} />
-          <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Aguardando Escrow...</span>
+        
+        {/* 🔥 CRONÔMETRO INJETADO AQUI NO LUGAR DO LOADER INFINITO */}
+        <div className="flex flex-col items-center gap-1 bg-slate-950 px-6 py-4 rounded-2xl border border-amber-500/30 w-full max-w-xs mx-auto justify-center mb-8 shadow-inner relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-amber-500 animate-pulse"></div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Tempo Restante</span>
+          <span className="text-3xl font-mono font-black tracking-widest text-white">{timeLeft !== null ? formatTime(timeLeft) : '05:00'}</span>
         </div>
         
         <button 
