@@ -1,12 +1,11 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/clientFreightService.ts
 // CTO-Log: Refinamento e Sincronização do Motor de Cálculo (Bloco 3 / FASE 3).
-// Status: Matematica e Recebimento de Payload expandido (Distância Dupla) validadas e seguras.
+// Status: Corrigido - Chamada de pagamento prematura removida.
 // =========================================================
 
 import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { paymentService } from './paymentService';
 import { AppTripState as TripState } from '../state/tripStateMachine';
 
 const inflightRegistry = new Set<string>();
@@ -19,8 +18,8 @@ export interface FreightPayload {
   valor?: number;
   valorBruto?: number;
   distanciaTotalKm?: number;
-  distanciaTarifada?: number; // 🔥 Suporte injetado
-  distanciaRealKm?: number;   // 🔥 Suporte injetado
+  distanciaTarifada?: number;
+  distanciaRealKm?: number;
   pesoKg?: number;
   tipoCarga?: string;
   paradas?: any[];
@@ -53,7 +52,6 @@ class ClientFreightService {
     };
   }
 
-  // 🔥 CTO FIX: Sincronizado com Cliente.tsx (['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha'] = 15%, resto = 20%)
   private calcularComissao(valorBruto: number, categoria: string) {
     const cat = categoria ? categoria.toLowerCase().trim() : '';
     const isHeavy = ['toco', 'truck', 'carreta_ls', 'bi_trem_cegonha', 'carreta'].some(c => cat.includes(c));
@@ -117,28 +115,8 @@ class ClientFreightService {
         valorLiquidoMotorista, 
       });
 
-      const pagamento = await paymentService.processarPagamento({
-        valor: valorBruto, 
-        descricao: `Frete ${normalizedPayload.categoria} - ID ${freteRef.id}`,
-        clienteId: normalizedPayload.clienteId,
-        freteId: freteRef.id,
-      });
-
-      if (!pagamento.success) {
-        await updateDoc(doc(db, 'fretes', freteRef.id), { 
-          status: TripState.CANCELADO, 
-          pagamentoStatus: 'falhou',
-          atualizadoEm: serverTimestamp()
-        });
-        return { success: false, error: 'PAGAMENTO_NEGADO' };
-      }
-
-      await updateDoc(doc(db, 'fretes', freteRef.id), {
-        pagamentoStatus: 'aprovado',
-        status: TripState.DISPONIVEL, 
-        atualizadoEm: serverTimestamp(),
-      });
-
+      // 🔥 CTO FIX: Removido o fluxo prematuro de pagamento daqui. O frete apenas vai pro feed.
+      
       return { success: true, freteId: freteRef.id };
     } catch (error) {
       console.error('ERRO CRÍTICO CRIAR FRETE:', error);
