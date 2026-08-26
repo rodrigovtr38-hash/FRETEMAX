@@ -2,8 +2,7 @@
 // NOME DO ARQUIVO: src/services/paymentService.ts
 // CTO-Log: Fase 3 - Homologação Operacional Distribuída.
 // Evolução Fase 5: Remoção da sobrescrita otimista do TripState.
-// Apenas o Webhook pode liberar a viagem de RESERVA para ACEITO.
-// Bloco Pagamento Real: Remoção da falsa aprovação. Evento de sucesso delegado estritamente ao Webhook.
+// Bloco Pagamento Real: Compatibilização de chaves de valor.
 // =========================================================
 
 import {
@@ -55,7 +54,8 @@ class PaymentService {
       }
       
       const freteData = freteSnap.data();
-      const valorEsperado = Number(freteData.valorTotal || freteData.valorFreteBruto || 0);
+      // 🔥 CTO FIX: Compatibilidade com a chave gravada pelo clientFreightService
+      const valorEsperado = Number(freteData.valorTotal || freteData.valorBruto || freteData.valorFreteBruto || 0);
       
       if (payload.valor < valorEsperado * 0.98) {
         console.error('[CTO-Log] FRAUDE BLOQUEADA - Tentativa de pagar menos. Enviado:', payload.valor, 'Banco:', valorEsperado);
@@ -79,8 +79,6 @@ class PaymentService {
 
       await this.sincronizarPagamento(payload.freteId, txId);
 
-      // 🔥 CTO FIX: REMOVIDA FALSA APROVAÇÃO FRONTAL (PAYMENT_APPROVED).
-      // A UI apenas redireciona para o MP. Quem aprova é o Webhook.
       console.log(`[CTO-Log] Redirecionando para Mercado Pago...`);
       return { success: true, transactionId: txId, url: data.url };
       
