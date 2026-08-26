@@ -6,6 +6,7 @@
 // Evolução Fase 6: Normalização Canônica de Categorias.
 // CTO-Log (EXECUÇÃO ATUAL): Limpeza estrita de variáveis estáticas/bypass de pagamento.
 // Ajuste Operacional (5 Minutos): Cronômetro ajustado para 5min e UI enriquecida com Veículo e ETA do motorista.
+// FIX FORENSE: Restauração da renderização dos componentes filhos (Mapa, Status Card, Resumo e Modal de Cancelamento) deletados acidentalmente.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -934,11 +935,89 @@ export default function Cliente() {
 
         {step === 'preview' && (
           <div className="w-full grid grid-cols-1 gap-8 animate-in fade-in zoom-in duration-500 lg:grid-cols-[1fr_450px]">
-            {/* OMITIDO RESUMO DA ROTA PARA FOCO... (PRESENTE NO ARQUIVO COMPLETO ABAIXO) */}
             <div className="flex flex-col gap-6">
-              <button onClick={handleContratar} disabled={loadingPayment || isProcessingPayment.current} className={`flex min-h-[72px] w-full items-center justify-center gap-3 rounded-[2rem] text-[15px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${loadingPayment ? 'bg-slate-200 text-slate-400' : 'bg-blue-600 text-white shadow-xl shadow-blue-500/40 hover:bg-blue-700 hover:scale-[1.02]'}`}>
-                {loadingPayment ? <><Loader2 className="h-6 w-6 animate-spin" /> Publicando...</> : <><Zap size={22} /> Publicar e Buscar Motorista</>}
-              </button>
+               <div className="h-[300px] w-full overflow-hidden rounded-[2rem] bg-slate-100 border border-slate-200 shadow-inner relative">
+                 {mapsReady && origemGPS && destinoGPS ? (
+                   <MapaCliente origem={origemGPS} destino={destinoGPS} paradas={paradasGPS} />
+                 ) : (
+                   <div className="flex h-full w-full items-center justify-center bg-slate-100">
+                     <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                   </div>
+                 )}
+               </div>
+               
+               <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-200 shadow-sm">
+                 <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 flex items-center gap-2">
+                   <MapPin className="text-blue-500" size={18}/> Resumo do Roteiro
+                 </h3>
+                 <div className="space-y-4">
+                   <div className="flex items-start gap-4">
+                     <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 text-xs font-black text-slate-500">A</div>
+                     <div>
+                       <p className="text-[10px] uppercase font-bold text-slate-400">Ponto de Coleta</p>
+                       <p className="text-sm font-bold text-slate-700 leading-snug">{coleta.rua}, {coleta.num} - {coleta.bairro}</p>
+                     </div>
+                   </div>
+                   {entregas.map((entrega, idx) => (
+                     <div key={idx} className="flex items-start gap-4">
+                       <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100 text-xs font-black text-blue-600">
+                         {String.fromCharCode(66 + idx)}
+                       </div>
+                       <div>
+                         <p className="text-[10px] uppercase font-bold text-slate-400">Ponto de Entrega {idx + 1}</p>
+                         <p className="text-sm font-bold text-slate-700 leading-snug">{entrega.rua}, {entrega.num} - {entrega.bairro}</p>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+                 
+                 <div className="mt-8 pt-6 border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-4">
+                   <div>
+                     <p className="text-[10px] uppercase font-bold text-slate-400">Distância Real</p>
+                     <p className="text-sm font-black text-slate-700">{distanciaReal.toFixed(1)} km</p>
+                   </div>
+                   <div>
+                     <p className="text-[10px] uppercase font-bold text-slate-400">Veículo Alvo</p>
+                     <p className="text-sm font-black text-slate-700">{VEHICLE_CONFIG[vehicle].nome}</p>
+                   </div>
+                   <div>
+                     <p className="text-[10px] uppercase font-bold text-slate-400">Peso Bruto</p>
+                     <p className="text-sm font-black text-slate-700">{peso || '---'}</p>
+                   </div>
+                   <div>
+                     <p className="text-[10px] uppercase font-bold text-slate-400">Qtd Volumes</p>
+                     <p className="text-sm font-black text-slate-700">{qtdVolumes || '---'}</p>
+                   </div>
+                 </div>
+               </div>
+            </div>
+            
+            <div className="flex flex-col gap-6">
+               <div className="bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl text-white">
+                  <h3 className="text-lg font-black uppercase tracking-widest text-emerald-400 mb-6 flex items-center gap-2"><DollarSign size={20}/> Resumo Financeiro</h3>
+                  <div className="space-y-4 mb-8">
+                    <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sua Oferta Base</span>
+                      <span className="text-sm font-black">R$ {valorOfertaNum.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pedágio Estimado</span>
+                      <span className="text-sm font-black text-slate-500">Incluso</span>
+                    </div>
+                  </div>
+                  <div className="bg-slate-950 rounded-2xl p-6 border border-emerald-500/20 mb-6">
+                    <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-1">Custo Total Oficial</p>
+                    <p className="text-3xl font-black text-emerald-400">R$ {(valorOfertaNum).toFixed(2).replace('.', ',')}</p>
+                    <p className="text-[10px] text-slate-500 mt-3 font-medium leading-relaxed">
+                      * O valor será retido com segurança (Escrow) e só será liberado ao motorista após a conclusão comprovada da entrega.
+                    </p>
+                  </div>
+                  
+                  <button onClick={handleContratar} disabled={loadingPayment || isProcessingPayment.current} className={`flex min-h-[72px] w-full items-center justify-center gap-3 rounded-[2rem] text-[15px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${loadingPayment ? 'bg-slate-200 text-slate-400' : 'bg-blue-600 text-white shadow-xl shadow-blue-500/40 hover:bg-blue-700 hover:scale-[1.02]'}`}>
+                    {loadingPayment ? <><Loader2 className="h-6 w-6 animate-spin" /> Publicando...</> : <><Zap size={22} /> Publicar e Buscar Motorista</>}
+                  </button>
+                  <button onClick={() => setStep('form')} className="w-full mt-4 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">Voltar para Edição</button>
+               </div>
             </div>
           </div>
         )}
@@ -1009,13 +1088,76 @@ export default function Cliente() {
                 )}
 
                 <div className="bg-slate-900 rounded-[2.5rem] p-8 md:p-10 shadow-2xl text-white relative overflow-hidden">
-                   {/* OMITIDO DETALHES GERAIS DA CARGA PARA FOCO... (MANTIDOS NO ARQUIVO FINAL COMPLETO ABAIXO) */}
+                   <div className="absolute top-0 right-0 bg-blue-600 px-5 py-2 rounded-bl-2xl font-black text-[10px] uppercase tracking-widest text-white shadow-lg">
+                      ID: {currentOrderId?.slice(0, 8).toUpperCase()}
+                   </div>
+
+                   <div className="mb-8">
+                      <ClientStatusCard 
+                        orderData={orderData} 
+                        onSmartPricing={handleSmartPricing} 
+                        onRepublicar={handleRepublicar} 
+                        onCancelar={() => setShowCancelModal(true)} 
+                      />
+                   </div>
+
+                   <div className="h-[300px] w-full mb-8 rounded-[2rem] overflow-hidden bg-slate-950 border border-slate-800 shadow-inner relative">
+                      {origemGPS && destinoGPS ? (
+                        <MapaCliente 
+                          origem={origemGPS} 
+                          destino={destinoGPS} 
+                          motorista={motoristaGPS}
+                          paradas={paradasGPS}
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                           <Loader2 className="w-8 h-8 text-cyan-500 animate-spin" />
+                        </div>
+                      )}
+                   </div>
+
+                   <div className="bg-slate-950 rounded-3xl p-6 md:p-8 border border-white/5">
+                      <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
+                         <FileText size={18} className="text-cyan-400" /> Resumo Logístico
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                         <div>
+                           <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Veículo Solicitado</p>
+                           <p className="text-sm font-bold text-white">{orderData?.veiculo ? VEHICLE_CONFIG[orderData.veiculo as VehicleType]?.nome : '---'}</p>
+                         </div>
+                         <div>
+                           <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Distância Oficial</p>
+                           <p className="text-sm font-bold text-white">{orderData?.distanciaRealKm?.toFixed(1) || '--'} km</p>
+                         </div>
+                         <div>
+                           <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Mercadoria</p>
+                           <p className="text-sm font-bold text-white">{orderData?.tipoMaterial || '---'}</p>
+                         </div>
+                         <div>
+                           <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Peso / Volume</p>
+                           <p className="text-sm font-bold text-white">{orderData?.pesoKg || orderData?.peso || '---'} / {orderData?.qtdVolumes || '---'}</p>
+                         </div>
+                      </div>
+                   </div>
+
+                   {['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte'].includes(orderData?.status || '') && (
+                      <div className="mt-8 pt-8 border-t border-white/5">
+                        <ChatFrete freteId={currentOrderId!} tipoUsuario="cliente" nome={nome || 'Embarcador'} />
+                      </div>
+                   )}
                 </div>
               </div>
             </div>
           </div>
         )}
       </main>
+
+      <ClientCancelModal
+          isOpen={showCancelModal}
+          onClose={() => setShowCancelModal(false)}
+          onConfirm={handleCancelarPedido}
+          loading={isCancelling}
+      />
     </div>
   );
 }
