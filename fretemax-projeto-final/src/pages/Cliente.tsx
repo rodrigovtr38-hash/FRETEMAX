@@ -4,7 +4,8 @@
 // Correção: Sincronização do Resumo da Rota com o SSOT antes do Pagamento.
 // Evolução Fase 5: INVERSÃO DO FUNIL (Pagamento no Match). Conectado ao PaymentService.
 // Evolução Fase 6: Normalização Canônica de Categorias.
-// CTO-Log (EXECUÇÃO ATUAL): Injeção do Cronômetro de Reserva (10 Minutos) e Card do Parceiro na Fase de Pagamento.
+// CTO-Log (EXECUÇÃO ATUAL): Limpeza estrita de variáveis estáticas/bypass de pagamento.
+// Ajuste Operacional (5 Minutos): Cronômetro ajustado para 5min e UI enriquecida com Veículo e ETA do motorista.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -95,7 +96,7 @@ export default function Cliente() {
   
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
-  // 🔥 LÓGICA DO CRONÔMETRO DE 10 MINUTOS PARA O CLIENTE
+  // 🔥 LÓGICA DO CRONÔMETRO PARA O CLIENTE
   const [timeLeftEscrow, setTimeLeftEscrow] = useState<number | null>(null);
 
   const coordsCache = useRef<Record<string, Coords>>({});
@@ -228,18 +229,17 @@ export default function Cliente() {
     setTimeout(() => setToast(null), 4500);
   };
 
-  // 🔥 EFEITO DO CRONÔMETRO ESCROW (CLIENTE)
+  // 🔥 EFEITO DO CRONÔMETRO ESCROW (AGORA PARA 5 MINUTOS)
   useEffect(() => {
     if (orderData?.status === TripState.RESERVADO_AGUARDANDO_PAGAMENTO && orderData?.reservadoEm) {
       const interval = setInterval(() => {
         const agora = Date.now();
-        const expiracao = orderData.reservadoEm! + (10 * 60 * 1000); // 10 minutos
+        // Regulado exatamente para 5 minutos (300.000 ms) conforme o fluxo da concorrência
+        const expiracao = orderData.reservadoEm! + (5 * 60 * 1000); 
         const restante = Math.max(0, expiracao - agora);
         
         setTimeLeftEscrow(restante);
 
-        // Se o tempo acabar e o banco não tiver virado pra ACEITO, o sistema congela o botão visualmente.
-        // A derrubada real do banco é feita pelo celular do motorista via 'cancelarReservaPorTimeout'.
         if (restante === 0) {
           clearInterval(interval);
         }
@@ -264,7 +264,7 @@ export default function Cliente() {
   }, [step, orderData]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = newSearchParams(window.location.search);
     const orderFromUrl = params.get('order');
 
     if (orderFromUrl) {
@@ -518,7 +518,6 @@ export default function Cliente() {
         motoristasNotificados: 0,
         interessados: 0,
 
-        // Carga nasce no Radar em DISPONIVEL 
         status: tipoFrete === 'agendado' ? TripState.AGENDADO : TripState.DISPONIVEL,
         pagamentoStatus: 'pendente',
         dispatchStatus: 'mural_aberto',
@@ -959,32 +958,50 @@ export default function Cliente() {
                        <CheckCircle size={32}/> MOTORISTA ENCONTRADO!
                     </h3>
                     
-                    {/* INJEÇÃO DE INFORMAÇÕES DO MOTORISTA PARA O CLIENTE */}
-                    <div className="bg-emerald-700/50 rounded-2xl p-4 mb-4 border border-emerald-400/30 flex items-center gap-4">
-                      <div className="p-3 bg-emerald-500/20 rounded-xl"><User size={24} className="text-white"/></div>
+                    {/* 🔥 INJEÇÃO DE INFORMAÇÕES DO MOTORISTA PARA O CLIENTE */}
+                    <div className="bg-emerald-700/50 rounded-2xl p-4 mb-4 border border-emerald-400/30 flex items-start gap-4 shadow-inner">
+                      <div className="p-3 bg-emerald-500/20 rounded-xl mt-1">
+                        <User size={24} className="text-white"/>
+                      </div>
                       <div>
-                        <p className="text-[10px] uppercase font-bold text-emerald-200 tracking-wider">Parceiro que aceitou a carga</p>
+                        <p className="text-[10px] uppercase font-bold text-emerald-200 tracking-wider">Parceiro Pronto para Coleta</p>
                         <p className="text-xl font-black text-white leading-tight">{orderData.motoristaNome || 'Motorista Parceiro'}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          <span className="bg-emerald-800/80 text-emerald-100 text-[9px] px-2 py-1 rounded font-black uppercase tracking-widest border border-emerald-600/50">
+                            {orderData.veiculo ? VEHICLE_CONFIG[orderData.veiculo as VehicleType]?.nome : 'Veículo'}
+                          </span>
+                          <span className="bg-emerald-800/80 text-emerald-100 text-[9px] px-2 py-1 rounded font-black uppercase tracking-widest border border-emerald-600/50">
+                            Chega em ~{Math.max(5, Math.round((orderData.distanciaRealKm || 0) * 1.5))} min
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    <p className="text-emerald-100 mb-6 font-medium">O motorista já reservou a viagem. O seu pagamento libera o envio dos endereços exatos para que ele inicie o deslocamento.</p>
+                    <p className="text-emerald-100 text-sm mb-6 font-medium leading-relaxed">
+                      O parceiro já reservou a viagem. O seu pagamento libera o envio dos endereços exatos para que ele inicie o deslocamento.
+                    </p>
                     
-                    {/* CRONÔMETRO DE URGÊNCIA */}
-                    <div className="flex items-center justify-center gap-3 mb-6 bg-slate-900/40 py-3 rounded-xl border border-amber-400/50">
+                    {/* 🔥 CRONÔMETRO DE URGÊNCIA */}
+                    <div className="flex items-center justify-center gap-3 mb-6 bg-slate-900/40 py-3 rounded-xl border border-amber-400/50 shadow-inner">
                        <Clock size={20} className="text-amber-400 animate-spin-slow" />
                        <p className="text-sm font-bold text-amber-300">Tempo restante para pagar:</p>
-                       <p className="text-xl font-mono font-black text-amber-400 tracking-widest">{timeLeftEscrow !== null ? formatTimeEscrow(timeLeftEscrow) : '10:00'}</p>
+                       <p className="text-xl font-mono font-black text-amber-400 tracking-widest">
+                         {timeLeftEscrow !== null ? formatTimeEscrow(timeLeftEscrow) : '05:00'}
+                       </p>
                     </div>
 
-                    <div className="bg-slate-900/50 rounded-2xl p-6 border border-emerald-400/30 flex items-center justify-between mb-6">
+                    <div className="bg-slate-900/50 rounded-2xl p-6 border border-emerald-400/30 flex items-center justify-between mb-6 shadow-inner">
                         <div>
                            <p className="text-[10px] uppercase tracking-widest text-emerald-300">Sua Oferta</p>
                            <p className="text-3xl font-black">R$ {orderData.valorFreteBruto?.toFixed(2).replace('.',',')}</p>
                         </div>
                     </div>
 
-                    <button onClick={handlePagarReserva} disabled={loadingPayment || timeLeftEscrow === 0} className="w-full bg-slate-900 hover:bg-black text-white text-lg font-black uppercase tracking-[0.2em] py-5 rounded-[1.5rem] flex items-center justify-center gap-3 transition-all shadow-xl disabled:opacity-50">
+                    <button 
+                      onClick={handlePagarReserva} 
+                      disabled={loadingPayment || timeLeftEscrow === 0} 
+                      className="w-full bg-slate-900 hover:bg-black text-white text-lg font-black uppercase tracking-[0.2em] py-5 rounded-[1.5rem] flex items-center justify-center gap-3 transition-all shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                         {loadingPayment ? <Loader2 className="animate-spin" /> : <Lock size={20}/>}
                         {timeLeftEscrow === 0 ? 'Tempo Expirado' : loadingPayment ? 'Conectando...' : 'Confirmar e Pagar'}
                     </button>
