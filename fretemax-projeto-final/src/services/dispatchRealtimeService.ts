@@ -3,9 +3,7 @@
 // CTO-Log: FASE 4 - Reconstrução Controlada (Etapa 3).
 // Evolução Fase 5: Motorista agora assume a Reserva (RESERVADO_AGUARDANDO_PAGAMENTO) antes do Aceite Real.
 // Evolução Fase 6: Liberação do motorista (Destravamento da Reserva + Start GPS) interligada ao Webhook Financeiro.
-// Evolução Fase 18: Correção das Primitivas de RTDB (Limpeza Prematura evitada e Salto de Estados corrigido).
-// Bloco GPS-01: Remoção do disparo automático de GPS na liberação. O Rastreamento agora é estritamente Opt-In.
-// CTO-Log (EXECUÇÃO ATUAL): Injeção do Timeout de Reserva (10 minutos) para proteger a Frota de clientes inativos.
+// Evolução Fase 12 (Escrow): Ajuste para Timeout de 5 Minutos. Expiração de frete direciona para EXPIRADO (não retorna ao radar automaticamente).
 // =========================================================
 
 import { increment } from 'firebase/firestore';
@@ -61,16 +59,22 @@ class DispatchRealtimeService {
     }
   }
 
-  async aceitarCorrida(driverId: string, freteId: string) {
+  async aceitarCorrida(driverId: string, freteId: string, driverData?: { nome?: string, whatsapp?: string }) {
     try {
+      const now = Date.now();
+      const expiraEm = now + 5 * 60 * 1000; // 🔥 CTO FIX: 5 Minutos cravados.
+
       const sucesso = await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, { 
         motoristaId: driverId,
-        // 🔥 CTO FIX: Registro exato de quando o motorista aceitou para o cronômetro iniciar
-        reservadoEm: Date.now() 
+        motoristaNome: driverData?.nome || 'Motorista',
+        motoristaTelefone: driverData?.whatsapp || '',
+        reservadoEm: now,
+        reservaExpiraEm: expiraEm,
+        pagamentoStatus: 'pendente'
       });
 
       if (!sucesso) {
-        throw new Error('Falha ao registrar reserva. A carga pode já ter sido assumida ou expirada.');
+        throw new Error('FRETE_JA_ATRIBUIDO');
       }
 
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
@@ -87,7 +91,7 @@ class DispatchRealtimeService {
     }
   }
 
-  // 🔥 NOVA FUNÇÃO: Aborta a viagem automaticamente e liberta o motorista se o cliente demorar a pagar.
+  // 🔥 CTO FIX: Aborta a viagem automaticamente e liberta o motorista se o cliente demorar a pagar (Timeout de 5 minutos).
   async cancelarReservaPorTimeout(driverId: string, freteId: string) {
     try {
       // 1. Limpa o Motorista (Volta pro Radar Livre)
@@ -100,15 +104,16 @@ class DispatchRealtimeService {
         atualizadoEm: Date.now(),
       });
 
-      // 2. Devolve o Frete do Cliente para "DISPONIVEL" (Alerta Insucesso)
-      await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.DISPONIVEL, {
+      // 2. Devolve o Frete do Cliente para "EXPIRADO" (Não retorna pro Feed)
+      await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.EXPIRADO, {
         motoristaId: null,
         motoristaNome: null,
+        motoristaTelefone: null,
         motoristaZap: null,
         motoristaLat: null,
         motoristaLng: null,
         alertaInsucesso: true,
-        motivoCancelamento: 'O cliente não realizou o pagamento no prazo de 10 minutos.'
+        motivoCancelamento: 'O cliente não realizou o pagamento no prazo de 5 minutos.'
       });
 
       locationRealtimeService.stop();
