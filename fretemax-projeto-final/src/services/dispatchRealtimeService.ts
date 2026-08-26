@@ -1,3 +1,13 @@
+// =========================================================
+// NOME DO ARQUIVO: src/services/dispatchRealtimeService.ts
+// CTO-Log: FASE 4 - Reconstrução Controlada (Etapa 3).
+// Evolução Fase 5: Motorista agora assume a Reserva (RESERVADO_AGUARDANDO_PAGAMENTO) antes do Aceite Real.
+// Evolução Fase 6: Liberação do motorista (Destravamento da Reserva + Start GPS) interligada ao Webhook Financeiro.
+// Evolução Fase 18: Correção das Primitivas de RTDB (Limpeza Prematura evitada e Salto de Estados corrigido).
+// Bloco GPS-01: Remoção do disparo automático de GPS na liberação. O Rastreamento agora é estritamente Opt-In.
+// CTO-Log (EXECUÇÃO ATUAL): Injeção do Timeout de Reserva (10 minutos) para proteger a Frota de clientes inativos.
+// =========================================================
+
 import { increment } from 'firebase/firestore';
 import { auth } from '../firebase';
 import { firebaseRealtimeService } from './firebaseRealtimeService';
@@ -55,7 +65,8 @@ class DispatchRealtimeService {
     try {
       const sucesso = await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, { 
         motoristaId: driverId,
-        reservadoEm: Date.now() // 🔥 INJEÇÃO DO TEMPO DA RESERVA
+        // 🔥 CTO FIX: Registro exato de quando o motorista aceitou para o cronômetro iniciar
+        reservadoEm: Date.now() 
       });
 
       if (!sucesso) {
@@ -76,9 +87,10 @@ class DispatchRealtimeService {
     }
   }
 
-  // 🔥 NOVA FUNÇÃO: DEVOLVE A CARGA PRO RADAR SE O CLIENTE NÃO PAGAR
+  // 🔥 NOVA FUNÇÃO: Aborta a viagem automaticamente e liberta o motorista se o cliente demorar a pagar.
   async cancelarReservaPorTimeout(driverId: string, freteId: string) {
     try {
+      // 1. Limpa o Motorista (Volta pro Radar Livre)
       await firebaseRealtimeService.updateDriverRealtime(driverId, {
         state: DriverState.ONLINE, 
         freteAtualId: null,
@@ -88,6 +100,7 @@ class DispatchRealtimeService {
         atualizadoEm: Date.now(),
       });
 
+      // 2. Devolve o Frete do Cliente para "DISPONIVEL" (Alerta Insucesso)
       await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.DISPONIVEL, {
         motoristaId: null,
         motoristaNome: null,
@@ -99,6 +112,7 @@ class DispatchRealtimeService {
       });
 
       locationRealtimeService.stop();
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
     } catch (error) {
       console.error('ERRO AO CANCELAR RESERVA POR TIMEOUT:', error);
       throw error;
@@ -108,6 +122,7 @@ class DispatchRealtimeService {
   async confirmarLiberacaoMotorista(freteId: string, motoristaId?: string) {
     try {
       const currentUid = auth.currentUser?.uid;
+      
       if (!currentUid) return;
 
       if (motoristaId && currentUid !== motoristaId) {
@@ -145,7 +160,10 @@ class DispatchRealtimeService {
       });
 
       locationRealtimeService.stop();
-      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+      
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+      }
     } catch (error) {
       console.error('ERRO AO CONCLUIR VIAGEM:', error);
       throw error;
@@ -170,7 +188,10 @@ class DispatchRealtimeService {
       });
 
       locationRealtimeService.stop();
-      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('FRETOGO_TRIP_FINISHED'));
+      }
     } catch (error) {
       console.error('ERRO AO ABORTAR VIAGEM:', error);
       throw error;
@@ -178,27 +199,69 @@ class DispatchRealtimeService {
   }
 
   async iniciarColeta(driverId: string) {
-    try { await firebaseRealtimeService.updateDriverRealtime(driverId, { state: DriverState.INDO_COLETA, atualizadoEm: Date.now() }); } catch (error) { console.error('ERRO:', error); }
+    try {
+      await firebaseRealtimeService.updateDriverRealtime(driverId, {
+        state: DriverState.INDO_COLETA,
+        atualizadoEm: Date.now(),
+      });
+    } catch (error) {
+      console.error('ERRO INICIAR COLETA:', error);
+    }
   }
 
   async chegouColeta(driverId: string) {
-    try { await firebaseRealtimeService.updateDriverRealtime(driverId, { state: DriverState.CHEGOU_COLETA, atualizadoEm: Date.now() }); } catch (error) { console.error('ERRO:', error); }
+    try {
+      await firebaseRealtimeService.updateDriverRealtime(driverId, {
+        state: DriverState.CHEGOU_COLETA,
+        atualizadoEm: Date.now(),
+      });
+    } catch (error) {
+      console.error('ERRO CHEGADA COLETA:', error);
+    }
   }
 
   async iniciouColetando(driverId: string) {
-    try { await firebaseRealtimeService.updateDriverRealtime(driverId, { state: DriverState.COLETANDO, atualizadoEm: Date.now() }); } catch (error) { console.error('ERRO:', error); }
+    try {
+      await firebaseRealtimeService.updateDriverRealtime(driverId, {
+        state: DriverState.COLETANDO,
+        atualizadoEm: Date.now(),
+      });
+    } catch (error) {
+      console.error('ERRO COLETANDO:', error);
+    }
   }
 
   async iniciarTransporte(driverId: string) {
-    try { await firebaseRealtimeService.updateDriverRealtime(driverId, { state: DriverState.EM_TRANSPORTE, atualizadoEm: Date.now() }); } catch (error) { console.error('ERRO:', error); }
+    try {
+      await firebaseRealtimeService.updateDriverRealtime(driverId, {
+        state: DriverState.EM_TRANSPORTE,
+        atualizadoEm: Date.now(),
+      });
+    } catch (error) {
+      console.error('ERRO TRANSPORTE:', error);
+    }
   }
 
   async finalizarEntrega(driverId: string) {
-    try { await firebaseRealtimeService.updateDriverRealtime(driverId, { state: DriverState.FINALIZANDO, atualizadoEm: Date.now() }); } catch (error) { console.error('ERRO:', error); }
+    try {
+      await firebaseRealtimeService.updateDriverRealtime(driverId, {
+        state: DriverState.FINALIZANDO,
+        atualizadoEm: Date.now(),
+      });
+    } catch (error) {
+      console.error('ERRO FINALIZAÇÃO:', error);
+    }
   }
 
   async atualizarTripRealtime(tripId: string, payload: Record<string, unknown>) {
-    try { await firebaseRealtimeService.updateTripRealtime(tripId, { ...payload, atualizadoEm: Date.now() }); } catch (error) { console.error('ERRO:', error); }
+    try {
+      await firebaseRealtimeService.updateTripRealtime(tripId, {
+        ...payload,
+        atualizadoEm: Date.now(),
+      });
+    } catch (error) {
+      console.error('ERRO TRIP REALTIME:', error);
+    }
   }
 
   async atualizarStatusTrip(tripId: string, status: AppTripState) {
@@ -207,6 +270,7 @@ class DispatchRealtimeService {
         await this.concluirViagemELiberarMotorista(auth.currentUser.uid, tripId);
         return;
       }
+      
       await TripLifecycleService.alterarStatusViagem(tripId, status);
     } catch (error) {
       console.error('ERRO STATUS TRIP:', error);
@@ -215,15 +279,35 @@ class DispatchRealtimeService {
   }
 
   async salvarChavePix(freteId: string, chavePix: string) {
-    try { await firebaseRealtimeService.updateTripRealtime(freteId, { chavePixMotorista: chavePix, pixEnviadoEm: Date.now() }); } catch (error) { throw error; }
+    try {
+      await firebaseRealtimeService.updateTripRealtime(freteId, {
+        chavePixMotorista: chavePix,
+        pixEnviadoEm: Date.now()
+      });
+    } catch (error) {
+      console.error('ERRO AO SALVAR PIX:', error);
+      throw error;
+    }
   }
 
   async registrarVisualizacao(freteId: string) {
-    try { await firebaseRealtimeService.updateTripRealtime(freteId, { visualizacoes: increment(1) }); } catch (error) {}
+    try {
+      await firebaseRealtimeService.updateTripRealtime(freteId, {
+        visualizacoes: increment(1)
+      });
+    } catch (error) {
+      console.warn('Falha silenciosa ao registrar view no banco:', error);
+    }
   }
 
   async registrarInteresse(freteId: string) {
-    try { await firebaseRealtimeService.updateTripRealtime(freteId, { interessados: increment(1) }); } catch (error) {}
+    try {
+      await firebaseRealtimeService.updateTripRealtime(freteId, {
+        interessados: increment(1)
+      });
+    } catch (error) {
+      console.warn('Falha silenciosa ao registrar interesse no banco:', error);
+    }
   }
 }
 
