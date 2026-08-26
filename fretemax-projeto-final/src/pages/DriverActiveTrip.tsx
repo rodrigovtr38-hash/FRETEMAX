@@ -12,6 +12,7 @@
 // Bloco 24.1: POD Migration. Upload fotográfico via Firebase Storage (URL HTTPS), extirpando Base64 pesada do Firestore.
 // CTO-Log (EXECUÇÃO ATUAL): Remoção do bloqueio de tela cego. Motorista agora acompanha a tela real da viagem com a "Trava Operacional Escrow" ativa no botão principal.
 // FIX ATUAL (BLOCO 1): Correção de crash de renderização e glitch de viewport no Modal do PIN (Keys + Remoção de autoFocus).
+// FIX ATUAL (BLOCO 2): Blindagem do Escrow. Remoção do bypass de cancelamento prematuro e correção de destravamento de RTDB no Insucesso.
 // =========================================================
 
 import { useState, useEffect } from 'react';
@@ -301,13 +302,12 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     }
     setActionLoading(true);
     try {
-      await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
-        status: AppTripState.DISPONIVEL, 
-        motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
-        alertaInsucesso: true,
-        motivoCancelamento: `Ocorrência: ${ocorrenciaMotivo}. Etapa interrompida.`,
-        paradasComInsucesso: isFaseColeta ? [] : arrayUnion(paradaAtualIndex)
-      });
+      const driverId = auth.currentUser?.uid;
+      if (!driverId) throw new Error("Motorista não identificado");
+
+      // 🔥 CTO FIX: Utiliza cancelamento seguro e blindado, limpando Firestore E Realtime Database.
+      await dispatchRealtimeService.cancelarViagemMotorista(driverId, frete.id, `Ocorrência: ${ocorrenciaMotivo}. Etapa interrompida.`);
+      
       setIsPinModalOpen(false); 
       setIsOcorrenciaOpen(false);
       setPinValue('');
@@ -498,28 +498,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
             <div className="flex flex-col gap-2">
               <button disabled className="w-full flex items-center justify-center bg-slate-800/80 h-16 font-black uppercase tracking-widest rounded-xl text-slate-400 cursor-not-allowed border border-slate-700 shadow-inner gap-2">
                 <Loader2 size={18} className="animate-spin" /> Aguardando Pagamento do Cliente
-              </button>
-              <button 
-                onClick={async () => {
-                  if (!window.confirm("Deseja cancelar esta reserva? O frete voltará para o Radar.")) return;
-                  setActionLoading(true);
-                  try {
-                    await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
-                      status: AppTripState.DISPONIVEL, 
-                      motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
-                      alertaInsucesso: true,
-                      motivoCancelamento: 'Motorista desistiu durante a reserva.'
-                    });
-                  } catch (e) {
-                    console.error(e);
-                  } finally {
-                    setActionLoading(false);
-                  }
-                }} 
-                disabled={actionLoading} 
-                className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center gap-2 mx-auto w-full py-2"
-              >
-                <AlertTriangle size={14} /> Desistir da Reserva
               </button>
             </div>
           )}
