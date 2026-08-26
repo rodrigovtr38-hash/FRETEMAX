@@ -3,6 +3,7 @@
 // CTO-Log: Auditoria Concluída - FASE 3 (Integração).
 // Status: "Vírus dos 15km" e "Buraco Negro da Recusa" erradicados pela raiz da leitura do Firestore.
 // Evolução Fase 12 (Escrow): Transação manual removida. Lock atômico centralizado no TripLifecycle.
+// Correção Bloco 1 (Bug do Frete Fantasma): Injeção do status 'reservado_aguardando_pagamento' no array de ACTIVE_STATUSES.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -32,7 +33,8 @@ interface DriverData {
   retornosUsadosHoje?: number; 
 }
 
-const ACTIVE_STATUSES = ['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'em_entrega', 'returning'];
+// 🔥 CTO FIX: Incluído o status de escrow da reserva para manter a viagem visível no painel.
+const ACTIVE_STATUSES = ['reservado_aguardando_pagamento', 'aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'em_entrega', 'returning'];
 
 const FeedSkeleton = () => (
   <div className="bg-slate-900/40 border border-slate-800 rounded-[2rem] p-6 shadow-2xl animate-pulse mb-6">
