@@ -72,11 +72,15 @@ service cloud.firestore {
          request.resource.data.status == 'cancelado' && 
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'canceladoEm', 'canceladoPor', 'updatedAt']))
         ||
+        // 🔥 CTO FIX: Blindagem do Escrow. Motorista NÃO PODE enviar 'aceito'. Apenas 'reservado_aguardando_pagamento'.
         (isAuthenticated() && 
          resource.data.status == 'disponivel' && 
-         request.resource.data.status == 'aceito' && 
+         request.resource.data.status == 'reservado_aguardando_pagamento' && 
          request.resource.data.motoristaId == request.auth.uid &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'motoristaId', 'aceitoEm', 'updatedAt']))
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'status', 'motoristaId', 'motoristaNome', 'motoristaTelefone', 'motoristaVeiculo', 
+           'motoristaPlaca', 'reservadoEm', 'reservaExpiraEm', 'pagamentoStatus', 'updatedAt'
+         ]))
         ||
         // Permite que o motorista já aceito altere o andamento da viagem sem mexer na grana
         (isAuthenticated() && 
@@ -87,7 +91,7 @@ service cloud.firestore {
           'distancia', 'origemLat', 'origemLng', 'destinoLat', 'destinoLng'
         ]))
         ||
-        // 🔥 CTO FIX: Liberação para Cliente injetar Auto-Bid (alteração apenas em valor/status e expiração de tempo)
+        // Liberação para Cliente injetar Auto-Bid (alteração apenas em valor/status e expiração de tempo)
         (isAuthenticated() &&
          resource.data.clienteId == request.auth.uid &&
          (resource.data.status == 'expirado' || resource.data.status == 'sem_motorista' || resource.data.status == 'disponivel') &&
@@ -99,7 +103,7 @@ service cloud.firestore {
 
       allow delete: if false;
       
-      // 🔥 CTO FIX: Liberação para a Coleção Filha de Chat FTI funcionar corretamente
+      // Liberação para a Coleção Filha de Chat FTI funcionar corretamente
       match /chat/{mensagemId} {
         allow read, create: if isAuthenticated() && (
           get(/databases/$(database)/documents/fretes/$(freteId)).data.clienteId == request.auth.uid ||
@@ -126,7 +130,7 @@ service cloud.firestore {
     }
 
     // =========================================================
-    // 🛡 FALLBACK GLOBAL (SE TENTAR INVADIR OUTRA TABELA, BLOQUEIA)
+    // 🛡 FALLBACK GLOBAL
     // =========================================================
     match /{document=**} {
       allow read, write: if false;
