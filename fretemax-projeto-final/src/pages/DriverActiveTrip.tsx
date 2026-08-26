@@ -12,7 +12,7 @@
 // Bloco 24.1: POD Migration. Upload fotográfico via Firebase Storage (URL HTTPS), extirpando Base64 pesada do Firestore.
 // CTO-Log (EXECUÇÃO ATUAL): Remoção do bloqueio de tela cego. Motorista agora acompanha a tela real da viagem com a "Trava Operacional Escrow" ativa no botão principal.
 // FIX ATUAL (BLOCO 1): Correção de crash de renderização e glitch de viewport no Modal do PIN (Keys + Remoção de autoFocus).
-// FIX ATUAL (BLOCO 2): Blindagem do Escrow. Remoção do bypass de cancelamento prematuro e correção de destravamento de RTDB no Insucesso.
+// FIX ATUAL (BLOCO 4A): Remoção do botão de bypass de cancelamento no Escrow. Correção da recusa operacional via chamada segura.
 // =========================================================
 
 import { useState, useEffect } from 'react';
