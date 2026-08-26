@@ -96,7 +96,7 @@ export default function Cliente() {
   
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
-  // 🔥 LÓGICA DO CRONÔMETRO PARA O CLIENTE
+  // 🔥 LÓGICA DO CRONÔMETRO DE 5 MINUTOS PARA O CLIENTE
   const [timeLeftEscrow, setTimeLeftEscrow] = useState<number | null>(null);
 
   const coordsCache = useRef<Record<string, Coords>>({});
@@ -229,13 +229,12 @@ export default function Cliente() {
     setTimeout(() => setToast(null), 4500);
   };
 
-  // 🔥 EFEITO DO CRONÔMETRO ESCROW (AGORA PARA 5 MINUTOS)
+  // 🔥 EFEITO DO CRONÔMETRO ESCROW (CLIENTE - 5 MINUTOS)
   useEffect(() => {
     if (orderData?.status === TripState.RESERVADO_AGUARDANDO_PAGAMENTO && orderData?.reservadoEm) {
       const interval = setInterval(() => {
         const agora = Date.now();
-        // Regulado exatamente para 5 minutos (300.000 ms) conforme o fluxo da concorrência
-        const expiracao = orderData.reservadoEm! + (5 * 60 * 1000); 
+        const expiracao = orderData.reservadoEm! + (5 * 60 * 1000); // 5 minutos exatos
         const restante = Math.max(0, expiracao - agora);
         
         setTimeLeftEscrow(restante);
@@ -264,7 +263,7 @@ export default function Cliente() {
   }, [step, orderData]);
 
   useEffect(() => {
-    const params = newSearchParams(window.location.search);
+    const params = new URLSearchParams(window.location.search);
     const orderFromUrl = params.get('order');
 
     if (orderFromUrl) {
@@ -958,7 +957,7 @@ export default function Cliente() {
                        <CheckCircle size={32}/> MOTORISTA ENCONTRADO!
                     </h3>
                     
-                    {/* 🔥 INJEÇÃO DE INFORMAÇÕES DO MOTORISTA PARA O CLIENTE */}
+                    {/* INJEÇÃO DE INFORMAÇÕES DO MOTORISTA PARA O CLIENTE */}
                     <div className="bg-emerald-700/50 rounded-2xl p-4 mb-4 border border-emerald-400/30 flex items-start gap-4 shadow-inner">
                       <div className="p-3 bg-emerald-500/20 rounded-xl mt-1">
                         <User size={24} className="text-white"/>
@@ -981,7 +980,7 @@ export default function Cliente() {
                       O parceiro já reservou a viagem. O seu pagamento libera o envio dos endereços exatos para que ele inicie o deslocamento.
                     </p>
                     
-                    {/* 🔥 CRONÔMETRO DE URGÊNCIA */}
+                    {/* CRONÔMETRO DE URGÊNCIA */}
                     <div className="flex items-center justify-center gap-3 mb-6 bg-slate-900/40 py-3 rounded-xl border border-amber-400/50 shadow-inner">
                        <Clock size={20} className="text-amber-400 animate-spin-slow" />
                        <p className="text-sm font-bold text-amber-300">Tempo restante para pagar:</p>
