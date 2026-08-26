@@ -10,13 +10,14 @@
 // Bloco GPS-01: Navegação Externa Inteligente. Telemetria amarrada à navegação com Injeção de Origem Exata.
 // Bloco 23: Fix POD/Foto Real obrigatória antes do PIN. Fix Problema no Local (Evita Falso ENTREGUE).
 // Bloco 24.1: POD Migration. Upload fotográfico via Firebase Storage (URL HTTPS), extirpando Base64 pesada do Firestore.
+// CTO-Log (EXECUÇÃO ATUAL): Remoção do bloqueio de tela cego. Motorista agora acompanha a tela real da viagem com a "Trava Operacional Escrow" ativa no botão principal.
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { db, auth, storage } from '../firebase'; // 🔥 CTO FIX BLOCO 24.1: Instância do Storage plugada
+import { db, auth, storage } from '../firebase'; 
 import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage'; // 🔥 CTO FIX BLOCO 24.1: SDK Storage injetado
+import { ref, uploadString, getDownloadURL } from 'firebase/storage'; 
 import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle, FileText, Check } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
@@ -49,7 +50,6 @@ interface ActiveFreightData extends DocumentData {
   distanciaRealKm?: number;
   valorLiquidoMotorista?: number;
   valorMotorista?: number;
-  reservadoEm?: number; // 🔥 INJEÇÃO PARA O CRONÔMETRO DE 5 MINUTOS
 }
 
 export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
@@ -75,9 +75,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
   const [currentGps, setCurrentGps] = useState<{lat: number, lng: number} | null>(null);
 
-  // 🔥 ESTADO DO CRONÔMETRO
-  const [timeLeft, setTimeLeft] = useState<number | null>(null);
-
   useEffect(() => {
     const unsubscribeGps = locationRealtimeService.onPositionUpdate((pos) => {
       setCurrentGps(pos);
@@ -98,47 +95,13 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     return () => unsubscribe();
   }, [freteId]);
 
-  // 🔥 LÓGICA DE REGRESSÃO DOS 5 MINUTOS
-  useEffect(() => {
-    if (frete?.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO && frete?.reservadoEm) {
-      const interval = setInterval(() => {
-        const agora = Date.now();
-        const expiracao = frete.reservadoEm! + (5 * 60 * 1000); // 5 minutos de trava
-        const restante = Math.max(0, expiracao - agora);
-        
-        setTimeLeft(restante);
-
-        if (restante === 0) {
-          clearInterval(interval);
-          // O tempo esgotou. O motorista desiste automaticamente para se libertar.
-          alert("O tempo de pagamento do cliente esgotou. Você foi liberado para buscar novos fretes no Radar.");
-          dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
-            status: AppTripState.DISPONIVEL, 
-            motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
-            alertaInsucesso: true,
-            motivoCancelamento: 'O cliente não pagou no prazo de 5 minutos.'
-          }).catch(console.error);
-        }
-      }, 1000);
-      return () => clearInterval(interval);
-    } else {
-      setTimeLeft(null);
-    }
-  }, [frete?.status, frete?.reservadoEm, frete?.id]);
-
-  const formatTime = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const m = Math.floor(totalSeconds / 60);
-    const s = totalSeconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
   const paradas = frete?.paradas || [];
   const paradaAtualIndex = frete?.paradaAtualIndex || 0;
   const destinoAtual = paradas[paradaAtualIndex] || (frete?.entrega || {});
 
+  // 🔥 CTO FIX: Incluído RESERVADO_AGUARDANDO_PAGAMENTO na fase de coleta para não quebrar a bússola/mapa
   const isFaseColeta = frete?.status 
-    ? [AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO].includes(frete.status) 
+    ? [AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO].includes(frete.status) 
     : false;
   
   const mapDestinoGPS = destinoAtual?.lat ? { lat: destinoAtual.lat, lng: destinoAtual.lng } : null;
@@ -164,50 +127,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   );
   
   if (!frete) return null;
-
-  if (frete.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO || String(frete.status) === 'reservado_aguardando_pagamento') {
-    return (
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] border border-emerald-500/20 bg-slate-900 shadow-2xl p-8 text-center flex flex-col items-center justify-center min-h-[50vh]">
-        <div className="w-24 h-24 bg-emerald-500/10 rounded-full border border-emerald-500/30 flex items-center justify-center mb-6 mx-auto shadow-[0_0_30px_rgba(16,185,129,0.15)]">
-          <LockKeyhole size={40} className="text-emerald-400 animate-pulse" />
-        </div>
-        <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Reserva Confirmada!</h2>
-        <p className="text-slate-400 text-sm max-w-sm mx-auto leading-relaxed mb-6 font-medium">
-          Aguardando o embarcador concluir o Pix para liberar a rota e os endereços.
-        </p>
-        
-        {/* 🔥 CRONÔMETRO INJETADO AQUI NO LUGAR DO LOADER INFINITO */}
-        <div className="flex flex-col items-center gap-1 bg-slate-950 px-6 py-4 rounded-2xl border border-amber-500/30 w-full max-w-xs mx-auto justify-center mb-8 shadow-inner relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-amber-500 animate-pulse"></div>
-          <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">Tempo Restante</span>
-          <span className="text-3xl font-mono font-black tracking-widest text-white">{timeLeft !== null ? formatTime(timeLeft) : '05:00'}</span>
-        </div>
-        
-        <button 
-          onClick={async () => {
-            if (!window.confirm("Deseja cancelar esta reserva? O frete voltará para o Radar.")) return;
-            setActionLoading(true);
-            try {
-              await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
-                status: AppTripState.DISPONIVEL, 
-                motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
-                alertaInsucesso: true,
-                motivoCancelamento: 'Motorista desistiu durante a reserva.'
-              });
-            } catch (e) {
-              console.error(e);
-            } finally {
-              setActionLoading(false);
-            }
-          }} 
-          disabled={actionLoading} 
-          className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center gap-2 mx-auto w-full py-4"
-        >
-          <AlertTriangle size={14} /> Desistir da Reserva
-        </button>
-      </motion.div>
-    );
-  }
 
   const enderecoAlvoTexto = isFaseColeta 
     ? frete.enderecoColetaTexto 
@@ -573,8 +492,39 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         </div>
 
         <div className="space-y-4">
+          {/* 🔥 CTO FIX: Botão Bloqueado de Escrow */}
+          {(frete.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO || String(frete.status) === 'reservado_aguardando_pagamento') && (
+            <div className="flex flex-col gap-2">
+              <button disabled className="w-full flex items-center justify-center bg-slate-800/80 h-16 font-black uppercase tracking-widest rounded-xl text-slate-400 cursor-not-allowed border border-slate-700 shadow-inner gap-2">
+                <Loader2 size={18} className="animate-spin" /> Aguardando Pagamento do Cliente
+              </button>
+              <button 
+                onClick={async () => {
+                  if (!window.confirm("Deseja cancelar esta reserva? O frete voltará para o Radar.")) return;
+                  setActionLoading(true);
+                  try {
+                    await dispatchRealtimeService.atualizarTripRealtime(frete.id, { 
+                      status: AppTripState.DISPONIVEL, 
+                      motoristaId: null, motoristaNome: null, motoristaZap: null, motoristaLat: null, motoristaLng: null,
+                      alertaInsucesso: true,
+                      motivoCancelamento: 'Motorista desistiu durante a reserva.'
+                    });
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }} 
+                disabled={actionLoading} 
+                className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center gap-2 mx-auto w-full py-2"
+              >
+                <AlertTriangle size={14} /> Desistir da Reserva
+              </button>
+            </div>
+          )}
+
           {frete.status === AppTripState.ACEITO && (
-            <button onClick={() => handleStatusUpdate(AppTripState.INDO_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center bg-blue-600 h-16 font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all hover:bg-blue-500 active:scale-95 text-white">
+            <button onClick={() => handleStatusUpdate(AppTripState.INDO_COLETA)} disabled={actionLoading} className="w-full flex items-center justify-center bg-blue-600 h-16 font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all hover:bg-blue-500 active:scale-95 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)]">
               {actionLoading ? <Loader2 className="animate-spin" size={24}/> : 'Deslocar p/ Coleta'}
             </button>
           )}
