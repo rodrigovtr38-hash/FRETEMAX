@@ -1,7 +1,10 @@
-// CTO-Log: Arquivo verificado. Lógica de blindagem financeira mantida.
+// =========================================================
+// NOME DO ARQUIVO: api/pagamento.js
+// CTO-Log: Arquivo verificado e blindado contra falsos positivos de valor.
 // Evolução Fase 5: Agora processa o checkout da "Reserva de Motorista" no momento do Match.
 // Evolução Fase 8: Trava dura de estado. Só gera cobrança para reservas ativas e motoristas vinculados.
 // Evolução Fase 11: Blindagem de Late Approval. Injeção de Metadata com motorista_id na Preferência MP.
+// =========================================================
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -52,7 +55,8 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Nenhum motorista vinculado a esta reserva.' });
     }
 
-    const valorReal = Number(freteData.valorTotal);
+    // 🔥 CTO FIX: Leitura padronizada da chave de valor
+    const valorReal = Number(freteData.valorTotal || freteData.valorBruto || 0);
 
     if (isNaN(valorReal) || valorReal <= 0) {
       console.error(`[FRAUDE EVITADA] Valor zerado/inválido. Pedido: ${idPedido}`);
