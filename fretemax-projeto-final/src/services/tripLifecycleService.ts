@@ -1,9 +1,9 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/tripLifecycleService.ts
 // CTO-Log: FASE 4 - Correção de Build (Vercel).
-// Status: Importação do DispatchQueueService ajustada (Maiúscula vs Minúscula)
-// para alinhar com os métodos estáticos do serviço de despacho.
-// Evolução Fase 5: Injeção do manuseio de Reserva (RESERVADO_AGUARDANDO_PAGAMENTO).
+// Status: Importação do DispatchQueueService ajustada (Maiúscula vs Minúscula).
+// Evolução Fase 12 (Escrow): Blindagem atômica injetada no runTransaction.
+// Impede race conditions durante a Reserva de 5 min e respeita as Firestore Rules limitadas.
 // =========================================================
 
 import { doc, serverTimestamp, collection, addDoc, runTransaction } from 'firebase/firestore';
@@ -12,18 +12,19 @@ import { AppTripState, canTransition } from '../state/tripStateMachine';
 import { DriverState } from '../state/driverStateMachine';
 import { StateSynchronizationService } from './stateSynchronizationService';
 import type { FretePayload } from './matchingEngine';
-import { DispatchQueueService } from './dispatchQueueService'; // 🔥 FIX: 'D' Maiúsculo importado
+import { DispatchQueueService } from './dispatchQueueService'; 
 import { ftiRadar } from '../core/ai/events/ia.events';
 
 export interface TripDocumentData {
   id?: string;
-  status?: AppTripState;
+  status?: AppTripState | string;
   driverState?: DriverState;
   paradaAtualIndex?: number;
   paradas?: unknown[];
   motoristaId?: string | null;
   motoristaNome?: string | null;
   motoristaZap?: string | null;
+  motoristaTelefone?: string | null;
   motoristaAtualDestaque?: string | null;
   dispatchStatus?: string;
   [key: string]: unknown;
@@ -38,7 +39,15 @@ export interface TripStateTransitionContract {
   motoristaId?: string | null;
   motoristaNome?: string | null;
   motoristaZap?: string | null;
+  motoristaTelefone?: string | null;
+  reservadoEm?: number;
+  reservaExpiraEm?: number;
+  pagamentoStatus?: string;
+  alertaInsucesso?: boolean;
+  motivoCancelamento?: string;
   isRecusa?: boolean;
+  entregueEm?: number;
+  canceladoPorMotoristaEm?: number;
 }
 
 export class TripLifecycleService {
@@ -60,7 +69,6 @@ export class TripLifecycleService {
       let mensagemLog = '';
 
       switch (novoStatus) {
-        // 🔥 NOVO ESTADO: Log da IA avisando que travou a reserva
         case AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any:
           mensagemLog = "⏳ [Torre Operacional]: Motorista reservado. Aguardando confirmação financeira do Embarcador para liberar a rota.";
           break;
@@ -89,6 +97,9 @@ export class TripLifecycleService {
            break;
         case AppTripState.SEM_MOTORISTA:
            mensagemLog = "⚠️ [Torre Operacional]: Tempo limite do Radar excedido. Nenhum motorista disponível.";
+           break;
+        case AppTripState.EXPIRADO:
+           mensagemLog = "⚠️ [Torre Operacional]: Reserva expirada por falta de pagamento. Operação abortada.";
            break;
         default:
           return; 
@@ -128,9 +139,17 @@ export class TripLifecycleService {
 
         const data = snapshot.data() as TripDocumentData;
 
-        // 🔥 CTO FIX: Incluído RESERVADO_AGUARDANDO_PAGAMENTO na lista de ForcedReset.
-        // Se a reserva der timeout e voltar pro DISPONIVEL, limpa o motorista.
-        const isForcedReset = novoStatus === AppTripState.DISPONIVEL && 
+        // 🔥 CTO FIX (Escrow Atomic Lock): Impede que dois motoristas acessem ao mesmo tempo
+        if (novoStatus === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any) {
+            if (data.motoristaId && data.motoristaId !== contract?.motoristaId) {
+                throw new Error("FRETE_JA_ATRIBUIDO");
+            }
+            if (!['disponivel', 'buscando_motorista'].includes(data.status as string)) {
+                throw new Error("FRETE_JA_ATRIBUIDO");
+            }
+        }
+
+        const isForcedReset = (novoStatus === AppTripState.DISPONIVEL || novoStatus === AppTripState.EXPIRADO) && 
           [
             AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any,
             AppTripState.ACEITO, 
@@ -151,48 +170,69 @@ export class TripLifecycleService {
           throw new Error(`TRANSICAO_BLOQUEADA: De ${data.status} para ${novoStatus}`);
         }
 
-        const runtime = StateSynchronizationService.synchronize(
-          (data.driverState as DriverState) || DriverState.ONLINE,
-          novoStatus
-        );
+        const payloadUpdate: Partial<TripDocumentData> = {};
 
-        let paradaAtualIndex = (data.paradaAtualIndex as number) || 0;
-        const totalParadas = data.paradas && Array.isArray(data.paradas) ? data.paradas.length : 1;
+        // 🔥 CTO FIX: Bypass rigoroso para satisfazer a regra do Firestore (Apenas chaves autorizadas)
+        if (novoStatus === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any) {
+            payloadUpdate.status = novoStatus;
+            payloadUpdate.updatedAt = serverTimestamp() as unknown;
+            
+            if (contract) {
+                if (contract.motoristaId !== undefined) payloadUpdate.motoristaId = contract.motoristaId;
+                if (contract.motoristaNome !== undefined) payloadUpdate.motoristaNome = contract.motoristaNome;
+                if (contract.motoristaTelefone !== undefined) payloadUpdate.motoristaTelefone = contract.motoristaTelefone;
+                if (contract.reservadoEm !== undefined) payloadUpdate.reservadoEm = contract.reservadoEm;
+                if (contract.reservaExpiraEm !== undefined) payloadUpdate.reservaExpiraEm = contract.reservaExpiraEm;
+                if (contract.pagamentoStatus !== undefined) payloadUpdate.pagamentoStatus = contract.pagamentoStatus;
+            }
+            statusCalculado = novoStatus;
+        } else {
+            // Comportamento original para todos os outros fluxos operacionais
+            const runtime = StateSynchronizationService.synchronize(
+              (data.driverState as DriverState) || DriverState.ONLINE,
+              novoStatus
+            );
 
-        statusCalculado = runtime.tripState;
-        
-        if (novoStatus === AppTripState.ENTREGUE && paradaAtualIndex + 1 < totalParadas) {
-          paradaAtualIndex += 1;
-          statusCalculado = AppTripState.EM_TRANSPORTE; 
-        }
+            let paradaAtualIndex = (data.paradaAtualIndex as number) || 0;
+            const totalParadas = data.paradas && Array.isArray(data.paradas) ? data.paradas.length : 1;
 
-        const payloadUpdate: Partial<TripDocumentData> = {
-          status: statusCalculado,
-          paradaAtualIndex,
-          runtime,
-          atualizadoEm: serverTimestamp() as unknown,
-        };
+            statusCalculado = runtime.tripState;
+            
+            if (novoStatus === AppTripState.ENTREGUE && paradaAtualIndex + 1 < totalParadas) {
+              paradaAtualIndex += 1;
+              statusCalculado = AppTripState.EM_TRANSPORTE; 
+            }
 
-        if (contract) {
-          if (contract.dispatchStatus !== undefined) payloadUpdate.dispatchStatus = contract.dispatchStatus;
-          if (contract.dispatchIndex !== undefined) payloadUpdate.dispatchIndex = contract.dispatchIndex;
-          if (contract.dispatchTentativa !== undefined) payloadUpdate.dispatchTentativa = contract.dispatchTentativa;
-          if (contract.filaTotal !== undefined) payloadUpdate.filaTotal = contract.filaTotal;
-          if (contract.motoristaAtualDestaque !== undefined) payloadUpdate.motoristaAtualDestaque = contract.motoristaAtualDestaque;
-          
-          // 🔥 CTO FIX: Grava os dados do Motorista LOGO NA RESERVA, e não apenas no Aceite.
-          if (novoStatus === AppTripState.ACEITO || novoStatus === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO as any) {
-             if (contract.motoristaId !== undefined) payloadUpdate.motoristaId = contract.motoristaId;
-             if (contract.motoristaNome !== undefined) payloadUpdate.motoristaNome = contract.motoristaNome;
-             if (contract.motoristaZap !== undefined) payloadUpdate.motoristaZap = contract.motoristaZap;
-          }
-        }
+            payloadUpdate.status = statusCalculado;
+            payloadUpdate.paradaAtualIndex = paradaAtualIndex;
+            payloadUpdate.runtime = runtime;
+            payloadUpdate.atualizadoEm = serverTimestamp() as unknown;
 
-        if (isForcedReset) {
-          payloadUpdate.motoristaId = null;
-          payloadUpdate.motoristaNome = null;
-          payloadUpdate.motoristaZap = null;
-          payloadUpdate.motoristaAtualDestaque = null;
+            if (contract) {
+              if (contract.dispatchStatus !== undefined) payloadUpdate.dispatchStatus = contract.dispatchStatus;
+              if (contract.dispatchIndex !== undefined) payloadUpdate.dispatchIndex = contract.dispatchIndex;
+              if (contract.dispatchTentativa !== undefined) payloadUpdate.dispatchTentativa = contract.dispatchTentativa;
+              if (contract.filaTotal !== undefined) payloadUpdate.filaTotal = contract.filaTotal;
+              if (contract.motoristaAtualDestaque !== undefined) payloadUpdate.motoristaAtualDestaque = contract.motoristaAtualDestaque;
+              if (contract.motoristaId !== undefined) payloadUpdate.motoristaId = contract.motoristaId;
+              if (contract.motoristaNome !== undefined) payloadUpdate.motoristaNome = contract.motoristaNome;
+              if (contract.motoristaZap !== undefined) payloadUpdate.motoristaZap = contract.motoristaZap;
+              if (contract.motoristaTelefone !== undefined) payloadUpdate.motoristaTelefone = contract.motoristaTelefone;
+              if (contract.alertaInsucesso !== undefined) payloadUpdate.alertaInsucesso = contract.alertaInsucesso;
+              if (contract.motivoCancelamento !== undefined) payloadUpdate.motivoCancelamento = contract.motivoCancelamento;
+              if (contract.entregueEm !== undefined) payloadUpdate.entregueEm = contract.entregueEm;
+              if (contract.canceladoPorMotoristaEm !== undefined) payloadUpdate.canceladoPorMotoristaEm = contract.canceladoPorMotoristaEm;
+            }
+
+            if (isForcedReset) {
+              payloadUpdate.motoristaId = null;
+              payloadUpdate.motoristaNome = null;
+              payloadUpdate.motoristaZap = null;
+              payloadUpdate.motoristaTelefone = null;
+              payloadUpdate.motoristaAtualDestaque = null;
+              payloadUpdate.motoristaLat = null;
+              payloadUpdate.motoristaLng = null;
+            }
         }
 
         transaction.update(freteRef, payloadUpdate as { [x: string]: any });
@@ -222,7 +262,6 @@ export class TripLifecycleService {
 
       if (statusCalculado === AppTripState.DISPONIVEL && finalDocumentState.dispatchStatus !== 'aberto_no_feed') {
         try {
-          // 🔥 FIX: Uso correto da classe com D maiúsculo
           DispatchQueueService.iniciarFila(freightPayloadToBroadcast).catch((err: unknown) => 
             console.error('[CTO-Log] AUTO_DISPATCH_ERROR', err)
           );
