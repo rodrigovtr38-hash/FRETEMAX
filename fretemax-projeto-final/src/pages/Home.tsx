@@ -6,6 +6,8 @@
 // FIX VERCEL: Correção definitiva da árvore JSX (Balanceamento de tags estruturais).
 // BLOCO HOME-VISUAL-01: Polimento visual do Hero (hierarquia, profundidade, glow),
 // correção de contraste do CTA Motorista (mobile/hero) e suporte a prefers-reduced-motion.
+// BLOCO HOME-FIX-02: Link funcional do botão "Entrar no Grupo" (WhatsApp) + acabamento
+// responsivo (indentação dos cards de passos e espaçamento do header no mobile).
 // Nenhuma rota, serviço, Firebase ou regra de negócio foi alterada.
 // =========================================================
 
@@ -29,7 +31,7 @@ export default function Home() {
   };
 
   const handleDriverGroup = () => {
-    openExternalLink(PLATFORM_LINKS.DRIVER_VIP_GROUP);
+    openExternalLink('https://chat.whatsapp.com/IGylgsZPYhsDfMZDKzVjHT');
   };
 
   return (
@@ -58,11 +60,11 @@ export default function Home() {
           </div>
 
           {/* CTAs */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button onClick={goToDriver} className="hidden sm:flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
               Sou Motorista
             </button>
-            <button onClick={goToClient} className="flex h-10 items-center justify-center rounded-xl bg-blue-600 px-5 text-xs md:text-sm font-black uppercase tracking-wider text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-700 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+            <button onClick={goToClient} className="flex h-10 items-center justify-center rounded-xl bg-blue-600 px-4 sm:px-5 text-xs md:text-sm font-black uppercase tracking-wider text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-700 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
               Publicar Carga
             </button>
           </div>
@@ -253,22 +255,22 @@ export default function Home() {
               </div>
               
               {/* Ilustração Visual B2B */}
-              <div className="bg-slate-100 rounded-[2rem] p-8 lg:p-12 border border-slate-200">
+              <div className="bg-slate-100 rounded-[2rem] p-6 sm:p-8 lg:p-12 border border-slate-200">
                 <div className="flex flex-col gap-4">
                   <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4">
-                    <div className="bg-slate-100 p-3 rounded-full text-slate-600"><Package size={20}/></div>
+                    <div className="bg-slate-100 p-3 rounded-full text-slate-600 shrink-0"><Package size={20}/></div>
                     <div><p className="text-[10px] font-black uppercase text-slate-400">Passo 1</p><p className="font-bold text-slate-900">Publicar</p></div>
                   </div>
-                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-4">
-                    <div className="bg-blue-50 p-3 rounded-full text-blue-600"><Search size={20}/></div>
+                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-0 sm:ml-4">
+                    <div className="bg-blue-50 p-3 rounded-full text-blue-600 shrink-0"><Search size={20}/></div>
                     <div><p className="text-[10px] font-black uppercase text-blue-400">Passo 2</p><p className="font-bold text-slate-900">Encontrar</p></div>
                   </div>
-                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-8">
-                    <div className="bg-amber-50 p-3 rounded-full text-amber-500"><Route size={20}/></div>
+                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-0 sm:ml-8">
+                    <div className="bg-amber-50 p-3 rounded-full text-amber-500 shrink-0"><Route size={20}/></div>
                     <div><p className="text-[10px] font-black uppercase text-amber-500">Passo 3</p><p className="font-bold text-slate-900">Acompanhar</p></div>
                   </div>
-                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-12">
-                    <div className="bg-emerald-50 p-3 rounded-full text-emerald-500"><CheckCircle size={20}/></div>
+                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-0 sm:ml-12">
+                    <div className="bg-emerald-50 p-3 rounded-full text-emerald-500 shrink-0"><CheckCircle size={20}/></div>
                     <div><p className="text-[10px] font-black uppercase text-emerald-500">Passo 4</p><p className="font-bold text-slate-900">Entregar</p></div>
                   </div>
                 </div>
@@ -285,18 +287,18 @@ export default function Home() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               
               {/* Como Funciona (Motorista) */}
-              <div className="order-2 lg:order-1 bg-slate-800/50 border border-slate-700 rounded-[2rem] p-8 lg:p-12">
+              <div className="order-2 lg:order-1 bg-slate-800/50 border border-slate-700 rounded-[2rem] p-6 sm:p-8 lg:p-12">
                  <div className="flex flex-col gap-4">
                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4">
-                     <div className="bg-slate-800 p-3 rounded-full text-slate-400"><MapPin size={20} /></div>
+                     <div className="bg-slate-800 p-3 rounded-full text-slate-400 shrink-0"><MapPin size={20} /></div>
                      <div><p className="text-[10px] font-black uppercase text-slate-500">Destino</p><p className="font-bold text-white">Informe para onde você vai</p></div>
                    </div>
-                   <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 ml-4">
-                     <div className="bg-cyan-900/30 p-3 rounded-full text-cyan-400"><Map size={20} /></div>
+                   <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 ml-0 sm:ml-4">
+                     <div className="bg-cyan-900/30 p-3 rounded-full text-cyan-400 shrink-0"><Map size={20} /></div>
                      <div><p className="text-[10px] font-black uppercase text-cyan-500">Busca</p><p className="font-bold text-white">Encontre fretes compatíveis</p></div>
                    </div>
-                   <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 ml-8">
-                     <div className="bg-emerald-900/30 p-3 rounded-full text-emerald-400"><DollarSign size={20} /></div>
+                   <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 ml-0 sm:ml-8">
+                     <div className="bg-emerald-900/30 p-3 rounded-full text-emerald-400 shrink-0"><DollarSign size={20} /></div>
                      <div><p className="text-[10px] font-black uppercase text-emerald-500">Fechamento</p><p className="font-bold text-white">Pagamento conforme regra</p></div>
                    </div>
                  </div>
