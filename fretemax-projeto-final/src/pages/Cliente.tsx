@@ -7,13 +7,15 @@
 // CTO-Log (EXECUÇÃO ATUAL): Limpeza estrita de variáveis estáticas/bypass de pagamento.
 // Ajuste Operacional (5 Minutos): Cronômetro ajustado para 5min e UI enriquecida com Veículo e ETA do motorista.
 // FIX VERCEL: Correção estrita de sintaxe (aspas/crases) nas linhas 354 e 517-519 para destravar o Build.
+// CLIENTE-AUTH-01: Injeção do Gatekeeper de Autenticação (Google Auth) e bloqueio de Postagem Anônima no Firestore.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, auth } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, doc, Timestamp, updateDoc } from 'firebase/firestore'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, BrainCircuit, BarChart3, TrendingUp, AlertOctagon, Download, FileText, Lock, Scale, Clock3, Clock } from 'lucide-react';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'; // 🔥 AUTH IMPORT
+import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, BrainCircuit, BarChart3, TrendingUp, AlertOctagon, Download, FileText, Lock, Scale, Clock3, Clock, Chrome } from 'lucide-react'; // 🔥 CHROME IMPORT
 import MapaCliente from '../components/MapaCliente';
 import ChatFrete from '../components/ChatFrete';
 import ClientStatusCard from '../components/client/ClientStatusCard';
@@ -56,6 +58,11 @@ const callWithRetryAndTimeout = async <T,>(callableName: string, payload: unknow
 };
 
 export default function Cliente() {
+  // 🔥 ESTADOS DE AUTENTICAÇÃO (GATEKEEPER)
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
   const [step, setStep] = useState<'form' | 'preview' | 'busca'>('form');
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [loadingPayment, setLoadingPayment] = useState(false);
@@ -108,6 +115,48 @@ export default function Cliente() {
     "Aplicando inteligência de mercado...",
     "Conectando Central FretoGo..."
   ];
+
+  const showToast = (msg: string, type: 'error' | 'success' | 'warning' = 'error') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4500);
+  };
+
+  // 🔥 LISTENER DE SESSÃO DO FIREBASE (NOVO)
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthReady(true);
+      
+      // Preserva a integração antiga do NotificationService se o usuário existir
+      if (currentUser?.uid) {
+        NotificationService.solicitarPermissao(currentUser.uid, 'cliente').catch(console.error);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 🔥 GOOGLE LOGIN HANDLER (NOVO)
+  const handleGoogleLogin = async () => {
+    if (isAuthenticating) return;
+    setIsAuthenticating(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, provider);
+      // Sucesso: O listener onAuthStateChanged cuidará da atualização do estado.
+    } catch (error: any) {
+      console.error("ERRO LOGIN EMBARCADOR:", error);
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        showToast('Você fechou a janela de acesso. Se quiser continuar, tente novamente.', 'warning');
+      } else if (error.code === 'auth/popup-blocked') {
+        showToast('Seu navegador bloqueou a janela do Google. Permita pop-ups e tente novamente.', 'error');
+      } else {
+        showToast('Não foi possível concluir o acesso agora. Tente novamente.', 'error');
+      }
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
@@ -224,11 +273,6 @@ export default function Cliente() {
       (tipoFrete === 'imediato' || (tipoFrete === 'agendado' && dataAgendada.trim() !== ''))
     );
   }, [nome, whatsapp, documento, coleta, entregas, peso, pesoValido, tipoMaterial, valorOfertaNum, tipoFrete, dataAgendada]);
-
-  const showToast = (msg: string, type: 'error' | 'success' | 'warning' = 'error') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4500);
-  };
 
   // 🔥 EFEITO DO CRONÔMETRO ESCROW (CLIENTE - 5 MINUTOS)
   useEffect(() => {
@@ -348,17 +392,6 @@ export default function Cliente() {
     return () => unsubscribe();
   }, [currentOrderId]);
 
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      if (!currentUser?.uid) return;
-      const solicitarNotificacao = async () => {
-        await NotificationService.solicitarPermissao(currentUser.uid, 'cliente');
-      };
-      solicitarNotificacao();
-    });
-    return () => unsubscribe();
-  }, []);
-
   const getValidCoords = async (addressStr: string): Promise<Coords> => {
     if (coordsCache.current[addressStr]) {
       return coordsCache.current[addressStr];
@@ -423,6 +456,14 @@ export default function Cliente() {
 
   const handleContratar = async () => {
     if (loadingRoute || loadingPayment || isProcessingPayment.current) return;
+    
+    // 🔥 CTO FIX: TRAVA ABSOLUTA DE SEGURANÇA.
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      showToast("Falha de Autenticação. Você precisa estar logado para publicar uma carga.", "error");
+      return;
+    }
+    
     isProcessingPayment.current = true;
     setLoadingPayment(true);
     setLoadingStep(0);
@@ -457,8 +498,6 @@ export default function Cliente() {
       const parsedDate = tipoFrete === 'agendado' && dataAgendada ? new Date(dataAgendada) : null;
       const firebaseTimestamp = parsedDate ? Timestamp.fromDate(parsedDate) : null;
 
-      const currentUser = auth.currentUser || { uid: "cliente_anonimo_fallback" };
-
       const isHeavy = ['toco', 'truck', 'carreta', 'bitrem'].includes(vehicle);
       const taxaPlataforma = isHeavy ? 0.15 : 0.20;
       const valorFreteBruto = valorOfertaNum; 
@@ -466,7 +505,7 @@ export default function Cliente() {
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
       const docRef = await addDoc(collection(db, 'fretes'), {
-        empresaId: currentUser.uid, 
+        empresaId: currentUser.uid,  // ID real, garantido pela trava.
         clienteId: currentUser.uid, 
         tipoConta: 'b2b',
         empresaNome: nome || 'Empresa Embarcadora',
@@ -682,6 +721,65 @@ export default function Cliente() {
     return undefined;
   }, [orderData?.motoristaLat, orderData?.motoristaLng]);
 
+  // 🔥 GATEKEEPER RENDER LOGIC
+  if (!authReady) {
+    return (
+      <div className="flex min-h-[100dvh] w-full items-center justify-center bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="relative flex min-h-[100dvh] w-full flex-col bg-slate-50 font-sans">
+        <header className="w-full border-b border-slate-200 bg-white px-6 py-4 flex justify-between items-center shadow-sm">
+          <div className="flex items-center gap-3">
+             <Building2 className="h-6 w-6 text-blue-600" />
+             <span className="text-xl font-black italic tracking-tighter text-slate-900">PAINEL EMBARCADOR</span>
+          </div>
+        </header>
+
+        <main className="flex-grow flex items-center justify-center px-4 py-12">
+          <div className="w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 md:p-10 shadow-xl text-center">
+             <div className="mb-6 mx-auto flex h-20 w-20 items-center justify-center rounded-[2rem] bg-blue-50 text-blue-600 border border-blue-100">
+                <Building2 size={32} />
+             </div>
+             <h2 className="text-3xl font-black text-slate-900 mb-3 tracking-tight">Painel do Embarcador</h2>
+             <p className="text-slate-500 text-sm leading-relaxed mb-8">
+               Para publicar um frete, precisamos identificar sua conta. Assim sua operação fica vinculada a você e podemos manter seu histórico e acompanhamento.
+             </p>
+             
+             <button
+               onClick={handleGoogleLogin}
+               disabled={isAuthenticating}
+               className="group relative flex w-full h-[64px] items-center justify-center gap-3 overflow-hidden rounded-[1.5rem] bg-blue-600 text-sm font-black uppercase tracking-[0.2em] text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed shadow-[0_10px_20px_rgba(37,99,235,0.2)]"
+             >
+               {isAuthenticating ? (
+                 <Loader2 className="animate-spin" size={20} />
+               ) : (
+                 <Chrome size={20} />
+               )}
+               {isAuthenticating ? 'Conectando...' : 'Continuar com Google'}
+             </button>
+             <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-6">
+               Seu acesso identifica sua empresa com segurança.
+             </p>
+          </div>
+        </main>
+        
+        {toast && (
+          <div className="fixed bottom-8 left-1/2 z-[120] -translate-x-1/2 animate-in slide-in-from-bottom-5">
+            <div className={`rounded-2xl border px-8 py-5 text-sm font-black uppercase tracking-widest shadow-2xl ${toast.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : toast.type === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+              {toast.msg}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 🔥 FLUXO LOGADO PRESERVADO DA AQUI PARA BAIXO.
   return (
     <div className="relative min-h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-800 font-sans selection:bg-blue-500/20">
       
