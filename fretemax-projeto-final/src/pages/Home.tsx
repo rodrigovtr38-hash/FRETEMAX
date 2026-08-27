@@ -4,6 +4,9 @@
 // Status: Arquitetura Mobile-First, focada em Dor e Solução para B2B e Transportadores.
 // Remoção de métricas irreais. Comunicação clara de Escrow e Rotas.
 // FIX VERCEL: Correção definitiva da árvore JSX (Balanceamento de tags estruturais).
+// BLOCO HOME-VISUAL-01: Polimento visual do Hero (hierarquia, profundidade, glow),
+// correção de contraste do CTA Motorista (mobile/hero) e suporte a prefers-reduced-motion.
+// Nenhuma rota, serviço, Firebase ou regra de negócio foi alterada.
 // =========================================================
 
 import { Zap, Truck, ShieldCheck, ArrowRight, Building2, MapPin, CheckCircle, Package, Route, LockKeyhole, Camera, Users, DollarSign, Clock, Map, ChevronRight, Search } from 'lucide-react';
@@ -56,10 +59,10 @@ export default function Home() {
 
           {/* CTAs */}
           <div className="flex items-center gap-3">
-            <button onClick={goToDriver} className="hidden sm:flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-95">
+            <button onClick={goToDriver} className="hidden sm:flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
               Sou Motorista
             </button>
-            <button onClick={goToClient} className="flex h-10 items-center justify-center rounded-xl bg-blue-600 px-5 text-xs md:text-sm font-black uppercase tracking-wider text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-700 active:scale-95">
+            <button onClick={goToClient} className="flex h-10 items-center justify-center rounded-xl bg-blue-600 px-5 text-xs md:text-sm font-black uppercase tracking-wider text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-700 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
               Publicar Carga
             </button>
           </div>
@@ -71,46 +74,58 @@ export default function Home() {
         {/* ======================================================= */}
         {/* 02 E 03 - HERO PRINCIPAL */}
         {/* ======================================================= */}
-        <section className="relative w-full bg-slate-950 overflow-hidden py-16 md:py-24 lg:py-32">
+        <section className="relative w-full bg-slate-950 overflow-hidden py-20 md:py-28 lg:py-36">
           {/* Background Animado Leve */}
           <div className="absolute inset-0 z-0">
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] opacity-20"></div>
-            <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-blue-600/10 blur-[120px]"></div>
-            <div className="absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-amber-500/5 blur-[100px]"></div>
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] opacity-20 [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,#000_40%,transparent_100%)]"></div>
+            <div className="absolute top-0 right-0 h-[550px] w-[550px] rounded-full bg-blue-600/10 blur-[130px]"></div>
+            <div className="absolute bottom-0 left-0 h-[420px] w-[420px] rounded-full bg-amber-500/5 blur-[110px]"></div>
+            <div className="absolute top-1/3 left-1/4 h-[300px] w-[300px] rounded-full bg-cyan-500/5 blur-[100px]"></div>
           </div>
 
-          <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row items-center gap-12 lg:gap-8">
+          <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row items-center gap-14 lg:gap-10">
             
             {/* Copy Hero */}
             <div className="w-full max-w-2xl text-center lg:text-left">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.1]">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/60 px-4 py-1.5 backdrop-blur-sm">
+                <span className="relative flex h-2 w-2">
+                  <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-300">Plataforma de Logística</span>
+              </div>
+
+              <h1 className="text-4xl sm:text-5xl lg:text-[3.75rem] font-black tracking-tight text-white leading-[1.08]">
                 Sua carga precisa chegar.<br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-400">
                   Nós encontramos quem leva.
                 </span>
               </h1>
-              <p className="mt-6 text-lg md:text-xl text-slate-300 font-medium leading-relaxed">
+              <p className="mt-6 text-lg md:text-xl text-slate-300 font-medium leading-relaxed max-w-xl mx-auto lg:mx-0">
                 Publique sua carga, conecte-se com motoristas prontos para rodar e acompanhe a entrega até o comprovante final.
               </p>
               
-              <div className="mt-10 flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
-                <button onClick={goToClient} className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-[1.5rem] bg-blue-600 px-8 text-sm font-black uppercase tracking-widest text-white shadow-[0_10px_30px_rgba(37,99,235,0.4)] transition-all hover:bg-blue-500 hover:scale-[1.02] active:scale-95">
+              <div className="mt-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 justify-center lg:justify-start">
+                <button onClick={goToClient} className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-[1.5rem] bg-blue-600 px-8 text-sm font-black uppercase tracking-widest text-white shadow-[0_10px_35px_rgba(37,99,235,0.45)] transition-all hover:bg-blue-500 hover:shadow-[0_14px_40px_rgba(37,99,235,0.55)] hover:scale-[1.02] active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950">
                   SOU EMPRESA — PUBLICAR CARGA <ArrowRight size={18} />
                 </button>
-                <button onClick={goToDriver} className="w-full sm:w-auto flex h-16 items-center justify-center gap-2 rounded-[1.5rem] border border-slate-700 bg-slate-900/50 px-8 text-sm font-black uppercase tracking-widest text-slate-300 backdrop-blur-md transition-all hover:bg-slate-800 hover:text-white active:scale-95">
+                <button onClick={goToDriver} className="w-full sm:w-auto flex h-16 items-center justify-center gap-2 rounded-[1.5rem] border-2 border-slate-600 bg-slate-800/90 px-8 text-sm font-black uppercase tracking-widest text-white backdrop-blur-md transition-all hover:bg-slate-700 hover:border-cyan-400/60 hover:text-cyan-300 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950">
                   <Truck size={18} /> SOU MOTORISTA — ENCONTRAR FRETES
                 </button>
               </div>
             </div>
 
             {/* Elemento Visual Logístico (Abstrato e Leve) */}
-            <div className="hidden lg:flex w-full justify-end relative h-[380px]">
+            <div className="hidden lg:flex w-full justify-end relative h-[400px]">
               <div className="relative w-full max-w-md h-full rounded-[2rem] border border-slate-800 bg-slate-900/50 backdrop-blur-sm p-6 shadow-2xl overflow-hidden flex flex-col justify-between">
                 
+                {/* Glow interno sutil para profundidade */}
+                <div className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl"></div>
+
                 {/* Rota Topo */}
-                <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+                <div className="relative flex justify-between items-center border-b border-slate-800 pb-4">
                   <div className="flex items-center gap-3">
-                    <span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span>
+                    <span className="relative flex h-3 w-3"><span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rastreamento Ativo</p>
                   </div>
                   <div className="bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-full">
@@ -129,7 +144,7 @@ export default function Home() {
                   </div>
                   
                   {/* Veículo (Ícone) */}
-                  <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 bg-slate-800 p-2 rounded-xl border border-slate-700 text-white shadow-lg">
+                  <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 bg-slate-800 p-2 rounded-xl border border-slate-700 text-white shadow-lg shadow-blue-500/10">
                     <Truck size={20} />
                   </div>
 
@@ -140,7 +155,7 @@ export default function Home() {
                 </div>
 
                 {/* Status Inferior */}
-                <div className="bg-slate-950 rounded-2xl p-4 flex items-center justify-between border border-slate-800">
+                <div className="relative bg-slate-950 rounded-2xl p-4 flex items-center justify-between border border-slate-800">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Carga Protegida</p>
                     <p className="text-lg font-black text-emerald-400 mt-0.5">Operação Segura</p>
