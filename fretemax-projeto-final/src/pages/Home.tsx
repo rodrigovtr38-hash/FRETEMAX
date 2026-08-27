@@ -5,7 +5,7 @@
 // Remoção de métricas irreais. Comunicação clara de Escrow e Rotas.
 // =========================================================
 
-import { Zap, Truck, ShieldCheck, ArrowRight, Building2, MapPin, CheckCircle, Package, Route, LockKeyhole, Camera, Users, DollarSign, Clock, Map } from 'lucide-react';
+import { Zap, Truck, ShieldCheck, ArrowRight, Building2, MapPin, CheckCircle, Package, Route, LockKeyhole, Camera, Users, DollarSign, Clock, Map, ChevronRight, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
 
@@ -155,24 +155,64 @@ export default function Home() {
       </section>
 
       {/* ======================================================= */}
-      {/* 04 - DOR DA EMPRESA */}
+      {/* 03 - ESCOLHA DO PERFIL */}
+      {/* ======================================================= */}
+      <section className="py-16 bg-slate-100 relative -mt-6 z-20 rounded-t-[2.5rem] border-t border-slate-200">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Você está aqui para...</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            {/* Card Empresa */}
+            <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm flex flex-col h-full transition-all hover:shadow-xl hover:border-blue-200">
+              <div className="h-14 w-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6 border border-blue-100">
+                <Building2 size={28} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 mb-3">Precisa enviar uma carga?</h3>
+              <p className="text-slate-600 font-medium leading-relaxed mb-8 flex-grow">
+                Publique seu frete, encontre motoristas e acompanhe a operação até a entrega.
+              </p>
+              <button onClick={goToClient} className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-blue-700 active:scale-95">
+                Publicar meu frete <ChevronRight size={18} />
+              </button>
+            </div>
+
+            {/* Card Motorista */}
+            <div className="bg-slate-900 rounded-[2rem] border border-slate-800 p-8 shadow-sm flex flex-col h-full transition-all hover:shadow-xl hover:border-slate-700">
+              <div className="h-14 w-14 rounded-2xl bg-slate-800 text-white flex items-center justify-center mb-6 border border-slate-700">
+                <Truck size={28} />
+              </div>
+              <h3 className="text-2xl font-black text-white mb-3">Quer encontrar bons fretes?</h3>
+              <p className="text-slate-400 font-medium leading-relaxed mb-8 flex-grow">
+                Veja oportunidades na sua região e encontre cargas que fazem sentido para sua rota.
+              </p>
+              <button onClick={goToDriver} className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-slate-800 border border-slate-700 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-slate-700 active:scale-95">
+                Encontrar fretes <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ======================================================= */}
+      {/* 04 E 07 - BLOCO EMPRESA (DOR/SOLUÇÃO E BENEFÍCIOS) */}
       {/* ======================================================= */}
       <section className="py-20 bg-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            
             <div>
               <div className="mb-4 inline-block rounded-lg bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-600">
                 Para Empresas e Embarcadores
               </div>
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 leading-[1.1] mb-6 tracking-tight">
-                Tem uma entrega para fazer?
+                Quando a entrega atrasa, o problema chega junto.
               </h2>
               <p className="text-lg text-slate-600 font-medium mb-6 leading-relaxed">
-                Carga parada, dificuldade para encontrar motorista disponível e falta de visibilidade são problemas reais. Não deixe uma venda parada esperando transporte.
+                Sua venda não termina quando o pedido sai da empresa. Ela termina quando o cliente recebe.
               </p>
               <p className="text-lg text-slate-600 font-medium mb-10 leading-relaxed">
-                A FretoGo ajuda a organizar sua operação. A plataforma considera distância, veículo, pedágios e características da operação para sugerir a oferta ideal, conectando você ao motorista de forma transparente.
+                Na FretoGo, você publica o frete, encontra uma opção de transporte e acompanha a operação em tempo real, sem depender de dezenas de mensagens. A FretoGo utiliza distância, veículo, paradas e características da operação para sugerir uma oferta mais competitiva.
               </p>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
@@ -199,29 +239,27 @@ export default function Home() {
               </button>
             </div>
             
-            {/* Como Funciona (Empresa) */}
-            <div className="bg-slate-50 rounded-[2rem] p-8 lg:p-12 border border-slate-200">
-              <h3 className="text-xl font-black text-slate-900 mb-8">Fluxo Operacional</h3>
-              <div className="flex flex-col gap-4 relative z-10">
-                <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 border border-slate-100">
-                  <div className="bg-blue-50 p-3 rounded-full text-blue-600"><Package size={20}/></div>
-                  <div><p className="font-bold text-slate-900">Publicar</p></div>
+            {/* Ilustração Visual B2B */}
+            <div className="bg-slate-100 rounded-[2rem] p-8 lg:p-12 border border-slate-200">
+              <div className="flex flex-col gap-4">
+                <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4">
+                  <div className="bg-slate-100 p-3 rounded-full text-slate-600"><Package size={20}/></div>
+                  <div><p className="text-[10px] font-black uppercase text-slate-400">Passo 1</p><p className="font-bold text-slate-900">Publicar</p></div>
                 </div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-4 border border-slate-100">
+                <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-4">
                   <div className="bg-blue-50 p-3 rounded-full text-blue-600"><Search size={20}/></div>
-                  <div><p className="font-bold text-slate-900">Encontrar</p></div>
+                  <div><p className="text-[10px] font-black uppercase text-blue-400">Passo 2</p><p className="font-bold text-slate-900">Encontrar</p></div>
                 </div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-8 border border-slate-100">
-                  <div className="bg-blue-50 p-3 rounded-full text-blue-600"><Route size={20}/></div>
-                  <div><p className="font-bold text-slate-900">Acompanhar</p></div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-8">
+                  <div className="bg-amber-50 p-3 rounded-full text-amber-500"><Route size={20}/></div>
+                  <div><p className="text-[10px] font-black uppercase text-amber-500">Passo 3</p><p className="font-bold text-slate-900">Acompanhar</p></div>
                 </div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-12 border border-slate-100">
+                <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-12">
                   <div className="bg-emerald-50 p-3 rounded-full text-emerald-500"><CheckCircle size={20}/></div>
-                  <div><p className="font-bold text-slate-900">Entregar</p></div>
+                  <div><p className="text-[10px] font-black uppercase text-emerald-500">Passo 4</p><p className="font-bold text-slate-900">Entregar</p></div>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </section>
