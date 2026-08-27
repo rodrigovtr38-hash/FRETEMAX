@@ -3,7 +3,7 @@
 // CTO-Log: HOME-EXEC-01. Landing Page Oficial FretoGo.
 // Status: Arquitetura Mobile-First, focada em Dor e Solução para B2B e Transportadores.
 // Remoção de métricas irreais. Comunicação clara de Escrow e Rotas.
-// FIX VERCEL: Rebalanceamento Estrutural Rigoroso da Árvore JSX (Fechamento Perfeito de Divs e Sections).
+// FIX VERCEL 02: Limpeza e alinhamento total de árvore JSX para garantir compilação.
 // =========================================================
 
 import { Zap, Truck, ShieldCheck, ArrowRight, Building2, MapPin, CheckCircle, Package, Route, LockKeyhole, Camera, Users, DollarSign, Clock, Map, ChevronRight, Search } from 'lucide-react';
@@ -103,7 +103,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Elemento Visual Logístico (Abstrato e Leve) */}
+            {/* Elemento Visual Logístico */}
             <div className="hidden lg:flex w-full justify-end relative h-[380px]">
               <div className="relative w-full max-w-md h-full rounded-[2rem] border border-slate-800 bg-slate-900/50 backdrop-blur-sm p-6 shadow-2xl overflow-hidden flex flex-col justify-between">
                 
@@ -197,7 +197,7 @@ export default function Home() {
       </section>
 
       {/* ======================================================= */}
-      {/* 04 E 07 - BLOCO EMPRESA (DOR/SOLUÇÃO E BENEFÍCIOS) */}
+      {/* 04 E 07 - BLOCO EMPRESA */}
       {/* ======================================================= */}
       <section className="py-20 bg-white border-t border-slate-100">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
