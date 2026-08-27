@@ -3,7 +3,7 @@
 // CTO-Log: HOME-EXEC-01. Landing Page Oficial FretoGo.
 // Status: Arquitetura Mobile-First, focada em Dor e Solução para B2B e Transportadores.
 // Remoção de métricas irreais. Comunicação clara de Escrow e Rotas.
-// FIX VERCEL: Rebalanceamento Estrutural Rigoroso da Árvore JSX (Tags Fechadas).
+// FIX VERCEL: Rebalanceamento Estrutural Rigoroso da Árvore JSX (Fechamento Perfeito de Divs e Sections).
 // =========================================================
 
 import { Zap, Truck, ShieldCheck, ArrowRight, Building2, MapPin, CheckCircle, Package, Route, LockKeyhole, Camera, Users, DollarSign, Clock, Map, ChevronRight, Search } from 'lucide-react';
@@ -199,7 +199,7 @@ export default function Home() {
       {/* ======================================================= */}
       {/* 04 E 07 - BLOCO EMPRESA (DOR/SOLUÇÃO E BENEFÍCIOS) */}
       {/* ======================================================= */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-white border-t border-slate-100">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
@@ -332,22 +332,22 @@ export default function Home() {
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
               <div className="w-14 h-14 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center mb-4"><LockKeyhole size={24} /></div>
               <h4 className="font-bold text-slate-900 mb-2">PIN</h4>
               <p className="text-sm text-slate-500 font-medium">Validação segura na ponta.</p>
             </div>
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
               <div className="w-14 h-14 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center mb-4"><Camera size={24} /></div>
               <h4 className="font-bold text-slate-900 mb-2">Foto da entrega</h4>
               <p className="text-sm text-slate-500 font-medium">Registro visual e documental.</p>
             </div>
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
               <div className="w-14 h-14 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center mb-4"><Route size={24} /></div>
               <h4 className="font-bold text-slate-900 mb-2">Acompanhamento</h4>
               <p className="text-sm text-slate-500 font-medium">Monitoramento do transporte.</p>
             </div>
-            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
               <div className="w-14 h-14 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center mb-4"><Clock size={24} /></div>
               <h4 className="font-bold text-slate-900 mb-2">Histórico</h4>
               <p className="text-sm text-slate-500 font-medium">Dados preservados da operação.</p>
@@ -357,7 +357,7 @@ export default function Home() {
       </section>
 
       {/* ======================================================= */}
-      {/* 09 - CTA FINAL (EMPRESA E MOTORISTA) */}
+      {/* 09 E 10 - CTA FINAL (EMPRESA E MOTORISTA) */}
       {/* ======================================================= */}
       <section className="py-20 bg-white border-t border-slate-200">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -386,7 +386,7 @@ export default function Home() {
       </main>
 
       {/* ======================================================= */}
-      {/* 10 - FOOTER */}
+      {/* 12 - FOOTER */}
       {/* ======================================================= */}
       <footer className="bg-slate-950 text-slate-400 py-16 mt-auto border-t border-slate-900">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
