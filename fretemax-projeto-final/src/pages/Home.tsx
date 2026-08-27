@@ -3,7 +3,7 @@
 // CTO-Log: HOME-EXEC-01. Landing Page Oficial FretoGo.
 // Status: Arquitetura Mobile-First, focada em Dor e Solução para B2B e Transportadores.
 // Remoção de métricas irreais. Comunicação clara de Escrow e Rotas.
-// FIX VERCEL: Correção de tag <main> ausente (balanceamento da árvore JSX).
+// FIX VERCEL: Rebalanceamento Estrutural Rigoroso da Árvore JSX (Tags Fechadas).
 // =========================================================
 
 import { Zap, Truck, ShieldCheck, ArrowRight, Building2, MapPin, CheckCircle, Package, Route, LockKeyhole, Camera, Users, DollarSign, Clock, Map, ChevronRight, Search } from 'lucide-react';
@@ -357,7 +357,7 @@ export default function Home() {
       </section>
 
       {/* ======================================================= */}
-      {/* 09 E 10 - CTA FINAL (EMPRESA E MOTORISTA) */}
+      {/* 09 - CTA FINAL (EMPRESA E MOTORISTA) */}
       {/* ======================================================= */}
       <section className="py-20 bg-white border-t border-slate-200">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -386,7 +386,7 @@ export default function Home() {
       </main>
 
       {/* ======================================================= */}
-      {/* 12 - FOOTER */}
+      {/* 10 - FOOTER */}
       {/* ======================================================= */}
       <footer className="bg-slate-950 text-slate-400 py-16 mt-auto border-t border-slate-900">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
