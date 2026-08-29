@@ -1,47 +1,52 @@
 import { useState } from "react";
 
-interface SecurityCodes {
-  pickupCode: string;
-  deliveryCode: string;
-}
-
 interface SecurityHook {
-  securityCodes: SecurityCodes | null;
-  generateSecurityCodes: () => void;
-  validatePickupCode: (code: string) => boolean;
-  validateDeliveryCode: (code: string) => boolean;
+  validatePickupCode: (inputCode: string, realCode: string) => boolean;
+  validateDeliveryCode: (inputCode: string, realCodes: string[] | string, stopIndex: number) => boolean;
+  enforcePhotoBeforePin: (photoFile: File | string | null) => boolean;
+  isProcessing: boolean;
+  setIsProcessing: (val: boolean) => void;
 }
 
 export default function useFreightSecurity(): SecurityHook {
-  const [securityCodes, setSecurityCodes] =
-    useState<SecurityCodes | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const generateRandomCode = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+  // Valida o PIN de Coleta diretamente com o que está salvo no Banco de Dados
+  const validatePickupCode = (inputCode: string, realCode: string) => {
+    if (!inputCode || !realCode) return false;
+    return inputCode.trim() === realCode.trim();
   };
 
-  const generateSecurityCodes = () => {
-    const pickupCode = generateRandomCode();
-    const deliveryCode = generateRandomCode();
+  // Valida o PIN de Entrega sabendo exatamente em qual das 5 paradas o motorista está
+  const validateDeliveryCode = (inputCode: string, realCodes: string[] | string, stopIndex: number) => {
+    if (!inputCode || !realCodes) return false;
 
-    setSecurityCodes({
-      pickupCode,
-      deliveryCode,
-    });
+    // Se for apenas uma entrega (string legada), valida direto
+    if (typeof realCodes === 'string') {
+      return inputCode.trim() === realCodes.trim();
+    }
+
+    // Se for múltiplas entregas (Array), valida o PIN da parada atual
+    if (Array.isArray(realCodes)) {
+      const targetCode = realCodes[stopIndex] || realCodes[realCodes.length - 1];
+      return inputCode.trim() === targetCode.trim();
+    }
+
+    return false;
   };
 
-  const validatePickupCode = (code: string) => {
-    return securityCodes?.pickupCode === code;
-  };
-
-  const validateDeliveryCode = (code: string) => {
-    return securityCodes?.deliveryCode === code;
+  // Trava operacional: O PIN só pode ser processado se a foto existir
+  const enforcePhotoBeforePin = (photoFile: File | string | null) => {
+    if (!photoFile) return false;
+    if (typeof photoFile === 'string' && photoFile.trim() === '') return false;
+    return true;
   };
 
   return {
-    securityCodes,
-    generateSecurityCodes,
     validatePickupCode,
     validateDeliveryCode,
+    enforcePhotoBeforePin,
+    isProcessing,
+    setIsProcessing
   };
 }
