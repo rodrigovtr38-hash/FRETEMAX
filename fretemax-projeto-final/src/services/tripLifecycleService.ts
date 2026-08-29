@@ -1,9 +1,9 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/tripLifecycleService.ts
-// CTO-Log: FASE 4 - Correção de Build (Vercel).
+// CTO-Log: FASE 4 - Correção de Build (Vercel) e Liquidação (Bloco 4).
 // Status: Importação do DispatchQueueService ajustada (Maiúscula vs Minúscula).
 // Evolução Fase 12 (Escrow): Blindagem atômica injetada no runTransaction.
-// Impede race conditions durante a Reserva de 5 min e respeita as Firestore Rules limitadas.
+// Correção Bloco 4: Injeção do status 'finalizado' no Tracker de Logs da Torre.
 // =========================================================
 
 import { doc, serverTimestamp, collection, addDoc, runTransaction } from 'firebase/firestore';
@@ -63,7 +63,7 @@ export class TripLifecycleService {
     this.inflight.delete(key);
   }
 
-  private static async registrarEventoDeIA(freteId: string, novoStatus: AppTripState, contract?: TripStateTransitionContract) {
+  private static async registrarEventoDeIA(freteId: string, novoStatus: AppTripState | string, contract?: TripStateTransitionContract) {
     try {
       const messagesRef = collection(db, 'fretes', freteId, 'chat');
       let mensagemLog = '';
@@ -88,7 +88,11 @@ export class TripLifecycleService {
           mensagemLog = "✅ [Torre Operacional]: Coleta finalizada (PIN validado). Motorista a caminho do Destino Final.";
           break;
         case AppTripState.ENTREGUE:
-          mensagemLog = "🏁 [Torre Operacional]: Rota Finalizada com Sucesso! Valores liberados pelo sistema Escrow.";
+          mensagemLog = "🏁 [Torre Operacional]: Rota Finalizada com Sucesso! Valores aguardando liquidação pelo sistema Escrow.";
+          break;
+        case 'finalizado':
+          // 🔥 CTO FIX: Registro financeiro definitivo (Bloco 4)
+          mensagemLog = "💸 [Torre Operacional]: Repasse financeiro (PIX) liquidado com sucesso pela Administração. Operação arquivada.";
           break;
         case AppTripState.DISPONIVEL:
            if (contract?.isRecusa) {
@@ -118,7 +122,7 @@ export class TripLifecycleService {
     }
   }
 
-  static async alterarStatusViagem(freteId: string, novoStatus: AppTripState, contract?: TripStateTransitionContract): Promise<boolean> {
+  static async alterarStatusViagem(freteId: string, novoStatus: AppTripState | string, contract?: TripStateTransitionContract): Promise<boolean> {
     const lockKey = `trip-${freteId}-${novoStatus}`;
 
     if (!this.acquire(lockKey)) return false;
@@ -165,9 +169,12 @@ export class TripLifecycleService {
 
         wasForcedReset = isForcedReset;
         
-        const permitido = canTransition(data.status as AppTripState, novoStatus);
-        if (!permitido && !isForcedReset) {
-          throw new Error(`TRANSICAO_BLOQUEADA: De ${data.status} para ${novoStatus}`);
+        // Permite a transição para 'finalizado' que é gerenciada externamente pelo Admin
+        if (novoStatus !== 'finalizado') {
+            const permitido = canTransition(data.status as AppTripState, novoStatus as AppTripState);
+            if (!permitido && !isForcedReset) {
+              throw new Error(`TRANSICAO_BLOQUEADA: De ${data.status} para ${novoStatus}`);
+            }
         }
 
         const payloadUpdate: Partial<TripDocumentData> = {};
@@ -186,11 +193,15 @@ export class TripLifecycleService {
                 if (contract.pagamentoStatus !== undefined) payloadUpdate.pagamentoStatus = contract.pagamentoStatus;
             }
             statusCalculado = novoStatus;
+        } else if (novoStatus === 'finalizado') {
+            payloadUpdate.status = novoStatus;
+            payloadUpdate.atualizadoEm = serverTimestamp() as unknown;
+            statusCalculado = novoStatus;
         } else {
             // Comportamento original para todos os outros fluxos operacionais
             const runtime = StateSynchronizationService.synchronize(
               (data.driverState as DriverState) || DriverState.ONLINE,
-              novoStatus
+              novoStatus as AppTripState
             );
 
             let paradaAtualIndex = (data.paradaAtualIndex as number) || 0;
@@ -246,7 +257,7 @@ export class TripLifecycleService {
 
       if (!finalDocumentState) return false;
 
-      await this.registrarEventoDeIA(freteId, statusCalculado as AppTripState, contract);
+      await this.registrarEventoDeIA(freteId, statusCalculado as string, contract);
 
       const freightPayloadToBroadcast = { ...finalDocumentState } as unknown as FretePayload;
       
