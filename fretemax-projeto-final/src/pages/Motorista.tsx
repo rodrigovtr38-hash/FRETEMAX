@@ -4,6 +4,7 @@
 // Status: "Vírus dos 15km" e "Buraco Negro da Recusa" erradicados pela raiz da leitura do Firestore.
 // Evolução Fase 12 (Escrow): Transação manual removida. Lock atômico centralizado no TripLifecycle.
 // Correção Bloco 1 (Bug do Frete Fantasma): Injeção do status 'reservado_aguardando_pagamento' no array de ACTIVE_STATUSES.
+// Correção Bloco 1 (Execução): Erradicação do TTL Local e alteração da linguagem de aceite.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -262,18 +263,11 @@ export default function Motorista() {
       if (!mountedRef.current) return;
 
       const now = Date.now();
-      // 🔥 CTO FIX: Expandindo a "Janela de Respiração" do Feed do Motorista para 35 minutos. 
-      // Se a empresa colocou tempo limite de 30min no painel, a carga some suavemente.
-      const MAX_TTL_MS = 35 * 60 * 1000;
 
+      // 🔥 CTO FIX: Erradicação do TTL Local (Bloco 1).
+      // A visibilidade agora é ditada 100% pelo Firestore (SSOT).
+      // Removido o filtro de MAX_TTL_MS que "escondia" o frete indevidamente.
       let next = snapshot.docs.map(document => normalizeFreight(document.id, document.data()));
-      
-      next = next.filter(freight => {
-        if (freight.agendado) return true;
-        // Lê do criadoEm (que ganha prioridade) ou createdAt (Data original)
-        const createdTime = (freight as any).criadoEm || (freight.createdAt?.toMillis ? freight.createdAt.toMillis() : now);
-        return (now - createdTime) <= MAX_TTL_MS;
-      });
 
       next = next.filter(freight => freight.categoria === operationalCategory);
       next = next.filter(freight => !freight.motoristaId || freight.motoristaId === user.uid || snapshot.docs.find(d => d.id === freight.id)?.data().motoristaAtualDestaque === user.uid); 
@@ -324,7 +318,7 @@ export default function Motorista() {
       await dispatchRealtimeService.aceitarCorrida(user.uid, freight.id, driverData);
       
       setSelectedFreight(null);
-      showToast('Carga reservada! Aguardando confirmação do pagamento (5 min).', 'success');
+      showToast('Motorista selecionado! Aguardando pagamento do embarcador (5 min).', 'success');
       
     } catch (error: any) { 
       showToast(error.message === 'FRETE_JA_ATRIBUIDO' ? "Esta carga já foi fechada por outro parceiro." : "Erro ao aceitar frete.", 'warning');
