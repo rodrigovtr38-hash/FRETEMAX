@@ -15,11 +15,20 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // 🔥 SUA CHAVE MESTRA INJETADA
+    // 🔥 CHAVE MESTRA ORIGINAL (Admin)
     function isAdmin() {
       return isAuthenticated() && request.auth.uid in [
         "uV1yeZoGfhZTRWDVL1CnMW6b6NY2"
       ];
+    }
+
+    // 🔥 CTO FIX: BLINDAGEM DE HOMOLOGAÇÃO (BLOCO 2 E 5)
+    // Permite que os emails oficiais simulem o Webhook do Mercado Pago sem bloqueio.
+    function isQATester() {
+      return isAuthenticated() && request.auth.token.email != null && (
+        request.auth.token.email == "contato@fretogo.com.br" ||
+        request.auth.token.email == "rodrigovtr38@gmail.com"
+      );
     }
 
     // =========================================================
@@ -27,7 +36,7 @@ service cloud.firestore {
     // =========================================================
 
     match /motoristas_cadastros/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin() || isQATester();
       allow create: if isOwner(userId);
       allow update: if
         (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -57,7 +66,7 @@ service cloud.firestore {
         resource.data.motoristaId == request.auth.uid ||
         resource.data.status == 'disponivel' ||
         resource.data.status == 'buscando_motorista' ||
-        isAdmin()
+        isAdmin() || isQATester()
       );
 
       allow create: if isAuthenticated() && request.resource.data.keys().hasAll([
@@ -65,14 +74,14 @@ service cloud.firestore {
       ]) && request.resource.data.clienteId == request.auth.uid;
 
       allow update: if
-        isAdmin()
+        isAdmin() || isQATester() // 🔥 CTO FIX: Liberação atômica para o Bypass do Bloco 2
         ||
         (isAuthenticated() && 
          resource.data.clienteId == request.auth.uid &&
          request.resource.data.status == 'cancelado' && 
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'canceladoEm', 'canceladoPor', 'updatedAt']))
         ||
-        // 🔥 CTO FIX: Blindagem do Escrow. Motorista NÃO PODE enviar 'aceito'. Apenas 'reservado_aguardando_pagamento'.
+        // Blindagem do Escrow. Motorista NÃO PODE enviar 'aceito'. Apenas 'reservado_aguardando_pagamento'.
         (isAuthenticated() && 
          resource.data.status == 'disponivel' && 
          request.resource.data.status == 'reservado_aguardando_pagamento' && 
@@ -82,7 +91,7 @@ service cloud.firestore {
            'motoristaPlaca', 'reservadoEm', 'reservaExpiraEm', 'pagamentoStatus', 'updatedAt'
          ]))
         ||
-        // Permite que o motorista já aceito altere o andamento da viagem sem mexer na grana
+        // Permite que o motorista já aceito altere o andamento da viagem, atualize PIN e envie FOTOS, mas protege o dinheiro
         (isAuthenticated() && 
          resource.data.motoristaId == request.auth.uid && 
          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -91,7 +100,7 @@ service cloud.firestore {
           'distancia', 'origemLat', 'origemLng', 'destinoLat', 'destinoLng'
         ]))
         ||
-        // Liberação para Cliente injetar Auto-Bid (alteração apenas em valor/status e expiração de tempo)
+        // Liberação para Cliente injetar Auto-Bid
         (isAuthenticated() &&
          resource.data.clienteId == request.auth.uid &&
          (resource.data.status == 'expirado' || resource.data.status == 'sem_motorista' || resource.data.status == 'disponivel') &&
@@ -103,12 +112,12 @@ service cloud.firestore {
 
       allow delete: if false;
       
-      // Liberação para a Coleção Filha de Chat FTI funcionar corretamente
+      // Liberação para a Coleção Filha de Chat FTI
       match /chat/{mensagemId} {
         allow read, create: if isAuthenticated() && (
           get(/databases/$(database)/documents/fretes/$(freteId)).data.clienteId == request.auth.uid ||
           get(/databases/$(database)/documents/fretes/$(freteId)).data.motoristaId == request.auth.uid ||
-          isAdmin()
+          isAdmin() || isQATester()
         );
         allow update, delete: if false;
       }
@@ -121,11 +130,11 @@ service cloud.firestore {
     match /ofertas/{ofertaId} {
       allow read: if isAuthenticated() && resource.data.motoristaId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.motoristaId == request.auth.uid;
-      allow create, delete: if isAdmin();
+      allow create, delete: if isAdmin() || isQATester();
     }
 
     match /analytics_demand/{docId} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || isQATester();
       allow write: if false;
     }
 
