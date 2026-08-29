@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/pages/Admin.tsx
 // CTO-Log: Torre de Controle Inteligente (Auditoria Fase 4).
 // Status: Dashboard Expandido, Frota Preservada, Informações Ouro Injetadas na Malha Logística.
+// Correção Bloco 3: Injeção do Painel de Segurança (Visibilidade Multi-PIN).
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -414,13 +415,13 @@ export default function Admin() {
                </button>
 
                <div className="bg-slate-900/50 border border-white/5 rounded-xl p-1 flex gap-1 backdrop-blur-sm shadow-inner">
-                  {[
+                 {[
                     { id: 'hoje', label: 'Hoje' },
                     { id: '7dias', label: '7 Dias' },
                     { id: '30dias', label: '30 Dias' },
                     { id: 'ano', label: 'Este Ano' },
                     { id: 'todos', label: 'Histórico Completo' }
-                  ].map(f => (
+                 ].map(f => (
                     <button 
                       key={f.id}
                       onClick={() => setTimeFilter(f.id)}
@@ -428,7 +429,7 @@ export default function Admin() {
                     >
                       {f.label}
                     </button>
-                  ))}
+                 ))}
                </div>
             </div>
 
@@ -807,6 +808,29 @@ export default function Admin() {
                                <p className="text-xs text-slate-300 italic">{f.observacoes}</p>
                              </div>
                           )}
+
+                          {/* 🔥 CTO FIX: VISIBILIDADE DOS PINS NA TORRE (Bloco 3) */}
+                          <div className="mt-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+                             <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-2 flex items-center gap-1"><ShieldCheck size={12}/> Chaves de Liberação (PINs)</p>
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                               <div className="bg-slate-950 p-2 rounded border border-white/5">
+                                  <p className="text-[8px] uppercase text-slate-500 font-bold mb-1">PIN Coleta</p>
+                                  <p className="text-sm font-mono text-white tracking-widest">{f.pinColeta || '---'}</p>
+                               </div>
+                               {f.pinEntregas && Array.isArray(f.pinEntregas) ? f.pinEntregas.map((pin: string, idx: number) => (
+                                  <div key={idx} className="bg-slate-950 p-2 rounded border border-white/5">
+                                    <p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">PIN Entrega {idx + 1}</p>
+                                    <p className="text-sm font-mono text-emerald-400 tracking-widest">{pin}</p>
+                                  </div>
+                               )) : (
+                                  <div className="bg-slate-950 p-2 rounded border border-white/5">
+                                    <p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">PIN Entrega Final</p>
+                                    <p className="text-sm font-mono text-emerald-400 tracking-widest">{typeof f.pinEntregas === 'string' ? f.pinEntregas : f.pinEntrega || '---'}</p>
+                                  </div>
+                               )}
+                             </div>
+                          </div>
+
                         </div>
 
                         <div className="flex flex-col gap-3 min-w-[200px] border-l border-white/5 pl-4 justify-center mt-4 lg:mt-0">
