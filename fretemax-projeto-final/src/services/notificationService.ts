@@ -1,7 +1,8 @@
 // =========================================================
 // NOME DO ARQUIVO: src/services/notificationService.ts
-// CTO-Log: FASE 3 - Integração.
+// CTO-Log: FASE 3/4 - Integração e Liquidação.
 // Status: Push Notification estendido para alertas de escassez B2B (Auto-Bid).
+// Correção Bloco 4: Injeção da automação oficial de cobrança de PIX do Motorista.
 // =========================================================
 
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
@@ -105,6 +106,17 @@ export class NotificationService {
     if (!telefoneLimpo) return;
 
     const mensagem = `⚠️ *ALERTA OPERACIONAL FRETOGO*\n\nOlá ${nome}. Tivemos um imprevisto com o veículo alocado para o frete #${idFrete.slice(0,6).toUpperCase()}.\n\n*Motivo reportado:* ${motivo}.\n\n🚨 *AÇÃO AUTOMÁTICA:* Nossa IA já devolveu sua carga para o topo do Radar com prioridade máxima. Outro parceiro assumirá a rota em breve.`;
+    window.open(`https://wa.me/55${telefoneLimpo}?text=${encodeURIComponent(mensagem)}`, '_blank');
+  }
+
+  // 🔥 CTO FIX: Automação Oficial de Solicitação de PIX (Bloco 4)
+  static solicitarPixMotorista(telefone: string, nome: string, idFrete: string, valor: number | string) {
+    const telefoneLimpo = telefone.replace(/\D/g, '');
+    if (!telefoneLimpo) return;
+
+    const valorFormatado = Number(valor).toFixed(2).replace('.', ',');
+    const mensagem = `Olá *${nome}*, aqui é a central operacional do *FretoGo*.\n\nVimos que você finalizou a corrida #${idFrete.slice(0,8).toUpperCase()}.\n\nPara liquidarmos o valor de *R$ ${valorFormatado}*, por favor, confirme sua Chave PIX nesta conversa.`;
+    
     window.open(`https://wa.me/55${telefoneLimpo}?text=${encodeURIComponent(mensagem)}`, '_blank');
   }
 }
