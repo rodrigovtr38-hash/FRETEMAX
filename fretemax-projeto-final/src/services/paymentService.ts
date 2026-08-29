@@ -3,13 +3,14 @@
 // CTO-Log: Fase 3 - Homologação Operacional Distribuída.
 // Evolução Fase 5: Remoção da sobrescrita otimista do TripState.
 // Bloco Pagamento Real: Compatibilização de chaves de valor.
+// Bloco 2 (Execução): Bypass de QA (Whitelist) injetado para simular aprovação instantânea sem gateway.
 // =========================================================
 
 import {
   doc, updateDoc, serverTimestamp, runTransaction, getDoc, 
   collection, query, where, getDocs, limit
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { eventBusService, AppEvents } from './eventBusService';
 import { firebaseRealtimeService } from './firebaseRealtimeService';
 
@@ -63,6 +64,39 @@ class PaymentService {
         return { success: false, error: 'VALOR_INVALIDO_FRAUDE' };
       }
 
+      // 🔥 CTO FIX: BYPASS DE HOMOLOGAÇÃO (Modo Teste - Bloco 2)
+      // Intercepta a chamada de contas autorizadas e simula aprovação instantânea
+      const TEST_EMAILS = ['contato@fretogo.com.br', 'rodrigovtr38@gmail.com'];
+      const currentUserEmail = auth.currentUser?.email;
+
+      if (currentUserEmail && TEST_EMAILS.includes(currentUserEmail)) {
+        console.log('[CTO-Log] BYPASS DE QA ATIVADO. Simulando pagamento aprovado para:', currentUserEmail);
+        const txId = 'QA_BYPASS_' + Date.now();
+        
+        // Simula o Webhook: Altera para aprovado e aceito atomicamente
+        await runTransaction(db, async (transaction) => {
+            transaction.update(freteRef, {
+                pagamentoStatus: 'aprovado',
+                status: 'aceito',
+                pagamentoId: txId,
+                transactionId: txId,
+                updatedAt: serverTimestamp(),
+            });
+        });
+
+        await firebaseRealtimeService.updateTripRealtime(payload.freteId, {
+            pagamentoStatus: 'aprovado',
+            status: 'aceito',
+            pagamentoId: txId,
+            transactionId: txId,
+        });
+
+        console.log('[CTO-Log] Rota liberada em modo de teste.');
+        // Retorna a URL simulada do próprio app para evitar quebra no Cliente.tsx
+        return { success: true, transactionId: txId, url: `/cliente?order=${payload.freteId}` };
+      }
+
+      // 🚀 FLUXO DE PRODUÇÃO (Clientes Reais)
       const response = await this.fetchWithTimeout('/api/pagamento', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,6 +170,21 @@ class PaymentService {
         if (!querySnapshot.empty) {
           idPedido = querySnapshot.docs[0].id;
         }
+      }
+
+      // Evita bater na API de reembolso se for uma transação de teste (Bypass)
+      if (transactionId.startsWith('QA_BYPASS_')) {
+          console.log('[CTO-Log] Reembolso simulado (Bypass QA).');
+          if (idPedido) {
+              const freteRef = doc(db, 'fretes', idPedido);
+              await updateDoc(freteRef, {
+                  pagamentoStatus: 'reembolsado',
+                  reembolsado: true,
+                  updatedAt: serverTimestamp(),
+              });
+          }
+          eventBusService.emit(AppEvents.PAYMENT_REFUNDED, { transactionId, freteId: idPedido });
+          return true;
       }
 
       const response = await this.fetchWithTimeout('/api/reembolso', {
