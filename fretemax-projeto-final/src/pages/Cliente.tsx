@@ -9,6 +9,7 @@
 // FIX VERCEL: Correção estrita de sintaxe (aspas/crases) nas linhas 354 e 517-519 para destravar o Build.
 // CLIENTE-AUTH-01: Injeção do Gatekeeper de Autenticação (Google Auth) e bloqueio de Postagem Anônima no Firestore.
 // BLOCO 6: Injeção do Painel de Visibilidade de PINs e Automação de Envio no Chat Operacional.
+// CTO-FIX ATUAL: Chat visível imediatamente no Match. Lógica de Expiração (Publicar Novamente ou Excluir) se não pagar em 5 min.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -16,7 +17,7 @@ import { db, auth } from '../firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, doc, Timestamp, updateDoc } from 'firebase/firestore'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'; // 🔥 AUTH IMPORT
-import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, BrainCircuit, BarChart3, TrendingUp, AlertOctagon, Download, FileText, Lock, Scale, Clock3, Clock, Chrome } from 'lucide-react'; // 🔥 CHROME IMPORT
+import { ArrowLeft, Zap, Truck, Loader2, CheckCircle, MapPin, AlertTriangle, ShieldCheck, XCircle, MessageCircle, Building2, User, Package, CalendarDays, Plus, Trash2, Flame, DollarSign, Activity, Eye, BrainCircuit, BarChart3, TrendingUp, AlertOctagon, Download, FileText, Lock, Scale, Clock3, Clock, Chrome, RefreshCcw } from 'lucide-react'; // 🔥 CHROME IMPORT
 import MapaCliente from '../components/MapaCliente';
 import ChatFrete from '../components/ChatFrete';
 import ClientStatusCard from '../components/client/ClientStatusCard';
@@ -29,7 +30,7 @@ import { NotificationService } from '../services/notificationService';
 
 interface AddressData { cep: string; bairro: string; rua: string; num: string; cidade?: string; uf?: string; lat?: number; lng?: number; }
 interface Coords { lat: number; lng: number; }
-interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; valorLiquidoMotorista?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; tipoMaterial?: string; qtdVolumes?: string; peso?: string; pesoKg?: string; reservadoEm?: number; }
+interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; valorLiquidoMotorista?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; tipoMaterial?: string; qtdVolumes?: string; peso?: string; pesoKg?: string; reservadoEm?: number; transactionId?: string; }
 
 type VehicleType = 'moto' | 'carro' | 'utilitarios' | 'toco' | 'truck' | 'carreta' | 'bitrem';
 
@@ -122,13 +123,12 @@ export default function Cliente() {
     setTimeout(() => setToast(null), 4500);
   };
 
-  // 🔥 LISTENER DE SESSÃO DO FIREBASE (NOVO)
+  // 🔥 LISTENER DE SESSÃO DO FIREBASE
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthReady(true);
       
-      // Preserva a integração antiga do NotificationService se o usuário existir
       if (currentUser?.uid) {
         NotificationService.solicitarPermissao(currentUser.uid, 'cliente').catch(console.error);
       }
@@ -136,7 +136,7 @@ export default function Cliente() {
     return () => unsubscribe();
   }, []);
 
-  // 🔥 GOOGLE LOGIN HANDLER (NOVO)
+  // 🔥 GOOGLE LOGIN HANDLER
   const handleGoogleLogin = async () => {
     if (isAuthenticating) return;
     setIsAuthenticating(true);
@@ -144,7 +144,6 @@ export default function Cliente() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
-      // Sucesso: O listener onAuthStateChanged cuidará da atualização do estado.
     } catch (error: any) {
       console.error("ERRO LOGIN EMBARCADOR:", error);
       if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
@@ -458,7 +457,6 @@ export default function Cliente() {
   const handleContratar = async () => {
     if (loadingRoute || loadingPayment || isProcessingPayment.current) return;
     
-    // 🔥 CTO FIX: TRAVA ABSOLUTA DE SEGURANÇA.
     const currentUser = auth.currentUser;
     if (!currentUser) {
       showToast("Falha de Autenticação. Você precisa estar logado para publicar uma carga.", "error");
@@ -601,6 +599,33 @@ export default function Cliente() {
     }
   };
 
+  // 🔥 CTO FIX: BOTÃO PARA REPUBLICAR QUANDO EXCLUIR O MOTORISTA QUE NÃO FOI PAGO (A PUNIÇÃO)
+  const handleRepublicar = async () => {
+    if (!currentOrderId) return;
+    try {
+      showToast('Limpando sistema e republicando...', 'warning');
+      const dataExpiracao = new Date();
+      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 15);
+
+      // Limpa todos os dados do motorista e volta a carga para DISPONIVEL
+      await updateDoc(doc(db, 'fretes', currentOrderId), {
+        status: 'disponivel',
+        motoristaId: null,
+        motoristaNome: null,
+        motoristaTelefone: null,
+        motoristaVeiculo: null,
+        motoristaPlaca: null,
+        reservadoEm: null,
+        pagamentoStatus: 'pendente',
+        ofertaExpiraEm: Timestamp.fromDate(dataExpiracao),
+        updatedAt: serverTimestamp()
+      });
+      showToast('Carga republicada. Aberta para novos parceiros.', 'success');
+    } catch (error) {
+      showToast('Erro ao republicar.', 'error');
+    }
+  };
+
   const handleSmartPricing = async (valorAdicional: number) => {
     if (!currentOrderId || !orderData) return;
     try {
@@ -634,40 +659,30 @@ export default function Cliente() {
     }
   };
 
-  const handleRepublicar = async () => {
-    if (!currentOrderId) return;
-    try {
-      showToast('Reiniciando radar...', 'warning');
-      const dataExpiracao = new Date();
-      dataExpiracao.setMinutes(dataExpiracao.getMinutes() + 15);
-
-      await updateDoc(doc(db, 'fretes', currentOrderId), {
-        status: 'disponivel',
-        ofertaExpiraEm: Timestamp.fromDate(dataExpiracao),
-        createdAt: serverTimestamp()
-      });
-      showToast('Carga republicada no topo do Feed.', 'success');
-    } catch (error) {
-      showToast('Erro ao republicar.', 'error');
-    }
-  };
-
+  // 🔥 CTO FIX: Função Excluir consertada para evitar chamar o MP atoa se não houver pagamento.
   const handleCancelarPedido = async () => {
     if (!currentOrderId || isCancelling) return;
     setIsCancelling(true);
     
     try {
-      showToast('Iniciando estorno seguro junto ao banco...', 'warning');
-      const res = await fetch('/api/reembolso', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idPedido: currentOrderId })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.detalhe || 'Erro na devolução.');
-
-      showToast('Estorno realizado! O PIX retornou para sua conta.', 'success');
+      if (orderData?.pagamentoStatus === 'aprovado' || orderData?.transactionId) {
+         showToast('Iniciando estorno seguro junto ao banco...', 'warning');
+         const res = await fetch('/api/reembolso', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ idPedido: currentOrderId })
+         });
+         const data = await res.json();
+         if (!res.ok) throw new Error(data.error || data.detalhe || 'Erro na devolução.');
+         showToast('Estorno realizado! O PIX retornou para sua conta.', 'success');
+      } else {
+         // Cancela direto no banco porque ele nem tinha pago ainda.
+         await updateDoc(doc(db, 'fretes', currentOrderId), {
+            status: 'cancelado',
+            canceladoEm: serverTimestamp()
+         });
+         showToast('Operação cancelada e excluída.', 'success');
+      }
       setShowCancelModal(false);
       resetFlow(); 
 
@@ -722,7 +737,6 @@ export default function Cliente() {
     return undefined;
   }, [orderData?.motoristaLat, orderData?.motoristaLng]);
 
-  // 🔥 CTO FIX: FUNÇÃO MÁGICA DO CHAT OPERACIONAL (BLOCO 6)
   const handleEnviarPinChat = async (pin: string, etapa: string) => {
     if (!currentOrderId || !pin) return;
     try {
@@ -1181,20 +1195,37 @@ export default function Cliente() {
                         </div>
                     </div>
 
-                    {/* CRONÔMETRO DE URGÊNCIA */}
-                    <div className="flex items-center justify-center gap-3 mb-6 bg-slate-900/40 py-3 rounded-xl border border-amber-400/50 shadow-inner">
-                       <Clock size={20} className="text-amber-400 animate-spin-slow" />
-                       <p className="text-sm font-bold text-amber-300">Tempo restante para pagar:</p>
-                       <p className="text-xl font-mono font-black text-amber-400 tracking-widest">
-                         {timeLeftEscrow !== null ? formatTimeEscrow(timeLeftEscrow) : '05:00'}
-                       </p>
-                    </div>
-
-                    <button onClick={handlePagarReserva} disabled={loadingPayment || timeLeftEscrow === 0} className="w-full bg-slate-900 hover:bg-black text-white text-lg font-black uppercase tracking-[0.2em] py-5 rounded-[1.5rem] flex items-center justify-center gap-3 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">
-                        {loadingPayment ? <Loader2 className="animate-spin" /> : <Lock size={20}/>}
-                        {timeLeftEscrow === 0 ? 'Tempo Expirado' : loadingPayment ? 'Conectando...' : 'Confirmar e Pagar'}
-                    </button>
-                    <p className="text-center text-[10px] text-emerald-200 mt-4 font-bold uppercase tracking-widest">O valor ficará retido pela garantia Escrow até a entrega.</p>
+                    {/* 🔥 CTO FIX: A Punição por Falta de Pagamento */}
+                    {timeLeftEscrow === 0 ? (
+                      <div className="flex flex-col gap-3 mt-4">
+                         <div className="bg-red-500/20 border border-red-500/30 rounded-2xl p-4 text-center mb-2">
+                            <AlertTriangle className="text-red-400 mx-auto mb-2" size={24}/>
+                            <p className="text-red-400 font-black uppercase tracking-widest text-sm">Tempo Esgotado</p>
+                            <p className="text-red-200 text-[10px] mt-1">O motorista foi liberado porque o pagamento não foi efetuado.</p>
+                         </div>
+                         <button onClick={handleRepublicar} disabled={loadingPayment} className="w-full bg-slate-900 hover:bg-black text-white text-sm font-black uppercase tracking-[0.1em] py-5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg border border-slate-700">
+                            <RefreshCcw size={18}/> Publicar Novamente no Radar
+                         </button>
+                         <button onClick={() => setShowCancelModal(true)} disabled={loadingPayment} className="w-full bg-transparent border border-red-500/30 text-red-100 hover:bg-red-500/20 text-xs font-black uppercase tracking-widest py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
+                            <Trash2 size={16}/> Excluir Frete Definitivamente
+                         </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-center gap-3 mb-6 bg-slate-900/40 py-3 rounded-xl border border-amber-400/50 shadow-inner">
+                           <Clock size={20} className="text-amber-400 animate-spin-slow" />
+                           <p className="text-sm font-bold text-amber-300">Tempo restante para pagar:</p>
+                           <p className="text-xl font-mono font-black text-amber-400 tracking-widest">
+                             {timeLeftEscrow !== null ? formatTimeEscrow(timeLeftEscrow) : '05:00'}
+                           </p>
+                        </div>
+                        <button onClick={handlePagarReserva} disabled={loadingPayment} className="w-full bg-slate-900 hover:bg-black text-white text-lg font-black uppercase tracking-[0.2em] py-5 rounded-[1.5rem] flex items-center justify-center gap-3 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">
+                            {loadingPayment ? <Loader2 className="animate-spin" /> : <Lock size={20}/>}
+                            {loadingPayment ? 'Conectando...' : 'Confirmar e Pagar'}
+                        </button>
+                        <p className="text-center text-[10px] text-emerald-200 mt-4 font-bold uppercase tracking-widest">O valor ficará retido pela garantia Escrow até a entrega.</p>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -1286,9 +1317,9 @@ export default function Cliente() {
                     </div>
                 </div>
 
-                {['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'entregue'].includes(orderData?.status || '') && (
+                {/* 🔥 CTO FIX: Adicionado 'reservado_aguardando_pagamento' para o Chat ficar sempre visível */}
+                {['reservado_aguardando_pagamento', 'aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'entregue'].includes(orderData?.status || '') && (
                   <div className="mt-8 pt-8 border-t border-white/5">
-                     {/* 🔥 CTO FIX: PAINEL DE PINS COM AUTOMAÇÃO DE CHAT (BLOCO 6) */}
                      <div className="mb-6 bg-slate-950 border border-emerald-500/20 rounded-3xl p-6 shadow-inner">
                         <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400 mb-4 flex items-center gap-2">
                            <ShieldCheck size={18} /> Chaves de Segurança (PINs)
