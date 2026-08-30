@@ -3,8 +3,7 @@
 // CTO-Log: Auditoria Concluída - FASE 3 (Integração).
 // Status: "Vírus dos 15km" e "Buraco Negro da Recusa" erradicados pela raiz da leitura do Firestore.
 // Evolução Fase 12 (Escrow): Transação manual removida. Lock atômico centralizado no TripLifecycle.
-// Correção Bloco 1 (Bug do Frete Fantasma): Injeção do status 'reservado_aguardando_pagamento' no array de ACTIVE_STATUSES.
-// Correção Bloco 1 (Execução): Erradicação do TTL Local e alteração da linguagem de aceite.
+// Correção "Execução Dois": Remoção do sequestro de tela. Motorista aguarda o pagamento no próprio Feed.
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -20,7 +19,7 @@ import DriverRadar from '../components/motorista/DriverRadar';
 import DriverActiveTrip from './DriverActiveTrip';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import type { OperationalFreight } from '../components/driver/dashboard/DriverDashboardLayout';
-import { Download, Search, MapPin, Flame, Clock, ThumbsUp, Star, Share2, Truck, Power, WifiOff, Activity, CalendarDays, Ruler } from 'lucide-react'; 
+import { Download, Search, MapPin, Flame, Clock, ThumbsUp, Star, Share2, Truck, Power, WifiOff, Activity, CalendarDays, Ruler, Loader2 } from 'lucide-react'; 
 import { NotificationService } from '../services/notificationService';
 
 interface DriverData { 
@@ -34,8 +33,8 @@ interface DriverData {
   retornosUsadosHoje?: number; 
 }
 
-// 🔥 CTO FIX: Incluído o status de escrow da reserva para manter a viagem visível no painel.
-const ACTIVE_STATUSES = ['reservado_aguardando_pagamento', 'aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'em_entrega', 'returning'];
+// 🔥 CTO FIX: Removido 'reservado_aguardando_pagamento' para evitar o sequestro da tela.
+const ACTIVE_STATUSES = ['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'em_entrega', 'returning'];
 
 const FeedSkeleton = () => (
   <div className="bg-slate-900/40 border border-slate-800 rounded-[2rem] p-6 shadow-2xl animate-pulse mb-6">
@@ -142,12 +141,10 @@ export default function Motorista() {
     const valorCliente = Number(data.valorCliente || data.valorTotal || data.valorFreteBruto || data.valor || 0); 
     const valorMotorista = Number(data.valorLiquidoMotorista || data.valorMotorista || valorCliente * 0.8);
     
-    // 🔥 CTO FIX: "O Fim do Vírus dos 15km" -> Leitura da "Single Source of Truth" (distanciaRealKm).
     const distanciaColetaKm = Number(data.distanciaColetaKm || 0);
     const distanciaTotalLimpa = Number(data.distanciaRealKm || data.distanciaTotalKm || data.distancia || 0);
 
     const now = Date.now();
-    // 🔥 CTO FIX: "Buraco Negro da Recusa Resolvido" -> Leitura do 'criadoEm' sobreposto no Dispatch Service.
     const createdTime = data.criadoEm || (data.createdAt?.toMillis ? data.createdAt.toMillis() : now);
     const horasParada = (now - createdTime) / (1000 * 60 * 60);
     const prioridadeMural = horasParada >= 24 || Boolean(data.prioridade);
@@ -161,7 +158,7 @@ export default function Motorista() {
       enderecoColetaTexto: data.enderecoColetaTexto || data.origem?.endereco || 'Coleta não informada',
       enderecoEntregaTexto: data.enderecoEntregaTexto || data.destino?.endereco || 'Entrega não informada',
       distanciaColetaKm,
-      distanciaEntregaKm: distanciaTotalLimpa, // Mapeado para o novo modelo limpo
+      distanciaEntregaKm: distanciaTotalLimpa, 
       distanciaTotalKm: distanciaTotalLimpa,
       valorCliente, 
       valorMotorista,
@@ -253,20 +250,16 @@ export default function Motorista() {
     }
     setRadarLoading(true);
     
+    // 🔥 CTO FIX: Incluído o status de 'reservado_aguardando_pagamento' para o frete não sumir do mural.
     const freightsQuery = query(
       collection(db, 'fretes'), 
-      where('status', 'in', ['disponivel', 'buscando_motorista']),
+      where('status', 'in', ['disponivel', 'buscando_motorista', 'reservado_aguardando_pagamento']),
       limit(100)
     );
     
     const unsubscribe = onSnapshot(freightsQuery, snapshot => {
       if (!mountedRef.current) return;
 
-      const now = Date.now();
-
-      // 🔥 CTO FIX: Erradicação do TTL Local (Bloco 1).
-      // A visibilidade agora é ditada 100% pelo Firestore (SSOT).
-      // Removido o filtro de MAX_TTL_MS que "escondia" o frete indevidamente.
       let next = snapshot.docs.map(document => normalizeFreight(document.id, document.data()));
 
       next = next.filter(freight => freight.categoria === operationalCategory);
@@ -313,8 +306,6 @@ export default function Motorista() {
     if (!user?.uid || !driverData) return;
     
     try {
-      // 🔥 CTO FIX: Transação centralizada e atômica via dispatchRealtimeService.
-      // Impede corrida de estados e cumpre as regras do Firestore para Escrow (5 min).
       await dispatchRealtimeService.aceitarCorrida(user.uid, freight.id, driverData);
       
       setSelectedFreight(null);
@@ -325,11 +316,6 @@ export default function Motorista() {
       setSelectedFreight(null); 
     }
   }, [user, driverData]);
-
-  const handleRejectFreight = useCallback(async (freight: OperationalFreight) => {
-    setAvailableFreights(current => current.filter(item => item.id !== freight.id));
-    setSelectedFreight(null);
-  }, []);
 
   const handleSocialAction = async (action: string, freightId: string) => {
     try {
@@ -604,6 +590,11 @@ export default function Motorista() {
                             showToast('Você está online! Confirme os detalhes e aceite o frete.', 'success');
                           }} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl shadow-lg shadow-blue-900/50 transition-all active:scale-95 flex items-center justify-center gap-2 border border-blue-500">
                               <Power size={18} /> Ficar Online para Aceitar
+                          </button>
+                        ) : freight.status === 'reservado_aguardando_pagamento' ? (
+                          // 🔥 CTO FIX: Feedback visual direto no Feed (O motorista não é mais ejetado para a tela de viagem)
+                          <button disabled className="w-full bg-slate-800/80 text-cyan-400 font-black uppercase tracking-[0.15em] py-4 rounded-xl shadow-inner flex items-center justify-center gap-2 border border-cyan-500/30 cursor-not-allowed">
+                              <Loader2 size={18} className="animate-spin" /> Aguardando Pagamento...
                           </button>
                         ) : (
                           <button onClick={() => handleSelectFreight(freight)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-[0.2em] py-4 rounded-xl shadow-lg shadow-emerald-900/50 transition-all active:scale-95 flex items-center justify-center gap-2 border border-emerald-500">
