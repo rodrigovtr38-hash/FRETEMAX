@@ -3,6 +3,7 @@
 // CTO-Log: Torre de Controle Inteligente (Auditoria Fase 4).
 // Status: Dashboard Expandido, Frota Preservada, Informações Ouro Injetadas na Malha Logística.
 // Correção Bloco 3: Injeção do Painel de Segurança (Visibilidade Multi-PIN).
+// Correção Atual: Sincronização exata de ícones da Frota e Botão "Vassoura" blindado para testes.
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -18,14 +19,15 @@ import {
 
 import { ftiAnalytics } from '../core/ai/analytics/ia.metrics';
 
+// 🔥 CTO FIX: Chaves ajustadas para casar exatamente com o VEHICLE_CONFIG do Cliente.tsx
 const CATEGORIAS_FROTA = [
   { id: 'moto', label: 'Moto / Courier', icon: '🏍️' },
-  { id: 'carro_pequeno', label: 'Carro / Hatch', icon: '🚗' },
-  { id: 'utilitario', label: 'Utilitário / Van', icon: '🚐' },
+  { id: 'carro', label: 'Carro / Hatch', icon: '🚗' },
+  { id: 'utilitarios', label: 'Utilitário / Van', icon: '🚐' },
   { id: 'toco', label: 'Caminhão Toco', icon: '🚚' },
   { id: 'truck', label: 'Caminhão Truck', icon: '🚛' },
-  { id: 'carreta_ls', label: 'Carreta LS', icon: '🛣️' },
-  { id: 'bi_trem_cegonha', label: 'Bi-trem / Cegonha', icon: '🏭' }
+  { id: 'carreta', label: 'Carreta LS', icon: '🛣️' },
+  { id: 'bitrem', label: 'Bi-trem / Cegonha', icon: '🚛💨' }
 ];
 
 export default function Admin() {
@@ -205,8 +207,8 @@ export default function Admin() {
 
   const contagemFrota = useMemo(() => {
     const contagem: Record<string, number> = {
-      moto: 0, carro_pequeno: 0, utilitario: 0, 
-      toco: 0, truck: 0, carreta_ls: 0, bi_trem_cegonha: 0
+      moto: 0, carro: 0, utilitarios: 0, 
+      toco: 0, truck: 0, carreta: 0, bitrem: 0
     };
     motoristasAprovados.forEach(m => {
       const cat = m.categoria ? m.categoria.toLowerCase() : '';
@@ -299,8 +301,9 @@ export default function Admin() {
     window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  // 🔥 CTO FIX: "A Vassoura Inteligente de QA" (Apaga apenas testes. Faturamento real é intocável)
   const handleNuclearReset = async () => {
-    const code = window.prompt("⚠️ CUIDADO: Esta ação vai varrer TODOS os fretes de teste e zerar os faturamentos. Suas homologações de motoristas ficarão INTACTAS. Digite 'ZERAR' para prosseguir:");
+    const code = window.prompt("⚠️ CUIDADO: Esta ação vai varrer APENAS os fretes de teste (Bypass) e limpar o Radar. O faturamento real será preservado. Digite 'ZERAR' para prosseguir:");
     if (code !== 'ZERAR') { alert("Ação abortada."); return; }
     
     setIsCleaning(true);
@@ -310,18 +313,33 @@ export default function Admin() {
 
       const fretesRef = collection(db, 'fretes');
       const snapshot = await getDocs(fretesRef);
-      snapshot.forEach((doc) => { batch.delete(doc.ref); countFretes++; });
       
+      snapshot.forEach((doc) => { 
+          const data = doc.data();
+          // Lógica Invertida (Segurança Máxima): Se NÃO tiver um transactionId real do MercadoPago, é teste ou lixo e pode ser apagado.
+          const isRealPayment = data.transactionId && !String(data.transactionId).startsWith('QA_BYPASS_');
+          
+          if (!isRealPayment) {
+             batch.delete(doc.ref); 
+             countFretes++; 
+          }
+      });
+      
+      // Limpa as conversas de IA para não pesar o banco
       const logsRef = collection(db, 'analytics_ia_logs');
       const logsSnap = await getDocs(logsRef);
       logsSnap.forEach((doc) => { batch.delete(doc.ref); countLogs++; });
       
-      if (countFretes > 0 || countLogs > 0) await batch.commit();
+      if (countFretes > 0 || countLogs > 0) {
+          await batch.commit();
+          alert(`✅ Vassoura Concluída! ${countFretes} fretes de teste foram apagados. Faturamento oficial protegido.`);
+          window.location.reload(); 
+      } else {
+          alert('A base já está limpa. Nenhum frete de teste foi encontrado.');
+      }
       
-      alert(`💥 Banco Resetado! ${countFretes} fretes apagados. Radar e Faturamento zerados para produção.`);
-      window.location.reload(); 
     } catch (error) {
-      alert("Falha ao executar a varredura.");
+      alert("Falha ao executar a limpeza de testes.");
     } finally {
       setIsCleaning(false);
     }
@@ -411,7 +429,7 @@ export default function Admin() {
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center mb-6">
                <button onClick={handleNuclearReset} disabled={isCleaning} className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-inner">
-                  {isCleaning ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} ZERAR FRETES E FATURAMENTO
+                  {isCleaning ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} ZERAR FRETES DE TESTE (QA)
                </button>
 
                <div className="bg-slate-900/50 border border-white/5 rounded-xl p-1 flex gap-1 backdrop-blur-sm shadow-inner">
@@ -782,7 +800,6 @@ export default function Admin() {
                              </div>
                           </div>
 
-                          {/* 🔥 CTO FIX: Informações operacionais ouro puxadas direto do Banco e exibidas na Torre */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-6 bg-slate-950 p-4 rounded-2xl border border-white/5">
                              <div className="border-r border-white/5 pr-2">
                                <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mb-1">Distância</p>
@@ -811,21 +828,36 @@ export default function Admin() {
 
                           {/* 🔥 CTO FIX: VISIBILIDADE DOS PINS NA TORRE (Bloco 3) */}
                           <div className="mt-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                             <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-2 flex items-center gap-1"><ShieldCheck size={12}/> Chaves de Liberação (PINs)</p>
-                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                             <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-2 flex items-center gap-1"><ShieldCheck size={12}/> Chaves de Segurança (PINs e Fotos)</p>
+                             <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
                                <div className="bg-slate-950 p-2 rounded border border-white/5">
                                   <p className="text-[8px] uppercase text-slate-500 font-bold mb-1">PIN Coleta</p>
                                   <p className="text-sm font-mono text-white tracking-widest">{f.pinColeta || '---'}</p>
                                </div>
+                               
                                {f.pinEntregas && Array.isArray(f.pinEntregas) ? f.pinEntregas.map((pin: string, idx: number) => (
-                                  <div key={idx} className="bg-slate-950 p-2 rounded border border-white/5">
-                                    <p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">PIN Entrega {idx + 1}</p>
-                                    <p className="text-sm font-mono text-emerald-400 tracking-widest">{pin}</p>
+                                  <div key={idx} className="bg-slate-950 p-2 rounded border border-white/5 flex flex-col justify-between">
+                                    <div>
+                                      <p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">PIN Entrega {idx + 1}</p>
+                                      <p className="text-sm font-mono text-emerald-400 tracking-widest">{pin}</p>
+                                    </div>
+                                    {f.fotosEntregas && f.fotosEntregas[idx] ? (
+                                       <a href={f.fotosEntregas[idx]} target="_blank" rel="noreferrer" className="text-[8px] font-black uppercase tracking-widest text-cyan-400 underline mt-2 block">Ver Foto</a>
+                                    ) : (
+                                       <p className="text-[8px] font-black uppercase tracking-widest text-amber-500/70 mt-2">S/ Foto</p>
+                                    )}
                                   </div>
                                )) : (
-                                  <div className="bg-slate-950 p-2 rounded border border-white/5">
-                                    <p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">PIN Entrega Final</p>
-                                    <p className="text-sm font-mono text-emerald-400 tracking-widest">{typeof f.pinEntregas === 'string' ? f.pinEntregas : f.pinEntrega || '---'}</p>
+                                  <div className="bg-slate-950 p-2 rounded border border-white/5 flex flex-col justify-between">
+                                    <div>
+                                      <p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">PIN Entrega Final</p>
+                                      <p className="text-sm font-mono text-emerald-400 tracking-widest">{typeof f.pinEntregas === 'string' ? f.pinEntregas : f.pinEntrega || '---'}</p>
+                                    </div>
+                                    {f.comprovanteUrl ? (
+                                       <a href={f.comprovanteUrl} target="_blank" rel="noreferrer" className="text-[8px] font-black uppercase tracking-widest text-cyan-400 underline mt-2 block">Ver Foto</a>
+                                    ) : (
+                                       <p className="text-[8px] font-black uppercase tracking-widest text-amber-500/70 mt-2">S/ Foto</p>
+                                    )}
                                   </div>
                                )}
                              </div>
