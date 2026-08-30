@@ -1,7 +1,7 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
 // CTO-Log: Auditoria Final - Bloco 6 (Operação & Contingência).
-// Correção: Botão de Emergência / Cancelamento Direto na Tela de Rota.
+// Correção: Refinamento do Botão de Emergência / Cancelamento Direto na Tela de Rota.
 // Status: Devolução atômica ao Feed em caso de Pane Mecânica ou Emergência Pessoal.
 // =========================================================
 
@@ -285,7 +285,8 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       const driverId = auth.currentUser?.uid;
       if (!driverId) throw new Error("Motorista não identificado");
 
-      await dispatchRealtimeService.cancelarViagemMotorista(driverId, frete.id, `Cancelado pelo Motorista: ${ocorrenciaMotivo}.`);
+      // Ocorrência gera a devolução pro feed (disponivel) no dispatchRealtimeService
+      await dispatchRealtimeService.cancelarViagemMotorista(driverId, frete.id, `Emergência/Cancelamento: ${ocorrenciaMotivo}`);
       
       setIsPinModalOpen(false); 
       setIsOcorrenciaOpen(false);
