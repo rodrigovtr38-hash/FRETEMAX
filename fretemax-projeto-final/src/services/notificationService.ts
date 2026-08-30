@@ -2,7 +2,7 @@
 // NOME DO ARQUIVO: src/services/notificationService.ts
 // CTO-Log: FASE 3/4 - Integração e Liquidação.
 // Status: Push Notification estendido para alertas de escassez B2B (Auto-Bid).
-// Correção Bloco 4: Injeção da automação oficial de cobrança de PIX do Motorista.
+// Correção Bloco 4/6: Automação PIX + Despertador da IA (Foto e PIN).
 // =========================================================
 
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
@@ -109,7 +109,7 @@ export class NotificationService {
     window.open(`https://wa.me/55${telefoneLimpo}?text=${encodeURIComponent(mensagem)}`, '_blank');
   }
 
-  // 🔥 CTO FIX: Automação Oficial de Solicitação de PIX (Bloco 4)
+  // Automação Oficial de Solicitação de PIX
   static solicitarPixMotorista(telefone: string, nome: string, idFrete: string, valor: number | string) {
     const telefoneLimpo = telefone.replace(/\D/g, '');
     if (!telefoneLimpo) return;
@@ -118,5 +118,21 @@ export class NotificationService {
     const mensagem = `Olá *${nome}*, aqui é a central operacional do *FretoGo*.\n\nVimos que você finalizou a corrida #${idFrete.slice(0,8).toUpperCase()}.\n\nPara liquidarmos o valor de *R$ ${valorFormatado}*, por favor, confirme sua Chave PIX nesta conversa.`;
     
     window.open(`https://wa.me/55${telefoneLimpo}?text=${encodeURIComponent(mensagem)}`, '_blank');
+  }
+
+  // 🔥 CTO FIX: Despertador da IA (Avisa o cliente que a foto chegou e exige o PIN)
+  static notificarClienteFotoRecebida(telefone: string, nome: string, idFrete: string) {
+    const telefoneLimpo = telefone.replace(/\D/g, '');
+    if (!telefoneLimpo) return;
+
+    const mensagem = `🚨 *FRETOGO INFORMA: FOTO RECEBIDA*\n\nOlá ${nome}, o motorista da operação #${idFrete.slice(0,8).toUpperCase()} chegou ao destino e enviou a foto da mercadoria.\n\n⚠️ Acesse o painel agora e clique no botão verde para enviar a CHAVE PIN no Chat Operacional e liberar o motorista.\n\n🔗 Acesse: https://app.fretogo.com.br/cliente`;
+    
+    // Disparo em background ou via API dependendo do backend. No contexto atual, como o cliente não está na tela, 
+    // a melhor prática em um PWA é simular ou preparar o link se houver backend, ou injetar no Notification nativo.
+    // Para efeito de demonstração e consistência, vamos apenas logar e disparar push nativo:
+    console.log(`[WhatsApp API Simulada] Disparo para Embarcador ${telefoneLimpo}: ${mensagem}`);
+    
+    // Push Nativo (se o cliente aceitou notificações do navegador)
+    this.enviarNotificacaoApp('system', 'Foto da Entrega Recebida!', 'Acesse o painel para liberar o PIN do motorista.');
   }
 }
