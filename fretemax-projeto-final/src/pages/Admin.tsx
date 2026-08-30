@@ -19,7 +19,7 @@ import {
 
 import { ftiAnalytics } from '../core/ai/analytics/ia.metrics';
 
-// 🔥 CTO FIX: Chaves ajustadas para casar exatamente com o VEHICLE_CONFIG do Cliente.tsx
+// 🔥 CTO FIX: Chaves ajustadas para casar perfeitamente com o VEHICLE_CONFIG e ícones consertados.
 const CATEGORIAS_FROTA = [
   { id: 'moto', label: 'Moto / Courier', icon: '🏍️' },
   { id: 'carro', label: 'Carro / Hatch', icon: '🚗' },
@@ -301,9 +301,9 @@ export default function Admin() {
     window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // 🔥 CTO FIX: "A Vassoura Inteligente de QA" (Apaga apenas testes. Faturamento real é intocável)
+  // 🔥 CTO FIX: "A Vassoura Inteligente de QA". Apaga fretes parados ou de testes baseados na ausência de transação real.
   const handleNuclearReset = async () => {
-    const code = window.prompt("⚠️ CUIDADO: Esta ação vai varrer APENAS os fretes de teste (Bypass) e limpar o Radar. O faturamento real será preservado. Digite 'ZERAR' para prosseguir:");
+    const code = window.prompt("⚠️ CUIDADO: Esta ação vai varrer TODOS os fretes de teste e limpar cargas presas. Faturamentos reais ficarão INTACTOS. Digite 'ZERAR' para prosseguir:");
     if (code !== 'ZERAR') { alert("Ação abortada."); return; }
     
     setIsCleaning(true);
@@ -316,7 +316,7 @@ export default function Admin() {
       
       snapshot.forEach((doc) => { 
           const data = doc.data();
-          // Lógica Invertida (Segurança Máxima): Se NÃO tiver um transactionId real do MercadoPago, é teste ou lixo e pode ser apagado.
+          // SE não tiver transação MP real, ou se tiver a assinatura do bypass de QA, é lixo e pode apagar.
           const isRealPayment = data.transactionId && !String(data.transactionId).startsWith('QA_BYPASS_');
           
           if (!isRealPayment) {
@@ -325,21 +325,20 @@ export default function Admin() {
           }
       });
       
-      // Limpa as conversas de IA para não pesar o banco
       const logsRef = collection(db, 'analytics_ia_logs');
       const logsSnap = await getDocs(logsRef);
       logsSnap.forEach((doc) => { batch.delete(doc.ref); countLogs++; });
       
       if (countFretes > 0 || countLogs > 0) {
           await batch.commit();
-          alert(`✅ Vassoura Concluída! ${countFretes} fretes de teste foram apagados. Faturamento oficial protegido.`);
+          alert(`💥 Limpeza Concluída! ${countFretes} fretes de teste (ou presos) apagados do Radar.`);
           window.location.reload(); 
       } else {
-          alert('A base já está limpa. Nenhum frete de teste foi encontrado.');
+          alert('Nenhum frete de teste pendente encontrado.');
       }
       
     } catch (error) {
-      alert("Falha ao executar a limpeza de testes.");
+      alert("Falha ao executar a varredura.");
     } finally {
       setIsCleaning(false);
     }
@@ -583,7 +582,7 @@ export default function Admin() {
                   <span className="text-[10px] font-black text-white bg-slate-800 px-3 py-1 rounded-lg">TOTAL: {motoristasAprovados.length}</span>
                 </div>
                 
-                {/* 🔥 A FROTA FOI RESTAURADA E NÃO ESTÁ MAIS OCULTA */}
+                {/* 🔥 CTO FIX: FROTA RENDERIZADA CORRETAMENTE */}
                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
                   {CATEGORIAS_FROTA.map(cat => {
                     const qtd = contagemFrota[cat.id] || 0;
