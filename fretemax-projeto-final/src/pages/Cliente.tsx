@@ -8,6 +8,7 @@
 // Ajuste Operacional (5 Minutos): Cronômetro ajustado para 5min e UI enriquecida com Veículo e ETA do motorista.
 // FIX VERCEL: Correção estrita de sintaxe (aspas/crases) nas linhas 354 e 517-519 para destravar o Build.
 // CLIENTE-AUTH-01: Injeção do Gatekeeper de Autenticação (Google Auth) e bloqueio de Postagem Anônima no Firestore.
+// BLOCO 6: Injeção do Painel de Visibilidade de PINs e Automação de Envio no Chat Operacional.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -721,6 +722,22 @@ export default function Cliente() {
     return undefined;
   }, [orderData?.motoristaLat, orderData?.motoristaLng]);
 
+  // 🔥 CTO FIX: FUNÇÃO MÁGICA DO CHAT OPERACIONAL (BLOCO 6)
+  const handleEnviarPinChat = async (pin: string, etapa: string) => {
+    if (!currentOrderId || !pin) return;
+    try {
+      await addDoc(collection(db, 'fretes', currentOrderId, 'chat'), {
+        texto: `Atenção Motorista, a etapa foi confirmada. O PIN de liberação para a ${etapa} é: ${pin}`,
+        nome: nome || 'Embarcador',
+        tipoUsuario: 'cliente',
+        createdAt: serverTimestamp(),
+      });
+      showToast(`PIN da ${etapa} enviado no chat!`, 'success');
+    } catch (error) {
+      showToast('Erro ao enviar mensagem automática no chat.', 'error');
+    }
+  };
+
   // 🔥 GATEKEEPER RENDER LOGIC
   if (!authReady) {
     return (
@@ -1269,10 +1286,52 @@ export default function Cliente() {
                     </div>
                 </div>
 
-                {['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte'].includes(orderData?.status || '') && (
-                    <div className="mt-8 pt-8 border-t border-white/5">
-                      <ChatFrete freteId={currentOrderId!} tipoUsuario="cliente" nome={nome || 'Embarcador'} />
-                    </div>
+                {['aceito', 'indo_coleta', 'chegou_coleta', 'coletando', 'em_transporte', 'entregue'].includes(orderData?.status || '') && (
+                  <div className="mt-8 pt-8 border-t border-white/5">
+                     {/* 🔥 CTO FIX: PAINEL DE PINS COM AUTOMAÇÃO DE CHAT (BLOCO 6) */}
+                     <div className="mb-6 bg-slate-950 border border-emerald-500/20 rounded-3xl p-6 shadow-inner">
+                        <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400 mb-4 flex items-center gap-2">
+                           <ShieldCheck size={18} /> Chaves de Segurança (PINs)
+                        </h3>
+                        <p className="text-[10px] text-slate-400 font-medium mb-6 uppercase tracking-widest">
+                          Envie o PIN pelo chat operacional apenas quando o motorista estiver na doca e enviar a foto da mercadoria.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                           <div className="bg-slate-900 p-4 rounded-2xl border border-white/5 flex flex-col justify-between">
+                             <div>
+                               <p className="text-[10px] font-black uppercase text-cyan-500 mb-1">PIN Coleta</p>
+                               <p className="text-2xl font-mono font-black text-white tracking-widest">{orderData?.pinColeta || '---'}</p>
+                             </div>
+                             <button onClick={() => handleEnviarPinChat(orderData?.pinColeta || '', 'Coleta')} className="mt-4 w-full bg-cyan-600/20 hover:bg-cyan-600 text-cyan-400 hover:text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-cyan-500/30">
+                               <MessageCircle size={14} /> Enviar no Chat
+                             </button>
+                           </div>
+                           {orderData?.pinEntregas && Array.isArray(orderData.pinEntregas) ? orderData.pinEntregas.map((pin: string, idx: number) => (
+                             <div key={idx} className="bg-slate-900 p-4 rounded-2xl border border-white/5 flex flex-col justify-between">
+                               <div>
+                                 <p className="text-[10px] font-black uppercase text-emerald-500 mb-1">PIN Entrega {idx + 1}</p>
+                                 <p className="text-2xl font-mono font-black text-white tracking-widest">{pin}</p>
+                               </div>
+                               <button onClick={() => handleEnviarPinChat(pin, `Entrega ${idx + 1}`)} className="mt-4 w-full bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-emerald-500/30">
+                                 <MessageCircle size={14} /> Enviar no Chat
+                               </button>
+                             </div>
+                           )) : (
+                             <div className="bg-slate-900 p-4 rounded-2xl border border-white/5 flex flex-col justify-between">
+                               <div>
+                                 <p className="text-[10px] font-black uppercase text-emerald-500 mb-1">PIN Entrega Final</p>
+                                 <p className="text-2xl font-mono font-black text-white tracking-widest">{typeof orderData?.pinEntregas === 'string' ? orderData.pinEntregas : (orderData as any)?.pinEntrega || '---'}</p>
+                               </div>
+                               <button onClick={() => handleEnviarPinChat(typeof orderData?.pinEntregas === 'string' ? orderData.pinEntregas : (orderData as any)?.pinEntrega || '', 'Entrega Final')} className="mt-4 w-full bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-emerald-500/30">
+                                 <MessageCircle size={14} /> Enviar no Chat
+                               </button>
+                             </div>
+                           )}
+                        </div>
+                     </div>
+
+                     <ChatFrete freteId={currentOrderId!} tipoUsuario="cliente" nome={nome || 'Embarcador'} />
+                  </div>
                 )}
               </div>
 
