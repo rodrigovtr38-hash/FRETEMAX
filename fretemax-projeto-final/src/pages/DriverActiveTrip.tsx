@@ -1,26 +1,16 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/DriverActiveTrip.tsx
-// CTO-Log: Auditoria Final - Bloco 2 (A Viagem Blindada)
-// Correção: Ejeção da função cliente-lado de Chat para evitar duplicações.
-// Evolução Fase 6: BLOCO 7 - Sala de Espera Visual (Escrow Lock) injetada.
-// Evolução Fase 14: Integração de Geofence Dinâmico e UI de GPS Real.
-// Evolução Fase #310: Correção de Rules of Hooks (Remoção do useMemo pós-early return).
-// Hotfix: Restauração da variável mapDestinoGPS (ReferenceError Fix).
-// Hotfix 2: Proteção de Nulos (Optional Chaining) nas variáveis Top-Level.
-// Bloco GPS-01: Navegação Externa Inteligente. Telemetria amarrada à navegação com Injeção de Origem Exata.
-// Bloco 23: Fix POD/Foto Real obrigatória antes do PIN. Fix Problema no Local (Evita Falso ENTREGUE).
-// Bloco 24.1: POD Migration. Upload fotográfico via Firebase Storage (URL HTTPS), extirpando Base64 pesada do Firestore.
-// CTO-Log (EXECUÇÃO ATUAL): Remoção do bloqueio de tela cego. Motorista agora acompanha a tela real da viagem com a "Trava Operacional Escrow" ativa no botão principal.
-// FIX ATUAL (BLOCO 1): Correção de crash de renderização e glitch de viewport no Modal do PIN (Keys + Remoção de autoFocus).
-// FIX ATUAL (BLOCO 4A): Remoção do botão de bypass de cancelamento no Escrow. Correção da recusa operacional via chamada segura.
+// CTO-Log: Auditoria Final - Bloco 6 (Operação & Contingência).
+// Correção: Botão de Emergência / Cancelamento Direto na Tela de Rota.
+// Status: Devolução atômica ao Feed em caso de Pane Mecânica ou Emergência Pessoal.
 // =========================================================
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, auth, storage } from '../firebase'; 
-import { doc, onSnapshot, arrayUnion, DocumentData } from 'firebase/firestore';
+import { doc, onSnapshot, DocumentData } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage'; 
-import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle, FileText, Check } from 'lucide-react';
+import { LockKeyhole, AlertTriangle, Loader2, MapPin, Radio, Navigation, Scale, Camera, Wallet, CheckCircle2, MessageCircle, FileText, Check, XCircle } from 'lucide-react';
 import MapaCliente from '../components/MapaCliente';
 import { dispatchRealtimeService } from '../services/dispatchRealtimeService';
 import { locationRealtimeService } from '../services/locationRealtimeService'; 
@@ -66,9 +56,8 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const [tentativasPin, setTentativasPin] = useState(0);
   const [bloqueioPin, setBloqueioPin] = useState(false);
 
-  // Estado que armazena momentaneamente a Base64 apenas na memória para dar feedback de tela ao usuário
   const [fotoPodBase64, setFotoPodBase64] = useState<string | null>(null);
-  const [uploadingPod, setUploadingPod] = useState(false); // Controle de UI do Firebase Storage
+  const [uploadingPod, setUploadingPod] = useState(false);
   
   const [chavePix, setChavePix] = useState('');
 
@@ -101,7 +90,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
   const paradaAtualIndex = frete?.paradaAtualIndex || 0;
   const destinoAtual = paradas[paradaAtualIndex] || (frete?.entrega || {});
 
-  // 🔥 CTO FIX: Incluído RESERVADO_AGUARDANDO_PAGAMENTO na fase de coleta para não quebrar a bússola/mapa
   const isFaseColeta = frete?.status 
     ? [AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO, AppTripState.ACEITO, AppTripState.INDO_COLETA, AppTripState.CHEGOU_COLETA, AppTripState.COLETANDO].includes(frete.status) 
     : false;
@@ -204,7 +192,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
     }
   };
 
-  // 🔥 CTO FIX BLOCO 24.1: UPLOAD DO POD NO CLIQUE DO PIN
   const handlePinSubmit = async () => {
     if (bloqueioPin || uploadingPod) return;
     setActionLoading(true);
@@ -212,7 +199,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
     try {
       if (frete.status === AppTripState.COLETANDO) {
-        // Fluxo Coleta
         if (pinValue !== frete.pinColeta) { 
           const errosAtuais = tentativasPin + 1;
           setTentativasPin(errosAtuais);
@@ -229,14 +215,12 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         await dispatchRealtimeService.atualizarStatusTrip(frete.id, AppTripState.EM_TRANSPORTE);
       
       } else {
-        // Fluxo Entrega (POD Obrigatório)
         if (!fotoPodBase64) {
           setPinError('A foto do canhoto/mercadoria é OBRIGATÓRIA antes de validar o PIN.');
           setActionLoading(false); 
           return;
         }
 
-        // Validação da Senha/PIN antes do Upload
         const pinEntregas = frete.pinEntregas || [];
         if (pinEntregas.length > 0 && pinValue !== pinEntregas[paradaAtualIndex]) { 
           const errosAtuais = tentativasPin + 1;
@@ -252,12 +236,11 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         }
         
         setTentativasPin(0);
-        setUploadingPod(true); // Trava o botão e avisa a UI que o upload começou
+        setUploadingPod(true);
 
         let finalUrl = '';
         
         try {
-          // Inicia o Upload para o Firebase Storage
           const fileRef = ref(storage, `pods/${frete.id}/parada_${paradaAtualIndex}.jpg`);
           await uploadString(fileRef, fotoPodBase64, 'data_url');
           finalUrl = await getDownloadURL(fileRef);
@@ -265,17 +248,15 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
           console.error('[CTO-Log] Erro no upload da foto POD:', uploadError);
           setPinError('Falha no upload do comprovante. Verifique a conexão e tente novamente.');
           setUploadingPod(false);
-          setActionLoading(false);
-          return; // Aborta e não avança a máquina de estados, o motorista não se livra da foto.
+          setActionLoading(false); 
+          return;
         }
 
-        // Transmissão da URL Segura para o Firestore (Preservando Compatibilidade Antiga)
         const fotosAtuais = frete.fotosPod || {};
         fotosAtuais[`parada_${paradaAtualIndex}`] = finalUrl;
         
         await dispatchRealtimeService.atualizarTripRealtime(frete.id, { fotosPod: fotosAtuais });
 
-        // Avanço Logístico
         if (paradaAtualIndex + 1 < paradas.length) {
            await dispatchRealtimeService.atualizarTripRealtime(frete.id, { paradaAtualIndex: paradaAtualIndex + 1 });
         } else {
@@ -283,7 +264,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         }
       }
       
-      // Cleanup pós-sucesso
       setIsPinModalOpen(false); 
       setPinValue('');
       setFotoPodBase64(null);
@@ -297,7 +277,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
 
   const handleConfirmInsucesso = async () => {
     if (!ocorrenciaMotivo) {
-       alert("Selecione um motivo para registrar o problema.");
+       alert("Selecione um motivo para registrar o cancelamento da viagem.");
        return;
     }
     setActionLoading(true);
@@ -305,8 +285,7 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       const driverId = auth.currentUser?.uid;
       if (!driverId) throw new Error("Motorista não identificado");
 
-      // 🔥 CTO FIX: Utiliza cancelamento seguro e blindado, limpando Firestore E Realtime Database.
-      await dispatchRealtimeService.cancelarViagemMotorista(driverId, frete.id, `Ocorrência: ${ocorrenciaMotivo}. Etapa interrompida.`);
+      await dispatchRealtimeService.cancelarViagemMotorista(driverId, frete.id, `Cancelado pelo Motorista: ${ocorrenciaMotivo}.`);
       
       setIsPinModalOpen(false); 
       setIsOcorrenciaOpen(false);
@@ -331,8 +310,8 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
       window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (error) {
       alert("Falha na comunicação. Tente novamente.");
-    } finally {
-      setActionLoading(false);
+    } finally { 
+      setActionLoading(false); 
     }
   };
 
@@ -493,7 +472,6 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
         </div>
 
         <div className="space-y-4">
-          {/* 🔥 CTO FIX: Botão Bloqueado de Escrow */}
           {(frete.status === AppTripState.RESERVADO_AGUARDANDO_PAGAMENTO || String(frete.status) === 'reservado_aguardando_pagamento') && (
             <div className="flex flex-col gap-2">
               <button disabled className="w-full flex items-center justify-center bg-slate-800/80 h-16 font-black uppercase tracking-widest rounded-xl text-slate-400 cursor-not-allowed border border-slate-700 shadow-inner gap-2">
@@ -534,87 +512,100 @@ export default function DriverActiveTrip({ freteId }: DriverActiveTripProps) {
              </button>
            </div>
         )}
+
+        {/* 🔥 CTO FIX: Botão Direto de Cancelamento / Emergência na Tela de Rota */}
+        {frete.status !== AppTripState.FINALIZANDO && frete.status !== AppTripState.ENTREGUE && (
+          <div className="mt-6 pt-4 border-t border-white/5">
+            <button 
+              onClick={() => setIsOcorrenciaOpen(true)} 
+              disabled={actionLoading}
+              className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-inner"
+            >
+              <AlertTriangle size={14} /> Reportar Problema / Cancelar Operação
+            </button>
+          </div>
+        )}
       </motion.div>
 
+      {/* MODAL DE OCORRÊNCIA E CANCELAMENTO DA VIAGEM */}
+      <AnimatePresence>
+        {isOcorrenciaOpen && (
+          <motion.div key="modal-ocorrencia-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4">
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-red-500/50 shadow-2xl">
+              <div className="flex justify-center mb-4"><div className="bg-red-500/10 p-4 rounded-full border border-red-500/20"><AlertTriangle size={32} className="text-red-400" /></div></div>
+              <h3 className="text-white text-center font-black mb-2 uppercase text-xl tracking-tight">Cancelar Operação</h3>
+              <p className="text-slate-400 text-xs text-center mb-6 leading-relaxed">A carga será devolvida ao Radar da FretoGo para que outro parceiro assuma.</p>
+              
+              <select 
+                value={ocorrenciaMotivo} 
+                onChange={(e) => setOcorrenciaMotivo(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white text-sm mb-6 outline-none focus:border-red-400"
+              >
+                <option value="" disabled>Selecione o motivo...</option>
+                <option value="Problema mecânico no veículo">Problema mecânico no veículo</option>
+                <option value="Emergência pessoal / Imprevisto grave">Emergência pessoal / Imprevisto grave</option>
+                <option value="Destinatário ausente / Doca fechada">Destinatário ausente / Doca fechada</option>
+                <option value="Local inacessível / Endereço incorreto">Local inacessível / Endereço incorreto</option>
+                <option value="Carga recusada pelo cliente">Carga recusada pelo cliente</option>
+              </select>
+
+              <div className="flex gap-2">
+                <button onClick={() => { setIsOcorrenciaOpen(false); setOcorrenciaMotivo(''); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
+                <button onClick={handleConfirmInsucesso} disabled={actionLoading || !ocorrenciaMotivo} className="w-2/3 flex items-center justify-center bg-red-500 py-4 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 hover:bg-red-600 shadow-lg shadow-red-500/20">
+                  {actionLoading ? <Loader2 className="animate-spin" size={18}/> : 'Confirmar'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL DE PIN E COMPROVANTE */}
       <AnimatePresence>
         {isPinModalOpen && (
           <motion.div key="pin-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4">
-            
-            <AnimatePresence mode="wait">
-              {isOcorrenciaOpen ? (
-                 <motion.div key="modal-ocorrencia" initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-red-500/50 shadow-2xl">
-                   <div className="flex justify-center mb-4"><div className="bg-red-500/10 p-4 rounded-full border border-red-500/20"><AlertTriangle size={32} className="text-red-400" /></div></div>
-                   <h3 className="text-white text-center font-black mb-2 uppercase text-xl tracking-tight">Reportar Problema</h3>
-                   <p className="text-slate-400 text-xs text-center mb-6 leading-relaxed">A viagem será suspensa e retornará para a Central.</p>
-                   
-                   <select 
-                     value={ocorrenciaMotivo} 
-                     onChange={(e) => setOcorrenciaMotivo(e.target.value)}
-                     className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white text-sm mb-6 outline-none focus:border-red-400"
-                   >
-                     <option value="" disabled>Selecione o motivo...</option>
-                     <option value="Destinatário ausente">Destinatário ausente</option>
-                     <option value="Local inacessível / Endereço não existe">Local inacessível / Endereço incorreto</option>
-                     <option value="Carga recusada pelo cliente">Carga recusada pelo cliente</option>
-                     <option value="Problema mecânico no veículo">Problema mecânico no veículo</option>
-                     <option value="Acidente / Imprevisto Grave">Acidente / Imprevisto Grave</option>
-                   </select>
-
-                   <div className="flex gap-2">
-                     <button onClick={() => setIsOcorrenciaOpen(false)} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
-                     <button onClick={handleConfirmInsucesso} disabled={actionLoading || !ocorrenciaMotivo} className="w-2/3 flex items-center justify-center bg-red-500 py-4 font-black uppercase tracking-widest rounded-xl text-white disabled:opacity-50 hover:bg-red-600 shadow-lg shadow-red-500/20">
-                       {actionLoading ? <Loader2 className="animate-spin" size={18}/> : 'Reportar'}
-                     </button>
-                   </div>
-                 </motion.div>
+            <motion.div key="modal-pin" initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-cyan-500/50 shadow-2xl">
+              <div className="flex justify-center mb-4"><div className="bg-cyan-500/10 p-4 rounded-full border border-cyan-500/20"><LockKeyhole size={32} className="text-cyan-400" /></div></div>
+              <h3 className="text-white text-center font-black mb-2 uppercase text-xl tracking-tight">{frete.status === AppTripState.COLETANDO ? 'PIN de Coleta' : 'Comprovante & PIN'}</h3>
+              
+              {frete.status === AppTripState.COLETANDO ? (
+                <p className="text-slate-400 text-xs text-center mb-6 leading-relaxed">Peça os 4 dígitos ao responsável no local para liberar o sistema.</p>
               ) : (
-                 <motion.div key="modal-pin" initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-slate-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-cyan-500/50 shadow-2xl">
-                   <div className="flex justify-center mb-4"><div className="bg-cyan-500/10 p-4 rounded-full border border-cyan-500/20"><LockKeyhole size={32} className="text-cyan-400" /></div></div>
-                   <h3 className="text-white text-center font-black mb-2 uppercase text-xl tracking-tight">{frete.status === AppTripState.COLETANDO ? 'PIN de Coleta' : 'Comprovante & PIN'}</h3>
-                   
-                   {frete.status === AppTripState.COLETANDO ? (
-                      <p className="text-slate-400 text-xs text-center mb-6 leading-relaxed">Peça os 4 dígitos ao responsável no local para liberar o sistema.</p>
-                   ) : (
-                      <p className="text-slate-400 text-xs text-center mb-4 leading-relaxed">Tire a foto do canhoto assinado ou da mercadoria deixada no local ANTES de digitar o PIN.</p>
-                   )}
-
-                   {frete.status !== AppTripState.COLETANDO && (
-                      <div className="mb-6">
-                        <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${fotoPodBase64 ? 'border-emerald-500 bg-emerald-500/10' : 'border-cyan-500/30 bg-slate-950 hover:bg-slate-900 focus:border-cyan-400'}`}>
-                           {fotoPodBase64 ? (
-                             <div className="flex flex-col items-center">
-                               <CheckCircle2 size={32} className="text-emerald-400 mb-2" />
-                               <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Foto Capturada!</span>
-                             </div>
-                           ) : (
-                             <div className="flex flex-col items-center">
-                               <Camera size={32} className="text-cyan-400 mb-2" />
-                               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Abrir Câmera</span>
-                             </div>
-                           )}
-                           <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCapturePhoto} />
-                        </label>
-                      </div>
-                   )}
-
-                   <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pinValue} onChange={(e) => { setPinValue(e.target.value.replace(/\D/g, '')); setPinError(''); }} className="w-full p-5 text-center text-5xl font-black tracking-[0.5em] bg-slate-950 text-cyan-400 border-2 border-cyan-500/30 rounded-2xl mb-4 focus:outline-none focus:border-cyan-400 placeholder:text-slate-800" placeholder="0000" />
-
-                   {pinError && <p className="text-red-400 text-[10px] font-black text-center mb-4 uppercase tracking-widest">{pinError}</p>}
-
-                   <div className="flex flex-col gap-3 mt-4">
-                     <div className="flex gap-2">
-                       <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); setFotoPodBase64(null); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
-                       <button onClick={handlePinSubmit} disabled={actionLoading || uploadingPod || pinValue.length < 4} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
-                         {uploadingPod ? <><Loader2 className="animate-spin text-black" size={18}/> Enviando</> : actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar PIN'}
-                       </button>
-                     </div>
-                     <button onClick={() => setIsOcorrenciaOpen(true)} disabled={actionLoading || uploadingPod} className="w-full mt-2 bg-red-500/10 border border-red-500/30 py-4 text-[10px] font-black uppercase tracking-widest rounded-xl text-red-400 hover:bg-red-50 hover:text-white transition-colors flex items-center justify-center gap-2">
-                       <AlertTriangle size={16} /> Problema no Local (Recusa)
-                     </button>
-                   </div>
-                 </motion.div>
+                <p className="text-slate-400 text-xs text-center mb-4 leading-relaxed">Tire a foto do canhoto assinado ou da mercadoria deixada no local ANTES de digitar o PIN.</p>
               )}
-            </AnimatePresence>
+
+              {frete.status !== AppTripState.COLETANDO && (
+                <div className="mb-6">
+                  <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${fotoPodBase64 ? 'border-emerald-500 bg-emerald-500/10' : 'border-cyan-500/30 bg-slate-950 hover:bg-slate-900 focus:border-cyan-400'}`}>
+                     {fotoPodBase64 ? (
+                       <div className="flex flex-col items-center">
+                         <CheckCircle2 size={32} className="text-emerald-400 mb-2" />
+                         <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Foto Capturada!</span>
+                       </div>
+                     ) : (
+                       <div className="flex flex-col items-center">
+                         <Camera size={32} className="text-cyan-400 mb-2" />
+                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Abrir Câmera</span>
+                       </div>
+                     )}
+                     <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCapturePhoto} />
+                  </label>
+                </div>
+              )}
+
+              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pinValue} onChange={(e) => { setPinValue(e.target.value.replace(/\D/g, '')); setPinError(''); }} className="w-full p-5 text-center text-5xl font-black tracking-[0.5em] bg-slate-950 text-cyan-400 border-2 border-cyan-500/30 rounded-2xl mb-4 focus:outline-none focus:border-cyan-400 placeholder:text-slate-800" placeholder="0000" />
+
+              {pinError && <p className="text-red-400 text-[10px] font-black text-center mb-4 uppercase tracking-widest">{pinError}</p>}
+
+              <div className="flex flex-col gap-3 mt-4">
+                <div className="flex gap-2">
+                  <button onClick={() => { setIsPinModalOpen(false); setPinValue(''); setPinError(''); setFotoPodBase64(null); }} className="w-1/3 bg-transparent border border-white/10 py-4 font-black uppercase text-xs rounded-xl text-slate-400 hover:bg-white/5">Voltar</button>
+                  <button onClick={handlePinSubmit} disabled={actionLoading || uploadingPod || pinValue.length < 4} className="w-2/3 flex items-center justify-center bg-cyan-500 py-4 font-black uppercase tracking-widest rounded-xl text-slate-950 disabled:opacity-50 hover:bg-cyan-400 shadow-lg shadow-cyan-500/20">
+                    {uploadingPod ? <><Loader2 className="animate-spin text-black" size={18}/> Enviando</> : actionLoading ? <Loader2 className="animate-spin text-black" size={18}/> : 'Confirmar PIN'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
