@@ -38,11 +38,12 @@ service cloud.firestore {
     match /motoristas_cadastros/{userId} {
       allow read: if isOwner(userId) || isAdmin() || isQATester();
       allow create: if isOwner(userId);
+      // 🔥 CTO FIX: Permite que contas de Teste/QA aprovem o motorista no Admin
       allow update: if
         (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'score', 'taxaAceite', 'totalCorridas', 'aprovado', 'status', 'riscoFraude', 'validacaoManual'
         ])) 
-        || isAdmin();
+        || isAdmin() || isQATester();
       allow delete: if false;
     }
 
@@ -110,7 +111,8 @@ service cloud.firestore {
            'lucroPlataforma', 'prioridade', 'ofertaExpiraEm', 'createdAt', 'updatedAt'
          ]));
 
-      allow delete: if false;
+      // 🔥 CTO FIX: Libera a deleção APENAS para os perfis autorizados (necessário para o botão Zerar Testes funcionar)
+      allow delete: if isAdmin() || isQATester();
       
       // Liberação para a Coleção Filha de Chat FTI
       match /chat/{mensagemId} {
