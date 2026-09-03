@@ -1,465 +1,566 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Home.tsx
-// CTO-Log: HOME-EXEC-01. Landing Page Oficial FretoGo.
-// Status: Arquitetura Mobile-First, focada em Dor e Solução para B2B e Transportadores.
-// Remoção de métricas irreais. Comunicação clara de Escrow e Rotas.
-// FIX VERCEL: Correção definitiva da árvore JSX (Balanceamento de tags estruturais).
-// BLOCO HOME-VISUAL-01: Polimento visual do Hero (hierarquia, profundidade, glow),
-// correção de contraste do CTA Motorista (mobile/hero) e suporte a prefers-reduced-motion.
-// BLOCO HOME-FIX-02: Link funcional do botão "Entrar no Grupo" (WhatsApp) + acabamento
-// responsivo (indentação dos cards de passos e espaçamento do header no mobile).
-// Nenhuma rota, serviço, Firebase ou regra de negócio foi alterada.
+// CTO-Log: HOME-VISUAL-03. Evolução de Arquitetura e UX B2B/B2C.
+// Status: Reestruturação da Landing Page Oficial FretoGo inspirada em 
+// usabilidade de grandes plataformas logísticas (clareza, hierarquia e conversão).
+// Integração visual da marca oficial (icon-192.png) sem bordas artificiais.
+// Todas as rotas, links de WhatsApp, grupos e serviços preservados.
 // =========================================================
 
-import { Zap, Truck, ShieldCheck, ArrowRight, Building2, MapPin, CheckCircle, Package, Route, LockKeyhole, Camera, Users, DollarSign, Clock, Map, ChevronRight, Search } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
+import Seo from '@/components/Seo';
+import Reveal from '@/components/Reveal';
+import { 
+  ArrowRight, 
+  Package, 
+  Truck, 
+  ShieldCheck, 
+  Search, 
+  Clock, 
+  CreditCard, 
+  Camera, 
+  ChevronRight, 
+  CheckCircle2, 
+  MessageCircle, 
+  Users, 
+  MapPin,
+  Menu,
+  X,
+  Instagram,
+  Youtube,
+  Globe
+} from 'lucide-react';
 
-export default function Home() {
+const HERO_IMG = 'https://images.hostinger.com/f09fbe30-dd15-4b3b-aede-622f9534802d.png';
+
+// =========================================================
+// 1. HEADER / NAVBAR ESPECÍFICO DA HOME
+// =========================================================
+interface NavProps {
+  onClient: () => void;
+  onDriver: () => void;
+  onSupport: () => void;
+}
+
+function HomeNavbar({ onClient, onDriver, onSupport }: NavProps) {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  return (
+    <header className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-300 ${scrolled ? 'bg-slate-900 shadow-lg border-b border-slate-800' : 'bg-slate-900 border-b border-transparent'}`}>
+      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+        
+        {/* LOGO FRETOGO INTEGRADA */}
+        <div className="flex items-center cursor-pointer" onClick={() => window.scrollTo(0, 0)}>
+          <img 
+            src="/icon-192.png" 
+            alt="FretoGo Logo" 
+            className="h-10 sm:h-12 w-auto object-contain rounded-md" 
+            title="FretoGo"
+          />
+        </div>
+        
+        {/* NAVEGAÇÃO DESKTOP */}
+        <div className="hidden md:flex items-center gap-8">
+          <button onClick={onClient} className="text-sm font-bold text-slate-300 hover:text-white transition-colors">Para Empresas</button>
+          <button onClick={onDriver} className="text-sm font-bold text-slate-300 hover:text-white transition-colors">Para Motoristas</button>
+          <button onClick={onSupport} className="text-sm font-bold text-slate-300 hover:text-white transition-colors">Suporte</button>
+        </div>
+
+        {/* CTAs DESKTOP */}
+        <div className="hidden md:flex items-center gap-4">
+          <button onClick={onDriver} className="flex h-11 items-center justify-center rounded-xl bg-slate-800 border border-slate-700 px-5 text-sm font-black uppercase tracking-widest text-white hover:bg-slate-700 transition-all active:scale-95">
+            Sou Motorista
+          </button>
+          <button onClick={onClient} className="flex h-11 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-black uppercase tracking-widest text-white shadow-lg hover:bg-blue-500 transition-all active:scale-95">
+            Publicar Carga
+          </button>
+        </div>
+
+        {/* MENU MOBILE TOGGLE */}
+        <div className="md:hidden flex items-center">
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-slate-300 hover:text-white p-2">
+            {mobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
+          </button>
+        </div>
+      </nav>
+
+      {/* MENU MOBILE EXPANDIDO */}
+      {mobileMenuOpen && (
+        <div className="md:hidden absolute top-full left-0 w-full bg-slate-900 border-b border-slate-800 shadow-2xl flex flex-col py-6 px-4 gap-4 animate-in slide-in-from-top-2">
+          <button onClick={() => { setMobileMenuOpen(false); onClient(); }} className="w-full text-left px-4 py-3 text-lg font-bold text-white hover:bg-slate-800 rounded-xl">Para Empresas</button>
+          <button onClick={() => { setMobileMenuOpen(false); onDriver(); }} className="w-full text-left px-4 py-3 text-lg font-bold text-white hover:bg-slate-800 rounded-xl">Para Motoristas</button>
+          <button onClick={() => { setMobileMenuOpen(false); onSupport(); }} className="w-full text-left px-4 py-3 text-lg font-bold text-white hover:bg-slate-800 rounded-xl">Suporte WhatsApp</button>
+          <div className="h-px w-full bg-slate-800 my-2"></div>
+          <button onClick={() => { setMobileMenuOpen(false); onClient(); }} className="w-full h-14 rounded-xl bg-blue-600 text-sm font-black uppercase tracking-widest text-white shadow-lg active:scale-95">
+            Publicar Carga
+          </button>
+          <button onClick={() => { setMobileMenuOpen(false); onDriver(); }} className="w-full h-14 rounded-xl bg-slate-800 border border-slate-700 text-sm font-black uppercase tracking-widest text-white active:scale-95">
+            Sou Motorista
+          </button>
+        </div>
+      )}
+    </header>
+  );
+}
+
+// =========================================================
+// 2. HERO / PRIMEIRA DOBRA
+// =========================================================
+function Hero({ onClient, onDriver }: any) {
+  return (
+    <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-slate-900 min-h-[90vh] flex items-center">
+      <div className="absolute inset-0 z-0">
+        <img src={HERO_IMG} alt="Rodovia Logística" className="h-full w-full object-cover opacity-30 mix-blend-overlay" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-slate-900"></div>
+        <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-blue-600/20 blur-[120px]"></div>
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+        <Reveal>
+          <h1 className="max-w-4xl mx-auto font-display text-4xl sm:text-5xl lg:text-7xl font-black text-white leading-[1.1] tracking-tight">
+            O transporte já tem a demanda. <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
+              Falta conectar melhor quem precisa transportar com quem está pronto para rodar.
+            </span>
+          </h1>
+        </Reveal>
+        
+        <Reveal delay={0.1}>
+          <p className="mt-8 max-w-2xl mx-auto text-lg sm:text-xl text-slate-300 font-medium leading-relaxed">
+            A FretoGo é a plataforma que simplifica a logística. Conectamos empresas a transportadores de forma direta, segura e com pagamento blindado.
+          </p>
+        </Reveal>
+
+        <Reveal delay={0.2}>
+          <div className="mt-12 flex flex-col sm:flex-row gap-5 justify-center items-center">
+            <button 
+              onClick={onClient}
+              className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-[1.5rem] bg-blue-600 px-10 text-sm font-black uppercase tracking-[0.2em] text-white shadow-[0_10px_30px_rgba(37,99,235,0.4)] transition-all hover:scale-105 hover:bg-blue-500"
+            >
+              Publicar Carga <ArrowRight size={18} />
+            </button>
+            <button 
+              onClick={onDriver}
+              className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-[1.5rem] bg-slate-800 border border-slate-700 px-10 text-sm font-black uppercase tracking-[0.2em] text-white transition-all hover:scale-105 hover:bg-slate-700 hover:border-cyan-500/50"
+            >
+              <Truck size={18} className="text-cyan-400" /> Encontrar Fretes
+            </button>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// 3. ENTRADA PARA EMPRESA E MOTORISTA
+// =========================================================
+function AudienceSplit({ onClient, onDriver }: any) {
+  return (
+    <section className="py-24 bg-slate-50 relative z-20 -mt-8 rounded-t-[2.5rem] border-t border-slate-200 shadow-xl">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          
+          {/* CARD EMPRESA */}
+          <Reveal>
+            <div className="bg-white rounded-[2rem] p-8 sm:p-10 shadow-lg border border-slate-200 flex flex-col h-full transition-transform hover:-translate-y-1 hover:shadow-2xl">
+              <div className="h-16 w-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-8 border border-blue-100">
+                <Package size={32} />
+              </div>
+              <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Tem uma carga para entregar?</h2>
+              <p className="text-slate-600 mb-8 flex-grow text-lg leading-relaxed">
+                Pare de perder tempo buscando veículos. Publique sua carga, acompanhe a entrega em tempo real e tenha a garantia da mercadoria validada na doca.
+              </p>
+              <ul className="space-y-4 mb-10 text-slate-700 font-bold text-sm">
+                <li className="flex items-center gap-3"><CheckCircle2 className="text-blue-500 w-6 h-6"/> Publicação rápida e simplificada</li>
+                <li className="flex items-center gap-3"><CheckCircle2 className="text-blue-500 w-6 h-6"/> Acompanhamento em tempo real</li>
+                <li className="flex items-center gap-3"><CheckCircle2 className="text-blue-500 w-6 h-6"/> Motoristas homologados pela plataforma</li>
+              </ul>
+              <button onClick={onClient} className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-widest text-sm transition-all shadow-md flex items-center justify-center gap-2">
+                Publicar minha carga <ChevronRight size={18} />
+              </button>
+            </div>
+          </Reveal>
+
+          {/* CARD MOTORISTA */}
+          <Reveal delay={0.1}>
+            <div className="bg-slate-900 rounded-[2rem] p-8 sm:p-10 shadow-xl border border-slate-800 flex flex-col h-full text-white transition-transform hover:-translate-y-1 hover:shadow-2xl">
+              <div className="h-16 w-16 bg-slate-800 text-cyan-400 rounded-2xl flex items-center justify-center mb-8 border border-slate-700">
+                <Truck size={32} />
+              </div>
+              <h2 className="text-3xl font-black text-white mb-4 tracking-tight">Tem um veículo e quer fretes?</h2>
+              <p className="text-slate-400 mb-8 flex-grow text-lg leading-relaxed">
+                Não rode de baú vazio. Acesse o radar de oportunidades na sua região, escolha as melhores rotas e garanta seu pagamento de forma blindada.
+              </p>
+              <ul className="space-y-4 mb-10 text-slate-300 font-bold text-sm">
+                <li className="flex items-center gap-3"><CheckCircle2 className="text-cyan-400 w-6 h-6"/> Oportunidades diárias no seu radar</li>
+                <li className="flex items-center gap-3"><CheckCircle2 className="text-cyan-400 w-6 h-6"/> Liberdade para escolher as rotas</li>
+                <li className="flex items-center gap-3"><CheckCircle2 className="text-cyan-400 w-6 h-6"/> Pagamento protegido e garantido</li>
+              </ul>
+              <button onClick={onDriver} className="w-full h-16 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl font-black uppercase tracking-widest text-sm transition-all shadow-md shadow-cyan-500/20 flex items-center justify-center gap-2">
+                Encontrar fretes <ChevronRight size={18} />
+              </button>
+            </div>
+          </Reveal>
+
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// 4. BENEFÍCIOS
+// =========================================================
+function Benefits() {
+  const benefits = [
+    { icon: <Clock size={28} />, title: "Agilidade na Conexão", desc: "A plataforma faz o match entre a sua carga e os veículos disponíveis rapidamente." },
+    { icon: <MapPin size={28} />, title: "Visibilidade Total", desc: "Acompanhe o status do frete desde a coleta até a confirmação de entrega." },
+    { icon: <ShieldCheck size={28} />, title: "Operação Blindada", desc: "Pagamento retido via Escrow e liberado apenas após a validação do serviço." },
+    { icon: <CreditCard size={28} />, title: "Sem Surpresas", desc: "Precificação transparente. O valor combinado é o valor garantido na operação." },
+  ];
+
+  return (
+    <section className="py-24 bg-white border-t border-slate-100">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+        <Reveal>
+          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-16 tracking-tight">O que a FretoGo entrega para você</h2>
+        </Reveal>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          {benefits.map((b, i) => (
+            <Reveal key={i} delay={i * 0.1}>
+              <div className="flex flex-col items-center p-6">
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6">
+                  {b.icon}
+                </div>
+                <h3 className="text-xl font-black text-slate-900 mb-3">{b.title}</h3>
+                <p className="text-slate-600 font-medium leading-relaxed">{b.desc}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// 5. COMO FUNCIONA
+// =========================================================
+function HowItWorks() {
+  return (
+    <section className="py-24 bg-slate-50 border-t border-slate-200">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Reveal>
+          <div className="text-center max-w-3xl mx-auto mb-20">
+            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-6 tracking-tight">Como a plataforma funciona?</h2>
+            <p className="text-lg text-slate-600 font-medium">Um processo organizado em etapas simples para garantir o sucesso de cada operação.</p>
+          </div>
+        </Reveal>
+
+        <div className="grid lg:grid-cols-2 gap-16">
+          {/* FLUXO EMPRESA */}
+          <Reveal delay={0.1}>
+            <div className="bg-white rounded-[2rem] p-8 sm:p-12 shadow-xl border border-slate-200 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -z-0"></div>
+              <h3 className="text-2xl font-black text-slate-900 mb-10 flex items-center gap-3 relative z-10">
+                <Package className="text-blue-600" /> Para Empresas
+              </h3>
+              <div className="space-y-8 relative z-10">
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">1</div>
+                  <div>
+                    <h4 className="font-bold text-lg text-slate-900 mb-1">Publicação da Carga</h4>
+                    <p className="text-slate-600">Insira a origem, destino, tipo de veículo e valor da oferta.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">2</div>
+                  <div>
+                    <h4 className="font-bold text-lg text-slate-900 mb-1">Pagamento Seguro</h4>
+                    <p className="text-slate-600">Ao encontrar um motorista, realize o pagamento para liberar a rota.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">3</div>
+                  <div>
+                    <h4 className="font-bold text-lg text-slate-900 mb-1">Acompanhamento</h4>
+                    <p className="text-slate-600">Monitore o status do deslocamento e da coleta em tempo real.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">4</div>
+                  <div>
+                    <h4 className="font-bold text-lg text-slate-900 mb-1">Confirmação (PIN e Foto)</h4>
+                    <p className="text-slate-600">Receba a foto da mercadoria e forneça o PIN para validar a entrega.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+
+          {/* FLUXO MOTORISTA */}
+          <Reveal delay={0.2}>
+            <div className="bg-slate-900 rounded-[2rem] p-8 sm:p-12 shadow-xl border border-slate-800 relative overflow-hidden text-white">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-slate-800 rounded-bl-full -z-0"></div>
+              <h3 className="text-2xl font-black text-white mb-10 flex items-center gap-3 relative z-10">
+                <Truck className="text-cyan-400" /> Para Motoristas
+              </h3>
+              <div className="space-y-8 relative z-10">
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">1</div>
+                  <div>
+                    <h4 className="font-bold text-lg text-white mb-1">Radar de Oportunidades</h4>
+                    <p className="text-slate-400">Acesse o mural e encontre cargas disponíveis na sua região.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">2</div>
+                  <div>
+                    <h4 className="font-bold text-lg text-white mb-1">Aceite o Frete</h4>
+                    <p className="text-slate-400">Confirme o interesse e aguarde a liberação do pagamento pelo cliente.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">3</div>
+                  <div>
+                    <h4 className="font-bold text-lg text-white mb-1">Realize o Transporte</h4>
+                    <p className="text-slate-400">Desloque-se até a coleta e inicie a rota com segurança financeira.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">4</div>
+                  <div>
+                    <h4 className="font-bold text-lg text-white mb-1">Entrega e Repasse</h4>
+                    <p className="text-slate-400">Tire a foto, insira o PIN do cliente e receba o valor na sua conta.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// 6. CONFIANÇA / SEGURANÇA
+// =========================================================
+function TrustSection() {
+  return (
+    <section className="py-24 bg-slate-900 text-white border-t border-slate-800">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <Reveal>
+            <h2 className="text-3xl sm:text-5xl font-black mb-6 tracking-tight leading-tight">
+              Sua operação <span className="text-cyan-400">blindada</span> de ponta a ponta.
+            </h2>
+            <p className="text-lg text-slate-400 font-medium mb-10 leading-relaxed">
+              Desenvolvemos mecanismos rigorosos para garantir que o embarcador tenha a prova da entrega e o motorista tenha a certeza do recebimento. Sem margem para falhas.
+            </p>
+            <ul className="space-y-6">
+              <li className="flex items-start gap-4">
+                <div className="bg-slate-800 p-3 rounded-xl text-cyan-400 shrink-0"><LockKeyhole size={24} /></div>
+                <div>
+                  <h4 className="font-bold text-lg text-white">Garantia Escrow</h4>
+                  <p className="text-slate-400 text-sm mt-1">O valor fica retido na plataforma e só é liberado mediante o sucesso da operação.</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-4">
+                <div className="bg-slate-800 p-3 rounded-xl text-cyan-400 shrink-0"><Camera size={24} /></div>
+                <div>
+                  <h4 className="font-bold text-lg text-white">Comprovação Fotográfica</h4>
+                  <p className="text-slate-400 text-sm mt-1">Obrigatoriedade de registro da mercadoria para atestar o descarregamento na doca.</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-4">
+                <div className="bg-slate-800 p-3 rounded-xl text-cyan-400 shrink-0"><ShieldCheck size={24} /></div>
+                <div>
+                  <h4 className="font-bold text-lg text-white">Assinatura por PIN</h4>
+                  <p className="text-slate-400 text-sm mt-1">Código único de 4 dígitos para liberação sistêmica. Sem a sua autorização, não há finalização.</p>
+                </div>
+              </li>
+            </ul>
+          </Reveal>
+          
+          <Reveal delay={0.2}>
+            <div className="relative">
+              <div className="absolute -inset-10 rounded-full bg-cyan-500/10 blur-[80px]" />
+              <div className="relative bg-slate-800 border border-slate-700 rounded-[2.5rem] p-10 shadow-2xl">
+                <div className="flex justify-center mb-8">
+                  <img src="/icon-192.png" alt="FretoGo" className="h-20 w-auto rounded-2xl shadow-xl" />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-2xl font-black text-white mb-4">A tecnologia a favor da logística.</h3>
+                  <p className="text-slate-400">Junte-se às empresas e motoristas que já estão operando com segurança no ecossistema FretoGo.</p>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// 7. CTA FINAL
+// =========================================================
+function FinalCta({ onClient, onDriver }: any) {
+  return (
+    <section className="py-24 bg-white">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
+        <Reveal>
+          <h2 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight mb-8">
+            Pronto para colocar a <span className="text-blue-600">carga na rua?</span>
+          </h2>
+          <p className="text-xl text-slate-600 font-medium mb-12">
+            Escolha seu perfil e acesse a plataforma agora mesmo.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
+             <button onClick={onClient} className="w-full sm:w-auto flex h-16 items-center justify-center rounded-[1.5rem] bg-blue-600 px-12 text-sm font-black uppercase tracking-widest text-white shadow-xl hover:bg-blue-700 transition-all hover:scale-105">
+                Publicar minha carga
+             </button>
+             <button onClick={onDriver} className="w-full sm:w-auto flex h-16 items-center justify-center rounded-[1.5rem] bg-slate-900 px-12 text-sm font-black uppercase tracking-widest text-white shadow-xl hover:bg-slate-800 transition-all hover:scale-105">
+                Encontrar Fretes
+             </button>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// 8. FOOTER ESPECÍFICO DA HOME
+// =========================================================
+interface FooterProps {
+  onClient: () => void;
+  onDriver: () => void;
+  onSupport: () => void;
+  onDriverGroup: () => void;
+}
+
+function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProps) {
+  return (
+    <footer className="bg-slate-950 text-slate-400 py-16 border-t border-slate-900 relative z-10">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+          
+          {/* Logo & Sobre */}
+          <div className="lg:col-span-1">
+            <div className="flex items-center gap-3 mb-6 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
+              <img src="/icon-192.png" alt="FretoGo Logo" className="h-10 w-auto rounded-md" />
+            </div>
+            <p className="text-sm font-medium leading-relaxed pr-4 text-slate-500">
+              Logística profissional e transparente que conecta quem precisa entregar a quem pode levar.
+            </p>
+          </div>
+
+          {/* Links Empresa */}
+          <div>
+            <h4 className="text-xs font-black uppercase tracking-widest text-white mb-6">Empresas</h4>
+            <ul className="space-y-4">
+              <li><button onClick={onClient} className="text-sm font-bold hover:text-blue-400 transition-colors">Publicar frete</button></li>
+            </ul>
+          </div>
+
+          {/* Links Motorista */}
+          <div>
+            <h4 className="text-xs font-black uppercase tracking-widest text-white mb-6">Motoristas</h4>
+            <ul className="space-y-4">
+              <li><button onClick={onDriver} className="text-sm font-bold hover:text-cyan-400 transition-colors">Encontrar fretes</button></li>
+              <li><button onClick={onDriverGroup} className="text-sm font-bold hover:text-cyan-400 transition-colors">Grupo de Motoristas</button></li>
+            </ul>
+          </div>
+
+          {/* Suporte & Outros */}
+          <div>
+            <h4 className="text-xs font-black uppercase tracking-widest text-white mb-6">Suporte & Mais</h4>
+            <ul className="space-y-4">
+              <li><button onClick={onSupport} className="text-sm font-bold text-emerald-400 hover:text-emerald-300 transition-colors">WhatsApp Oficial</button></li>
+              <li><button className="text-sm font-bold text-slate-500 hover:text-white transition-colors cursor-not-allowed" title="Em breve">Blog</button></li>
+            </ul>
+          </div>
+
+        </div>
+
+        <div className="border-t border-slate-900 pt-8 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-6">
+            <p className="text-xs font-bold text-slate-600">FretoGo Tecnologia</p>
+            <p className="text-xs font-bold text-slate-600">CNPJ: 64.172.243/0001-90</p>
+          </div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 text-center">
+            © {new Date().getFullYear()} FretoGo — Todos os direitos reservados.
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+// =========================================================
+// COMPONENTE PRINCIPAL
+// =========================================================
+export default function HomePage() {
   const navigate = useNavigate();
 
-  const goToClient = () => {
-    navigate('/cliente');
-  };
-
-  const goToDriver = () => {
-    navigate('/motorista');
-  };
-
-  const handleWhatsAppSupport = () => {
-    openExternalLink(PLATFORM_LINKS.SUPPORT_WHATSAPP);
-  };
-
-  const handleDriverGroup = () => {
-    openExternalLink('https://chat.whatsapp.com/IGylgsZPYhsDfMZDKzVjHT');
-  };
+  // Handlers Preservados
+  const goToClient = () => navigate('/cliente');
+  const goToDriver = () => navigate('/motorista');
+  const handleWhatsAppSupport = () => openExternalLink(PLATFORM_LINKS.SUPPORT_WHATSAPP);
+  const handleDriverGroup = () => openExternalLink('https://chat.whatsapp.com/IGylgsZPYhsDfMZDKzVjHT');
 
   return (
     <div className="relative min-h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-900 font-sans selection:bg-blue-600/20 overflow-x-hidden">
       
-      {/* ======================================================= */}
-      {/* 01 - NAVBAR */}
-      {/* ======================================================= */}
-      <header className="fixed top-0 left-0 right-0 z-50 w-full border-b border-slate-200/50 bg-white/90 backdrop-blur-md shadow-sm">
-        <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-          {/* Logo */}
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.scrollTo(0, 0)}>
-            <div className="bg-blue-600 p-1.5 rounded-lg shadow-sm">
-              <Zap className="h-5 w-5 fill-white text-white" />
-            </div>
-            <span className="text-xl font-black italic tracking-tighter text-slate-900">
-              FRETOGO
-            </span>
-          </div>
-          
-          {/* Links Desktop */}
-          <div className="hidden md:flex items-center gap-6">
-            <button onClick={goToClient} className="text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">Para Empresas</button>
-            <button onClick={goToDriver} className="text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">Para Motoristas</button>
-            <button onClick={handleWhatsAppSupport} className="text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">Suporte</button>
-          </div>
+      <Helmet>
+        <title>FretoGo | Plataforma de Logística</title>
+        <meta name="description" content="Conectamos empresas que precisam transportar cargas com motoristas prontos para rodar. Segurança, praticidade e pagamento protegido." />
+      </Helmet>
+      
+      <Seo
+        title="FretoGo | Conectando Empresas e Motoristas"
+        description="Conectamos empresas que precisam transportar cargas com motoristas prontos para rodar. Segurança, praticidade e pagamento protegido."
+        image={HERO_IMG}
+        siteName="FretoGo"
+      />
 
-          {/* CTAs */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <button onClick={goToDriver} className="hidden sm:flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
-              Sou Motorista
-            </button>
-            <button onClick={goToClient} className="flex h-10 items-center justify-center rounded-xl bg-blue-600 px-4 sm:px-5 text-xs md:text-sm font-black uppercase tracking-wider text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-700 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
-              Publicar Carga
-            </button>
-          </div>
-        </nav>
-      </header>
+      {/* Noise background overlay */}
+      <div className="pointer-events-none fixed inset-0 z-[60] bg-grain opacity-[0.03]" />
+
+      <HomeNavbar 
+        onClient={goToClient} 
+        onDriver={goToDriver} 
+        onSupport={handleWhatsAppSupport} 
+      />
 
       <main className="flex-grow flex flex-col pt-16">
-        
-        {/* ======================================================= */}
-        {/* 02 E 03 - HERO PRINCIPAL */}
-        {/* ======================================================= */}
-        <section className="relative w-full bg-slate-950 overflow-hidden py-20 md:py-28 lg:py-36">
-          {/* Background Animado Leve */}
-          <div className="absolute inset-0 z-0">
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] opacity-20 [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,#000_40%,transparent_100%)]"></div>
-            <div className="absolute top-0 right-0 h-[550px] w-[550px] rounded-full bg-blue-600/10 blur-[130px]"></div>
-            <div className="absolute bottom-0 left-0 h-[420px] w-[420px] rounded-full bg-amber-500/5 blur-[110px]"></div>
-            <div className="absolute top-1/3 left-1/4 h-[300px] w-[300px] rounded-full bg-cyan-500/5 blur-[100px]"></div>
-          </div>
-
-          <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row items-center gap-14 lg:gap-10">
-            
-            {/* Copy Hero */}
-            <div className="w-full max-w-2xl text-center lg:text-left">
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/60 px-4 py-1.5 backdrop-blur-sm">
-                <span className="relative flex h-2 w-2">
-                  <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                </span>
-                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-300">Plataforma de Logística</span>
-              </div>
-
-              <h1 className="text-4xl sm:text-5xl lg:text-[3.75rem] font-black tracking-tight text-white leading-[1.08]">
-                Sua carga precisa chegar.<br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-400">
-                  Nós encontramos quem leva.
-                </span>
-              </h1>
-              <p className="mt-6 text-lg md:text-xl text-slate-300 font-medium leading-relaxed max-w-xl mx-auto lg:mx-0">
-                Publique sua carga, conecte-se com motoristas prontos para rodar e acompanhe a entrega até o comprovante final.
-              </p>
-              
-              <div className="mt-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 justify-center lg:justify-start">
-                <button onClick={goToClient} className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-[1.5rem] bg-blue-600 px-8 text-sm font-black uppercase tracking-widest text-white shadow-[0_10px_35px_rgba(37,99,235,0.45)] transition-all hover:bg-blue-500 hover:shadow-[0_14px_40px_rgba(37,99,235,0.55)] hover:scale-[1.02] active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950">
-                  SOU EMPRESA — PUBLICAR CARGA <ArrowRight size={18} />
-                </button>
-                <button onClick={goToDriver} className="w-full sm:w-auto flex h-16 items-center justify-center gap-2 rounded-[1.5rem] border-2 border-slate-600 bg-slate-800/90 px-8 text-sm font-black uppercase tracking-widest text-white backdrop-blur-md transition-all hover:bg-slate-700 hover:border-cyan-400/60 hover:text-cyan-300 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950">
-                  <Truck size={18} /> SOU MOTORISTA — ENCONTRAR FRETES
-                </button>
-              </div>
-            </div>
-
-            {/* Elemento Visual Logístico (Abstrato e Leve) */}
-            <div className="hidden lg:flex w-full justify-end relative h-[400px]">
-              <div className="relative w-full max-w-md h-full rounded-[2rem] border border-slate-800 bg-slate-900/50 backdrop-blur-sm p-6 shadow-2xl overflow-hidden flex flex-col justify-between">
-                
-                {/* Glow interno sutil para profundidade */}
-                <div className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl"></div>
-
-                {/* Rota Topo */}
-                <div className="relative flex justify-between items-center border-b border-slate-800 pb-4">
-                  <div className="flex items-center gap-3">
-                    <span className="relative flex h-3 w-3"><span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rastreamento Ativo</p>
-                  </div>
-                  <div className="bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-full">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-400">Em Trânsito</p>
-                  </div>
-                </div>
-
-                {/* Gráfico de Linha de Rota */}
-                <div className="relative flex-grow my-6 mx-4 border-l-2 border-dashed border-slate-700 py-4 flex flex-col justify-between">
-                  <div className="absolute -left-[9px] top-0 h-4 w-4 rounded-full border-4 border-slate-900 bg-blue-500"></div>
-                  <div className="absolute -left-[9px] bottom-0 h-4 w-4 rounded-full border-4 border-slate-900 bg-amber-500"></div>
-                  
-                  <div className="pl-6">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Origem</p>
-                    <p className="text-sm font-bold text-white mt-1">Centro de Distribuição</p>
-                  </div>
-                  
-                  {/* Veículo (Ícone) */}
-                  <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 bg-slate-800 p-2 rounded-xl border border-slate-700 text-white shadow-lg shadow-blue-500/10">
-                    <Truck size={20} />
-                  </div>
-
-                  <div className="pl-6">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Destino</p>
-                    <p className="text-sm font-bold text-white mt-1">Cliente Final</p>
-                  </div>
-                </div>
-
-                {/* Status Inferior */}
-                <div className="relative bg-slate-950 rounded-2xl p-4 flex items-center justify-between border border-slate-800">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Carga Protegida</p>
-                    <p className="text-lg font-black text-emerald-400 mt-0.5">Operação Segura</p>
-                  </div>
-                  <ShieldCheck className="text-slate-600 w-8 h-8" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ======================================================= */}
-        {/* 03 - ESCOLHA DO PERFIL */}
-        {/* ======================================================= */}
-        <section className="py-16 bg-slate-100 relative -mt-6 z-20 rounded-t-[2.5rem] border-t border-slate-200">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Você está aqui para...</h2>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-              {/* Card Empresa */}
-              <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm flex flex-col h-full transition-all hover:shadow-xl hover:border-blue-200">
-                <div className="h-14 w-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6 border border-blue-100">
-                  <Building2 size={28} />
-                </div>
-                <h3 className="text-2xl font-black text-slate-900 mb-3">Precisa enviar uma carga?</h3>
-                <p className="text-slate-600 font-medium leading-relaxed mb-8 flex-grow">
-                  Publique seu frete, encontre motoristas e acompanhe a operação até a entrega.
-                </p>
-                <button onClick={goToClient} className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-blue-700 active:scale-95">
-                  Publicar meu frete <ChevronRight size={18} />
-                </button>
-              </div>
-
-              {/* Card Motorista */}
-              <div className="bg-slate-900 rounded-[2rem] border border-slate-800 p-8 shadow-sm flex flex-col h-full transition-all hover:shadow-xl hover:border-slate-700">
-                <div className="h-14 w-14 rounded-2xl bg-slate-800 text-white flex items-center justify-center mb-6 border border-slate-700">
-                  <Truck size={28} />
-                </div>
-                <h3 className="text-2xl font-black text-white mb-3">Quer encontrar bons fretes?</h3>
-                <p className="text-slate-400 font-medium leading-relaxed mb-8 flex-grow">
-                  Veja oportunidades na sua região e encontre cargas que fazem sentido para sua rota.
-                </p>
-                <button onClick={goToDriver} className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-slate-800 border border-slate-700 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-slate-700 active:scale-95">
-                  Encontrar fretes <ChevronRight size={18} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ======================================================= */}
-        {/* 04 E 07 - BLOCO EMPRESA (DOR/SOLUÇÃO E BENEFÍCIOS) */}
-        {/* ======================================================= */}
-        <section className="py-20 bg-white border-t border-slate-100">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-              <div>
-                <div className="mb-4 inline-block rounded-lg bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-600">
-                  Para Empresas e Embarcadores
-                </div>
-                <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 leading-[1.1] mb-6 tracking-tight">
-                  Quando a entrega atrasa, o problema chega junto.
-                </h2>
-                <p className="text-lg text-slate-600 font-medium mb-6 leading-relaxed">
-                  Sua venda não termina quando o pedido sai da empresa. Ela termina quando o cliente recebe.
-                </p>
-                <p className="text-lg text-slate-600 font-medium mb-10 leading-relaxed">
-                  Na FretoGo, você publica o frete, encontra uma opção de transporte e acompanha a operação em tempo real, sem depender de dezenas de mensagens. A FretoGo utiliza distância, veículo, paradas e características da operação para sugerir uma oferta mais competitiva.
-                </p>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-                  <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <CheckCircle className="text-emerald-500 w-5 h-5 shrink-0" />
-                    <span className="font-bold text-slate-800 text-sm">Menos carga parada</span>
-                  </div>
-                  <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <CheckCircle className="text-emerald-500 w-5 h-5 shrink-0" />
-                    <span className="font-bold text-slate-800 text-sm">Controle da operação</span>
-                  </div>
-                  <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <CheckCircle className="text-emerald-500 w-5 h-5 shrink-0" />
-                    <span className="font-bold text-slate-800 text-sm">Acompanhamento</span>
-                  </div>
-                  <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <CheckCircle className="text-emerald-500 w-5 h-5 shrink-0" />
-                    <span className="font-bold text-slate-800 text-sm">Entrega comprovada</span>
-                  </div>
-                </div>
-
-                <button onClick={goToClient} className="flex h-14 w-full sm:w-max px-10 items-center justify-center rounded-xl bg-blue-600 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-blue-700 active:scale-95">
-                  Publicar meu frete
-                </button>
-              </div>
-              
-              {/* Ilustração Visual B2B */}
-              <div className="bg-slate-100 rounded-[2rem] p-6 sm:p-8 lg:p-12 border border-slate-200">
-                <div className="flex flex-col gap-4">
-                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4">
-                    <div className="bg-slate-100 p-3 rounded-full text-slate-600 shrink-0"><Package size={20}/></div>
-                    <div><p className="text-[10px] font-black uppercase text-slate-400">Passo 1</p><p className="font-bold text-slate-900">Publicar</p></div>
-                  </div>
-                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-0 sm:ml-4">
-                    <div className="bg-blue-50 p-3 rounded-full text-blue-600 shrink-0"><Search size={20}/></div>
-                    <div><p className="text-[10px] font-black uppercase text-blue-400">Passo 2</p><p className="font-bold text-slate-900">Encontrar</p></div>
-                  </div>
-                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-0 sm:ml-8">
-                    <div className="bg-amber-50 p-3 rounded-full text-amber-500 shrink-0"><Route size={20}/></div>
-                    <div><p className="text-[10px] font-black uppercase text-amber-500">Passo 3</p><p className="font-bold text-slate-900">Acompanhar</p></div>
-                  </div>
-                  <div className="bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 ml-0 sm:ml-12">
-                    <div className="bg-emerald-50 p-3 rounded-full text-emerald-500 shrink-0"><CheckCircle size={20}/></div>
-                    <div><p className="text-[10px] font-black uppercase text-emerald-500">Passo 4</p><p className="font-bold text-slate-900">Entregar</p></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ======================================================= */}
-        {/* 05 - DOR DO MOTORISTA */}
-        {/* ======================================================= */}
-        <section className="py-20 bg-slate-900">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-              
-              {/* Como Funciona (Motorista) */}
-              <div className="order-2 lg:order-1 bg-slate-800/50 border border-slate-700 rounded-[2rem] p-6 sm:p-8 lg:p-12">
-                 <div className="flex flex-col gap-4">
-                   <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4">
-                     <div className="bg-slate-800 p-3 rounded-full text-slate-400 shrink-0"><MapPin size={20} /></div>
-                     <div><p className="text-[10px] font-black uppercase text-slate-500">Destino</p><p className="font-bold text-white">Informe para onde você vai</p></div>
-                   </div>
-                   <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 ml-0 sm:ml-4">
-                     <div className="bg-cyan-900/30 p-3 rounded-full text-cyan-400 shrink-0"><Map size={20} /></div>
-                     <div><p className="text-[10px] font-black uppercase text-cyan-500">Busca</p><p className="font-bold text-white">Encontre fretes compatíveis</p></div>
-                   </div>
-                   <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 ml-0 sm:ml-8">
-                     <div className="bg-emerald-900/30 p-3 rounded-full text-emerald-400 shrink-0"><DollarSign size={20} /></div>
-                     <div><p className="text-[10px] font-black uppercase text-emerald-500">Fechamento</p><p className="font-bold text-white">Pagamento conforme regra</p></div>
-                   </div>
-                 </div>
-              </div>
-
-              <div className="order-1 lg:order-2">
-                <div className="mb-4 inline-block rounded-lg bg-cyan-500/10 border border-cyan-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-cyan-400">
-                  Para Transportadores
-                </div>
-                <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-white leading-[1.1] mb-6 tracking-tight">
-                  Tem uma rota para fazer?
-                </h2>
-                <p className="text-lg text-slate-400 font-medium mb-6 leading-relaxed">
-                  Voltar com o baú vazio ou perder tempo procurando carga consome a sua margem de lucro na estrada.
-                </p>
-                <p className="text-lg text-slate-400 font-medium mb-10 leading-relaxed">
-                  Veja se existe uma carga que combina com o seu caminho. Na plataforma, você pode encontrar oportunidades pelo seu destino desejado. Após concluir a entrega e o comprovante, o pagamento entra no fluxo de pagamento da FretoGo.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <button onClick={goToDriver} className="flex h-14 w-full sm:w-auto items-center justify-center px-10 rounded-xl bg-cyan-500 text-sm font-black uppercase tracking-widest text-slate-950 transition-all hover:bg-cyan-400 active:scale-95">
-                    Encontrar fretes
-                  </button>
-                  <button onClick={handleDriverGroup} className="flex h-14 w-full sm:w-auto items-center justify-center px-6 rounded-xl border border-slate-700 bg-transparent text-sm font-black uppercase tracking-widest text-slate-300 transition-all hover:bg-slate-800 active:scale-95 gap-2">
-                    <Users size={18} /> Entrar no grupo
-                  </button>
-                </div>
-              </div>
-              
-            </div>
-          </div>
-        </section>
-
-        {/* ======================================================= */}
-        {/* 07 - SEGURANÇA E CONTROLE DA ENTREGA */}
-        {/* ======================================================= */}
-        <section className="py-20 bg-slate-50">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            <div className="mb-4 inline-block rounded-lg bg-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-700">
-              Segurança Operacional
-            </div>
-            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">Entrega comprovada.</h2>
-            <p className="mt-4 text-slate-600 font-medium text-lg max-w-2xl mx-auto mb-16">
-              A plataforma possui ferramentas nativas para assegurar a custódia, o acompanhamento e o rastreamento da operação até o destino.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
-                <div className="w-14 h-14 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center mb-4"><LockKeyhole size={24} /></div>
-                <h4 className="font-bold text-slate-900 mb-2">PIN</h4>
-                <p className="text-sm text-slate-500 font-medium">Validação segura na ponta.</p>
-              </div>
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
-                <div className="w-14 h-14 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center mb-4"><Camera size={24} /></div>
-                <h4 className="font-bold text-slate-900 mb-2">Foto da entrega</h4>
-                <p className="text-sm text-slate-500 font-medium">Registro visual e documental.</p>
-              </div>
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
-                <div className="w-14 h-14 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center mb-4"><Route size={24} /></div>
-                <h4 className="font-bold text-slate-900 mb-2">Acompanhamento</h4>
-                <p className="text-sm text-slate-500 font-medium">Monitoramento do transporte.</p>
-              </div>
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col items-center text-center">
-                <div className="w-14 h-14 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center mb-4"><Clock size={24} /></div>
-                <h4 className="font-bold text-slate-900 mb-2">Histórico</h4>
-                <p className="text-sm text-slate-500 font-medium">Dados preservados da operação.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ======================================================= */}
-        {/* 09 E 10 - CTA FINAL (EMPRESA E MOTORISTA) */}
-        {/* ======================================================= */}
-        <section className="py-20 bg-white border-t border-slate-200">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-              
-              <div className="bg-blue-600 p-10 rounded-[2rem] text-center flex flex-col items-center justify-center shadow-xl">
-                <h3 className="text-2xl font-black text-white mb-3">Sua carga não pode esperar.</h3>
-                <p className="text-blue-100 mb-8 font-medium">Cadastre-se na FretoGo e coloque sua mercadoria na rua.</p>
-                <button onClick={goToClient} className="bg-white text-blue-600 w-full sm:w-auto px-10 h-14 rounded-xl font-black uppercase tracking-widest text-sm hover:bg-slate-50 transition-colors active:scale-95">
-                  Publicar uma carga
-                </button>
-              </div>
-
-              <div className="bg-slate-900 p-10 rounded-[2rem] text-center flex flex-col items-center justify-center shadow-xl">
-                <h3 className="text-2xl font-black text-white mb-3">Sua rota pode render mais.</h3>
-                <p className="text-slate-400 mb-8 font-medium">Conecte-se às melhores cargas e não rode de baú vazio.</p>
-                <button onClick={goToDriver} className="bg-cyan-500 text-slate-950 w-full sm:w-auto px-10 h-14 rounded-xl font-black uppercase tracking-widest text-sm hover:bg-cyan-400 transition-colors active:scale-95">
-                  Encontrar fretes
-                </button>
-              </div>
-
-            </div>
-          </div>
-        </section>
-
+        <Hero onClient={goToClient} onDriver={goToDriver} />
+        <AudienceSplit onClient={goToClient} onDriver={goToDriver} />
+        <Benefits />
+        <HowItWorks />
+        <TrustSection />
+        <FinalCta onClient={goToClient} onDriver={goToDriver} />
       </main>
 
-      {/* ======================================================= */}
-      {/* 12 - FOOTER */}
-      {/* ======================================================= */}
-      <footer className="bg-slate-950 text-slate-400 py-16 mt-auto border-t border-slate-900">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8 mb-12">
-            
-            <div className="lg:col-span-1">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="bg-slate-800 p-1.5 rounded-lg">
-                  <Zap className="h-5 w-5 fill-white text-white" />
-                </div>
-                <span className="text-xl font-black italic tracking-tighter text-white">
-                  FRETOGO
-                </span>
-              </div>
-              <p className="text-sm font-medium leading-relaxed pr-4 text-slate-400">
-                Logística que conecta quem precisa entregar a quem pode levar.
-              </p>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-black uppercase tracking-widest text-white mb-6">Empresas</h4>
-              <ul className="space-y-4">
-                <li><button onClick={goToClient} className="text-sm font-medium hover:text-white transition-colors">Publicar frete</button></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-black uppercase tracking-widest text-white mb-6">Motoristas</h4>
-              <ul className="space-y-4">
-                <li><button onClick={goToDriver} className="text-sm font-medium hover:text-white transition-colors">Encontrar fretes</button></li>
-                <li><button onClick={handleDriverGroup} className="text-sm font-medium hover:text-white transition-colors">Grupo de motoristas</button></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-black uppercase tracking-widest text-white mb-6">Suporte</h4>
-              <ul className="space-y-4">
-                <li><button onClick={handleWhatsAppSupport} className="text-sm font-bold text-emerald-400 hover:text-emerald-300 transition-colors">WhatsApp</button></li>
-                <li className="text-sm font-medium text-slate-400">contato@fretogo.com.br</li>
-              </ul>
-            </div>
-
-          </div>
-
-          <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-6">
-              <p className="text-xs font-medium text-slate-500">
-                FretoGo
-              </p>
-              <p className="text-xs font-medium text-slate-500">
-                CNPJ: 64.172.243/0001-90
-              </p>
-            </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 text-center">
-              © {new Date().getFullYear()} FretoGo — Todos os direitos reservados.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <HomeFooter 
+        onClient={goToClient} 
+        onDriver={goToDriver} 
+        onSupport={handleWhatsAppSupport} 
+        onDriverGroup={handleDriverGroup}
+      />
 
       {/* ======================================================= */}
       {/* WHATSAPP FLUTUANTE (PRESERVADO INTACTO) */}
