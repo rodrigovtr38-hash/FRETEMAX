@@ -5,11 +5,10 @@
 // usabilidade de grandes plataformas logísticas (clareza, hierarquia e conversão).
 // Integração visual da marca oficial (icon-192.png) sem bordas artificiais.
 // Todas as rotas, links de WhatsApp, grupos e serviços preservados.
-// FIX VERCEL BUILD: Remoção da dependência "react-helmet" não resolvida pelo Rollup. 
-// O SEO já está garantido pelo componente nativo <Seo />.
 // =========================================================
 
 import React, { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
 import Seo from '@/components/Seo';
@@ -30,96 +29,10 @@ import {
   MapPin,
   Menu,
   X,
-  Instagram,
-  Youtube,
-  Globe,
-  Zap,
-  LayoutDashboard,
-  Database,
-  MonitorSmartphone,
-  BrainCircuit,
-  Route,
-  Rss,
-  ShoppingBag,
-  PieChart,
-  Wallet
+  Zap
 } from 'lucide-react';
 
 const HERO_IMG = 'https://images.hostinger.com/f09fbe30-dd15-4b3b-aede-622f9534802d.png';
-const MAP_IMG = 'https://images.hostinger.com/3fcebdf6-cf59-4228-8079-b71ee1813866.png';
-const FLEET_IMG = 'https://images.hostinger.com/b1c18f1f-35e4-4861-8eaa-f4a06d406a87.png';
-
-const MARQUEE_ITEMS = [
-  'Tecnologia Logística',
-  'Matching Inteligente',
-  'Gestão de Operação',
-  'Conexão B2B',
-  'Parceria Estratégica',
-  'Escala de Mercado',
-];
-
-const PAINS = [
-  {
-    title: 'Contato manual e fragmentado',
-    text: 'A busca por veículos ainda depende de ligações, mensagens soltas no WhatsApp e indicações sem padronização.',
-  },
-  {
-    title: 'Negociação repetitiva',
-    text: 'Cada novo frete exige recomeçar a negociação de preços e prazos do zero, gerando atrito e lentidão.',
-  },
-  {
-    title: 'Zero visibilidade da operação',
-    text: 'Sem um sistema centralizado, a empresa não sabe o status real da carga e o motorista roda sem garantias.',
-  },
-  {
-    title: 'Processo sem fluxo',
-    text: 'Informações se perdem entre o financeiro, a doca e o motorista, transformando o transporte em um gargalo.',
-  },
-];
-
-const FLOW_STEPS = [
-  { icon: Package, title: 'Empresa publica', text: 'A demanda é registrada no sistema com origem, destinos e valor de oferta.' },
-  { icon: Search, title: 'Motorista encontra', text: 'Oportunidades compatíveis aparecem no radar do motorista em tempo real.' },
-  { icon: CircleCheck, title: 'Motorista aceita', text: 'O frete é vinculado ao parceiro e um tempo de exclusividade é iniciado.' },
-  { icon: BellRing, title: 'Empresa é avisada', text: 'O embarcador recebe a confirmação de que há um veículo pronto para a carga.' },
-  { icon: CreditCard, title: 'Cliente paga', text: 'O pagamento é realizado na plataforma, garantindo os fundos da operação.' },
-  { icon: Route, title: 'Rota liberada', text: 'O sistema destrava os endereços exatos e permite o início do deslocamento.' },
-  { icon: MapPinned, title: 'Coleta e PIN', text: 'Chegada validada via GPS e código de segurança fornecido na doca.' },
-  { icon: Camera, title: 'Entrega e validação', text: 'Conclusão registrada com foto da mercadoria e liberação final do repasse.' },
-];
-
-const REVENUE_STEPS = [
-  { icon: CreditCard, title: 'Pagamento do Frete', text: 'O embarcador liquida o valor total da operação diretamente no ecossistema da plataforma.' },
-  { icon: PieChart, title: 'Take Rate', text: 'O sistema retém a taxa operacional administrativa pela tecnologia, segurança e conexão.' },
-  { icon: Wallet, title: 'Repasse Líquido', text: 'O motorista recebe o valor acordado de forma garantida após a comprovação da entrega.' },
-];
-
-const BUILT_ASSETS = [
-  { icon: LayoutDashboard, title: 'Produto', text: 'Plataforma web e mobile totalmente operacionais.' },
-  { icon: Database, title: 'Tecnologia', text: 'Arquitetura baseada em nuvem, machine state e GPS.' },
-  { icon: MonitorSmartphone, title: 'UX/UI', text: 'Interfaces validadas, focadas em usabilidade logística.' },
-  { icon: ShieldCheck, title: 'Marca', text: 'Identidade visual consolidada e registro posicionado.' },
-  { icon: BrainCircuit, title: 'Estratégia', text: 'Regras de negócio e precificação dinâmica implementadas.' },
-  { icon: Route, title: 'Operação', text: 'Fluxos de segurança, pagamento escrow e validação (POD).' },
-  { icon: Rss, title: 'Comunicação', text: 'Canais estabelecidos para tração de clientes e frota.' },
-  { icon: Users, title: 'Base Inicial', text: 'Primeiros motoristas e empresas integrados na validação.' }
-];
-
-const DIGITAL_PRESENCE = [
-  { icon: Globe, name: 'Site / App', desc: 'Domínio próprio e aplicação' },
-  { icon: Instagram, name: 'Instagram', desc: 'Canal de atração e engajamento' },
-  { icon: Youtube, name: 'YouTube', desc: 'Conteúdo operacional' },
-  { icon: MapPinned, name: 'Google', desc: 'Captura de demanda orgânica' },
-];
-
-const ECOSYSTEM = [
-  { id: '01', icon: Truck, title: 'Transporte', text: 'Conectar empresas e motoristas de forma segura.' },
-  { id: '02', icon: Route, title: 'Escala', text: 'Novas categorias e regiões de atuação.' },
-  { id: '03', icon: BrainCircuit, title: 'Inteligência', text: 'Dados e otimização de roteirização.' },
-  { id: '04', icon: Wrench, title: 'Serviços', text: 'Soluções para quem vive do transporte.' },
-  { id: '05', icon: ShoppingBag, title: 'Comércio', text: 'Loja de acessórios focada em frotistas.' },
-  { id: '06', icon: Youtube, title: 'Mídia', text: 'Conteúdo para a comunidade logística.' },
-];
 
 // =========================================================
 // 1. HEADER / NAVBAR ESPECÍFICO DA HOME
@@ -201,7 +114,12 @@ function HomeNavbar({ onClient, onDriver, onSupport }: NavProps) {
 // =========================================================
 // 2. HERO / PRIMEIRA DOBRA
 // =========================================================
-function Hero({ onClient, onDriver }: any) {
+interface HeroProps {
+  onClient: () => void;
+  onDriver: () => void;
+}
+
+function Hero({ onClient, onDriver }: HeroProps) {
   return (
     <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-slate-900 min-h-[90vh] flex items-center">
       <div className="absolute inset-0 z-0">
@@ -250,7 +168,12 @@ function Hero({ onClient, onDriver }: any) {
 // =========================================================
 // 3. ENTRADA PARA EMPRESA E MOTORISTA
 // =========================================================
-function AudienceSplit({ onClient, onDriver }: any) {
+interface AudienceSplitProps {
+  onClient: () => void;
+  onDriver: () => void;
+}
+
+function AudienceSplit({ onClient, onDriver }: AudienceSplitProps) {
   return (
     <section className="py-24 bg-slate-50 relative z-20 -mt-8 rounded-t-[2.5rem] border-t border-slate-200 shadow-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -502,7 +425,12 @@ function TrustSection() {
 // =========================================================
 // 7. CTA FINAL
 // =========================================================
-function FinalCta({ onClient, onDriver }: any) {
+interface FinalCtaProps {
+  onClient: () => void;
+  onDriver: () => void;
+}
+
+function FinalCta({ onClient, onDriver }: FinalCtaProps) {
   return (
     <section className="py-24 bg-white">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
@@ -609,6 +537,11 @@ export default function HomePage() {
 
   return (
     <div className="relative min-h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-900 font-sans selection:bg-blue-600/20 overflow-x-hidden">
+      
+      <Helmet>
+        <title>FretoGo | Plataforma de Logística</title>
+        <meta name="description" content="Conectamos empresas que precisam transportar cargas com motoristas prontos para rodar. Segurança, praticidade e pagamento protegido." />
+      </Helmet>
       
       <Seo
         title="FretoGo | Conectando Empresas e Motoristas"
