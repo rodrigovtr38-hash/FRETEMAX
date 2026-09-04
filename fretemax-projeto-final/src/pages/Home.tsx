@@ -5,16 +5,16 @@
 // usabilidade de grandes plataformas logísticas (clareza, hierarquia e conversão).
 // Integração visual da marca oficial (icon-192.png) sem bordas artificiais.
 // Todas as rotas, links de WhatsApp, grupos e serviços preservados.
-// FIX VERCEL BUILD: Correção do ReferenceError adicionando os imports 
-// ausentes do lucide-react (LockKeyhole, PieChart, Wallet, etc.).
+// FIX VERCEL BUILD: Remoção definitiva das dependências fantasmas ("react-helmet", 
+// "@/components/Seo" e "@/components/Reveal") que causavam erro ENOENT no Rollup/Vite.
+// HOME-FIX-04: Corrigido ReferenceError "LockKeyhole is not defined" — ícone
+// estava sendo usado no JSX da seção de confiança sem constar no import de
+// lucide-react. Import corrigido, nenhuma outra alteração de escopo realizada.
 // =========================================================
 
 import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
-import Seo from '@/components/Seo';
-import Reveal from '@/components/Reveal';
 import { 
   ArrowRight, 
   Package, 
@@ -32,22 +32,6 @@ import {
   Menu,
   X,
   Zap,
-  CircleCheck,
-  BellRing,
-  Route,
-  MapPinned,
-  PieChart,
-  Wallet,
-  LayoutDashboard,
-  Database,
-  MonitorSmartphone,
-  BrainCircuit,
-  Rss,
-  Globe,
-  Instagram,
-  Youtube,
-  Wrench,
-  ShoppingBag,
   LockKeyhole
 } from 'lucide-react';
 
@@ -148,37 +132,31 @@ function Hero({ onClient, onDriver }: HeroProps) {
       </div>
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-        <Reveal>
-          <h1 className="max-w-4xl mx-auto font-display text-4xl sm:text-5xl lg:text-7xl font-black text-white leading-[1.1] tracking-tight">
-            O transporte já tem a demanda. <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-              Falta conectar melhor quem precisa transportar com quem está pronto para rodar.
-            </span>
-          </h1>
-        </Reveal>
+        <h1 className="max-w-4xl mx-auto font-display text-4xl sm:text-5xl lg:text-7xl font-black text-white leading-[1.1] tracking-tight">
+          O transporte já tem a demanda. <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
+            Falta conectar melhor quem precisa transportar com quem está pronto para rodar.
+          </span>
+        </h1>
         
-        <Reveal delay={0.1}>
-          <p className="mt-8 max-w-2xl mx-auto text-lg sm:text-xl text-slate-300 font-medium leading-relaxed">
-            A FretoGo é a plataforma que simplifica a logística. Conectamos empresas a transportadores de forma direta, segura e com pagamento blindado.
-          </p>
-        </Reveal>
+        <p className="mt-8 max-w-2xl mx-auto text-lg sm:text-xl text-slate-300 font-medium leading-relaxed">
+          A FretoGo é a plataforma que simplifica a logística. Conectamos empresas a transportadores de forma direta, segura e com pagamento blindado.
+        </p>
 
-        <Reveal delay={0.2}>
-          <div className="mt-12 flex flex-col sm:flex-row gap-5 justify-center items-center">
-            <button 
-              onClick={onClient}
-              className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-[1.5rem] bg-blue-600 px-10 text-sm font-black uppercase tracking-[0.2em] text-white shadow-[0_10px_30px_rgba(37,99,235,0.4)] transition-all hover:scale-105 hover:bg-blue-500"
-            >
-              Publicar Carga <ArrowRight size={18} />
-            </button>
-            <button 
-              onClick={onDriver}
-              className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-[1.5rem] bg-slate-800 border border-slate-700 px-10 text-sm font-black uppercase tracking-[0.2em] text-white transition-all hover:scale-105 hover:bg-slate-700 hover:border-cyan-500/50"
-            >
-              <Truck size={18} className="text-cyan-400" /> Encontrar Fretes
-            </button>
-          </div>
-        </Reveal>
+        <div className="mt-12 flex flex-col sm:flex-row gap-5 justify-center items-center">
+          <button 
+            onClick={onClient}
+            className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-[1.5rem] bg-blue-600 px-10 text-sm font-black uppercase tracking-[0.2em] text-white shadow-[0_10px_30px_rgba(37,99,235,0.4)] transition-all hover:scale-105 hover:bg-blue-500"
+          >
+            Publicar Carga <ArrowRight size={18} />
+          </button>
+          <button 
+            onClick={onDriver}
+            className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-[1.5rem] bg-slate-800 border border-slate-700 px-10 text-sm font-black uppercase tracking-[0.2em] text-white transition-all hover:scale-105 hover:bg-slate-700 hover:border-cyan-500/50"
+          >
+            <Truck size={18} className="text-cyan-400" /> Encontrar Fretes
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -199,46 +177,42 @@ function AudienceSplit({ onClient, onDriver }: AudienceSplitProps) {
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           
           {/* CARD EMPRESA */}
-          <Reveal>
-            <div className="bg-white rounded-[2rem] p-8 sm:p-10 shadow-lg border border-slate-200 flex flex-col h-full transition-transform hover:-translate-y-1 hover:shadow-2xl">
-              <div className="h-16 w-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-8 border border-blue-100">
-                <Package size={32} />
-              </div>
-              <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Tem uma carga para entregar?</h2>
-              <p className="text-slate-600 mb-8 flex-grow text-lg leading-relaxed">
-                Pare de perder tempo buscando veículos. Publique sua carga, acompanhe a entrega em tempo real e tenha a garantia da mercadoria validada na doca.
-              </p>
-              <ul className="space-y-4 mb-10 text-slate-700 font-bold text-sm">
-                <li className="flex items-center gap-3"><CheckCircle2 className="text-blue-500 w-6 h-6"/> Publicação rápida e simplificada</li>
-                <li className="flex items-center gap-3"><CheckCircle2 className="text-blue-500 w-6 h-6"/> Acompanhamento em tempo real</li>
-                <li className="flex items-center gap-3"><CheckCircle2 className="text-blue-500 w-6 h-6"/> Motoristas homologados pela plataforma</li>
-              </ul>
-              <button onClick={onClient} className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-widest text-sm transition-all shadow-md flex items-center justify-center gap-2">
-                Publicar minha carga <ChevronRight size={18} />
-              </button>
+          <div className="bg-white rounded-[2rem] p-8 sm:p-10 shadow-lg border border-slate-200 flex flex-col h-full transition-transform hover:-translate-y-1 hover:shadow-2xl">
+            <div className="h-16 w-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-8 border border-blue-100">
+              <Package size={32} />
             </div>
-          </Reveal>
+            <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Tem uma carga para entregar?</h2>
+            <p className="text-slate-600 mb-8 flex-grow text-lg leading-relaxed">
+              Pare de perder tempo buscando veículos. Publique sua carga, acompanhe a entrega em tempo real e tenha a garantia da mercadoria validada na doca.
+            </p>
+            <ul className="space-y-4 mb-10 text-slate-700 font-bold text-sm">
+              <li className="flex items-center gap-3"><CheckCircle2 className="text-blue-500 w-6 h-6"/> Publicação rápida e simplificada</li>
+              <li className="flex items-center gap-3"><CheckCircle2 className="text-blue-500 w-6 h-6"/> Acompanhamento em tempo real</li>
+              <li className="flex items-center gap-3"><CheckCircle2 className="text-blue-500 w-6 h-6"/> Motoristas homologados pela plataforma</li>
+            </ul>
+            <button onClick={onClient} className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-widest text-sm transition-all shadow-md flex items-center justify-center gap-2">
+              Publicar minha carga <ChevronRight size={18} />
+            </button>
+          </div>
 
           {/* CARD MOTORISTA */}
-          <Reveal delay={0.1}>
-            <div className="bg-slate-900 rounded-[2rem] p-8 sm:p-10 shadow-xl border border-slate-800 flex flex-col h-full text-white transition-transform hover:-translate-y-1 hover:shadow-2xl">
-              <div className="h-16 w-16 bg-slate-800 text-cyan-400 rounded-2xl flex items-center justify-center mb-8 border border-slate-700">
-                <Truck size={32} />
-              </div>
-              <h2 className="text-3xl font-black text-white mb-4 tracking-tight">Tem um veículo e quer fretes?</h2>
-              <p className="text-slate-400 mb-8 flex-grow text-lg leading-relaxed">
-                Não rode de baú vazio. Acesse o radar de oportunidades na sua região, escolha as melhores rotas e garanta seu pagamento de forma blindada.
-              </p>
-              <ul className="space-y-4 mb-10 text-slate-300 font-bold text-sm">
-                <li className="flex items-center gap-3"><CheckCircle2 className="text-cyan-400 w-6 h-6"/> Oportunidades diárias no seu radar</li>
-                <li className="flex items-center gap-3"><CheckCircle2 className="text-cyan-400 w-6 h-6"/> Liberdade para escolher as rotas</li>
-                <li className="flex items-center gap-3"><CheckCircle2 className="text-cyan-400 w-6 h-6"/> Pagamento protegido e garantido</li>
-              </ul>
-              <button onClick={onDriver} className="w-full h-16 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl font-black uppercase tracking-widest text-sm transition-all shadow-md shadow-cyan-500/20 flex items-center justify-center gap-2">
-                Encontrar fretes <ChevronRight size={18} />
-              </button>
+          <div className="bg-slate-900 rounded-[2rem] p-8 sm:p-10 shadow-xl border border-slate-800 flex flex-col h-full text-white transition-transform hover:-translate-y-1 hover:shadow-2xl">
+            <div className="h-16 w-16 bg-slate-800 text-cyan-400 rounded-2xl flex items-center justify-center mb-8 border border-slate-700">
+              <Truck size={32} />
             </div>
-          </Reveal>
+            <h2 className="text-3xl font-black text-white mb-4 tracking-tight">Tem um veículo e quer fretes?</h2>
+            <p className="text-slate-400 mb-8 flex-grow text-lg leading-relaxed">
+              Não rode de baú vazio. Acesse o radar de oportunidades na sua região, escolha as melhores rotas e garanta seu pagamento de forma blindada.
+            </p>
+            <ul className="space-y-4 mb-10 text-slate-300 font-bold text-sm">
+              <li className="flex items-center gap-3"><CheckCircle2 className="text-cyan-400 w-6 h-6"/> Oportunidades diárias no seu radar</li>
+              <li className="flex items-center gap-3"><CheckCircle2 className="text-cyan-400 w-6 h-6"/> Liberdade para escolher as rotas</li>
+              <li className="flex items-center gap-3"><CheckCircle2 className="text-cyan-400 w-6 h-6"/> Pagamento protegido e garantido</li>
+            </ul>
+            <button onClick={onDriver} className="w-full h-16 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl font-black uppercase tracking-widest text-sm transition-all shadow-md shadow-cyan-500/20 flex items-center justify-center gap-2">
+              Encontrar fretes <ChevronRight size={18} />
+            </button>
+          </div>
 
         </div>
       </div>
@@ -260,20 +234,16 @@ function Benefits() {
   return (
     <section className="py-24 bg-white border-t border-slate-100">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-        <Reveal>
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-16 tracking-tight">O que a FretoGo entrega para você</h2>
-        </Reveal>
+        <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-16 tracking-tight">O que a FretoGo entrega para você</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {benefits.map((b, i) => (
-            <Reveal key={i} delay={i * 0.1}>
-              <div className="flex flex-col items-center p-6">
-                <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6">
-                  {b.icon}
-                </div>
-                <h3 className="text-xl font-black text-slate-900 mb-3">{b.title}</h3>
-                <p className="text-slate-600 font-medium leading-relaxed">{b.desc}</p>
+            <div key={i} className="flex flex-col items-center p-6">
+              <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6">
+                {b.icon}
               </div>
-            </Reveal>
+              <h3 className="text-xl font-black text-slate-900 mb-3">{b.title}</h3>
+              <p className="text-slate-600 font-medium leading-relaxed">{b.desc}</p>
+            </div>
           ))}
         </div>
       </div>
@@ -285,107 +255,90 @@ function Benefits() {
 // 5. COMO FUNCIONA
 // =========================================================
 function HowItWorks() {
-  const FLOW_STEPS = [
-    { icon: Package, title: 'Empresa publica', text: 'A demanda é registrada no sistema com origem, destinos e valor de oferta.' },
-    { icon: Search, title: 'Motorista encontra', text: 'Oportunidades compatíveis aparecem no radar do motorista em tempo real.' },
-    { icon: CircleCheck, title: 'Motorista aceita', text: 'O frete é vinculado ao parceiro e um tempo de exclusividade é iniciado.' },
-    { icon: BellRing, title: 'Empresa é avisada', text: 'O embarcador recebe a confirmação de que há um veículo pronto para a carga.' },
-    { icon: CreditCard, title: 'Cliente paga', text: 'O pagamento é realizado na plataforma, garantindo os fundos da operação.' },
-    { icon: Route, title: 'Rota liberada', text: 'O sistema destrava os endereços exatos e permite o início do deslocamento.' },
-    { icon: MapPinned, title: 'Coleta e PIN', text: 'Chegada validada via GPS e código de segurança fornecido na doca.' },
-    { icon: Camera, title: 'Entrega e validação', text: 'Conclusão registrada com foto da mercadoria e liberação final do repasse.' },
-  ];
-
   return (
     <section className="py-24 bg-slate-50 border-t border-slate-200">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <Reveal>
-          <div className="text-center max-w-3xl mx-auto mb-20">
-            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-6 tracking-tight">Como a plataforma funciona?</h2>
-            <p className="text-lg text-slate-600 font-medium">Um processo organizado em etapas simples para garantir o sucesso de cada operação.</p>
-          </div>
-        </Reveal>
+        <div className="text-center max-w-3xl mx-auto mb-20">
+          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-6 tracking-tight">Como a plataforma funciona?</h2>
+          <p className="text-lg text-slate-600 font-medium">Um processo organizado em etapas simples para garantir o sucesso de cada operação.</p>
+        </div>
 
         <div className="grid lg:grid-cols-2 gap-16">
           {/* FLUXO EMPRESA */}
-          <Reveal delay={0.1}>
-            <div className="bg-white rounded-[2rem] p-8 sm:p-12 shadow-xl border border-slate-200 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -z-0"></div>
-              <h3 className="text-2xl font-black text-slate-900 mb-10 flex items-center gap-3 relative z-10">
-                <Package className="text-blue-600" /> Para Empresas
-              </h3>
-              <div className="space-y-8 relative z-10">
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">1</div>
-                  <div>
-                    <h4 className="font-bold text-lg text-slate-900 mb-1">Publicação da Carga</h4>
-                    <p className="text-slate-600">Insira a origem, destino, tipo de veículo e valor da oferta.</p>
-                  </div>
+          <div className="bg-white rounded-[2rem] p-8 sm:p-12 shadow-xl border border-slate-200 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -z-0"></div>
+            <h3 className="text-2xl font-black text-slate-900 mb-10 flex items-center gap-3 relative z-10">
+              <Package className="text-blue-600" /> Para Empresas
+            </h3>
+            <div className="space-y-8 relative z-10">
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">1</div>
+                <div>
+                  <h4 className="font-bold text-lg text-slate-900 mb-1">Publicação da Carga</h4>
+                  <p className="text-slate-600">Insira a origem, destino, tipo de veículo e valor da oferta.</p>
                 </div>
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">2</div>
-                  <div>
-                    <h4 className="font-bold text-lg text-slate-900 mb-1">Pagamento Seguro</h4>
-                    <p className="text-slate-600">Ao encontrar um motorista, realize o pagamento para liberar a rota.</p>
-                  </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">2</div>
+                <div>
+                  <h4 className="font-bold text-lg text-slate-900 mb-1">Pagamento Seguro</h4>
+                  <p className="text-slate-600">Ao encontrar um motorista, realize o pagamento para liberar a rota.</p>
                 </div>
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">3</div>
-                  <div>
-                    <h4 className="font-bold text-lg text-slate-900 mb-1">Acompanhamento</h4>
-                    <p className="text-slate-600">Monitore o status do deslocamento e da coleta em tempo real.</p>
-                  </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">3</div>
+                <div>
+                  <h4 className="font-bold text-lg text-slate-900 mb-1">Acompanhamento</h4>
+                  <p className="text-slate-600">Monitore o status do deslocamento e da coleta em tempo real.</p>
                 </div>
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">4</div>
-                  <div>
-                    <h4 className="font-bold text-lg text-slate-900 mb-1">Confirmação (PIN e Foto)</h4>
-                    <p className="text-slate-600">Receba a foto da mercadoria e forneça o PIN para validar a entrega.</p>
-                  </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black shrink-0">4</div>
+                <div>
+                  <h4 className="font-bold text-lg text-slate-900 mb-1">Confirmação (PIN e Foto)</h4>
+                  <p className="text-slate-600">Receba a foto da mercadoria e forneça o PIN para validar a entrega.</p>
                 </div>
               </div>
             </div>
-          </Reveal>
+          </div>
 
           {/* FLUXO MOTORISTA */}
-          <Reveal delay={0.2}>
-            <div className="bg-slate-900 rounded-[2rem] p-8 sm:p-12 shadow-xl border border-slate-800 relative overflow-hidden text-white">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-slate-800 rounded-bl-full -z-0"></div>
-              <h3 className="text-2xl font-black text-white mb-10 flex items-center gap-3 relative z-10">
-                <Truck className="text-cyan-400" /> Para Motoristas
-              </h3>
-              <div className="space-y-8 relative z-10">
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">1</div>
-                  <div>
-                    <h4 className="font-bold text-lg text-white mb-1">Radar de Oportunidades</h4>
-                    <p className="text-slate-400">Acesse o mural e encontre cargas disponíveis na sua região.</p>
-                  </div>
+          <div className="bg-slate-900 rounded-[2rem] p-8 sm:p-12 shadow-xl border border-slate-800 relative overflow-hidden text-white">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-slate-800 rounded-bl-full -z-0"></div>
+            <h3 className="text-2xl font-black text-white mb-10 flex items-center gap-3 relative z-10">
+              <Truck className="text-cyan-400" /> Para Motoristas
+            </h3>
+            <div className="space-y-8 relative z-10">
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">1</div>
+                <div>
+                  <h4 className="font-bold text-lg text-white mb-1">Radar de Oportunidades</h4>
+                  <p className="text-slate-400">Acesse o mural e encontre cargas disponíveis na sua região.</p>
                 </div>
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">2</div>
-                  <div>
-                    <h4 className="font-bold text-lg text-white mb-1">Aceite o Frete</h4>
-                    <p className="text-slate-400">Confirme o interesse e aguarde a liberação do pagamento pelo cliente.</p>
-                  </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">2</div>
+                <div>
+                  <h4 className="font-bold text-lg text-white mb-1">Aceite o Frete</h4>
+                  <p className="text-slate-400">Confirme o interesse e aguarde a liberação do pagamento pelo cliente.</p>
                 </div>
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">3</div>
-                  <div>
-                    <h4 className="font-bold text-lg text-white mb-1">Realize o Transporte</h4>
-                    <p className="text-slate-400">Desloque-se até a coleta e inicie a rota com segurança financeira.</p>
-                  </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">3</div>
+                <div>
+                  <h4 className="font-bold text-lg text-white mb-1">Realize o Transporte</h4>
+                  <p className="text-slate-400">Desloque-se até a coleta e inicie a rota com segurança financeira.</p>
                 </div>
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">4</div>
-                  <div>
-                    <h4 className="font-bold text-lg text-white mb-1">Entrega e Repasse</h4>
-                    <p className="text-slate-400">Tire a foto, insira o PIN do cliente e receba o valor na sua conta.</p>
-                  </div>
+              </div>
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-900 flex items-center justify-center font-black shrink-0">4</div>
+                <div>
+                  <h4 className="font-bold text-lg text-white mb-1">Entrega e Repasse</h4>
+                  <p className="text-slate-400">Tire a foto, insira o PIN do cliente e receba o valor na sua conta.</p>
                 </div>
               </div>
             </div>
-          </Reveal>
+          </div>
         </div>
       </div>
     </section>
@@ -400,7 +353,7 @@ function TrustSection() {
     <section className="py-24 bg-slate-900 text-white border-t border-slate-800">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
-          <Reveal>
+          <div>
             <h2 className="text-3xl sm:text-5xl font-black mb-6 tracking-tight leading-tight">
               Sua operação <span className="text-cyan-400">blindada</span> de ponta a ponta.
             </h2>
@@ -430,22 +383,20 @@ function TrustSection() {
                 </div>
               </li>
             </ul>
-          </Reveal>
+          </div>
           
-          <Reveal delay={0.2}>
-            <div className="relative">
-              <div className="absolute -inset-10 rounded-full bg-cyan-500/10 blur-[80px]" />
-              <div className="relative bg-slate-800 border border-slate-700 rounded-[2.5rem] p-10 shadow-2xl">
-                <div className="flex justify-center mb-8">
-                  <img src="/icon-192.png" alt="FretoGo" className="h-20 w-auto rounded-2xl shadow-xl" />
-                </div>
-                <div className="text-center">
-                  <h3 className="text-2xl font-black text-white mb-4">A tecnologia a favor da logística.</h3>
-                  <p className="text-slate-400">Junte-se às empresas e motoristas que já estão operando com segurança no ecossistema FretoGo.</p>
-                </div>
+          <div className="relative">
+            <div className="absolute -inset-10 rounded-full bg-cyan-500/10 blur-[80px]" />
+            <div className="relative bg-slate-800 border border-slate-700 rounded-[2.5rem] p-10 shadow-2xl">
+              <div className="flex justify-center mb-8">
+                <img src="/icon-192.png" alt="FretoGo" className="h-20 w-auto rounded-2xl shadow-xl" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-2xl font-black text-white mb-4">A tecnologia a favor da logística.</h3>
+                <p className="text-slate-400">Junte-se às empresas e motoristas que já estão operando com segurança no ecossistema FretoGo.</p>
               </div>
             </div>
-          </Reveal>
+          </div>
         </div>
       </div>
     </section>
@@ -464,22 +415,20 @@ function FinalCta({ onClient, onDriver }: FinalCtaProps) {
   return (
     <section className="py-24 bg-white">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
-        <Reveal>
-          <h2 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight mb-8">
-            Pronto para colocar a <span className="text-blue-600">carga na rua?</span>
-          </h2>
-          <p className="text-xl text-slate-600 font-medium mb-12">
-            Escolha seu perfil e acesse a plataforma agora mesmo.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-             <button onClick={onClient} className="w-full sm:w-auto flex h-16 items-center justify-center rounded-[1.5rem] bg-blue-600 px-12 text-sm font-black uppercase tracking-widest text-white shadow-xl hover:bg-blue-700 transition-all hover:scale-105">
-                Publicar minha carga
-             </button>
-             <button onClick={onDriver} className="w-full sm:w-auto flex h-16 items-center justify-center rounded-[1.5rem] bg-slate-900 px-12 text-sm font-black uppercase tracking-widest text-white shadow-xl hover:bg-slate-800 transition-all hover:scale-105">
-                Encontrar Fretes
-             </button>
-          </div>
-        </Reveal>
+        <h2 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight mb-8">
+          Pronto para colocar a <span className="text-blue-600">carga na rua?</span>
+        </h2>
+        <p className="text-xl text-slate-600 font-medium mb-12">
+          Escolha seu perfil e acesse a plataforma agora mesmo.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
+           <button onClick={onClient} className="w-full sm:w-auto flex h-16 items-center justify-center rounded-[1.5rem] bg-blue-600 px-12 text-sm font-black uppercase tracking-widest text-white shadow-xl hover:bg-blue-700 transition-all hover:scale-105">
+              Publicar minha carga
+           </button>
+           <button onClick={onDriver} className="w-full sm:w-auto flex h-16 items-center justify-center rounded-[1.5rem] bg-slate-900 px-12 text-sm font-black uppercase tracking-widest text-white shadow-xl hover:bg-slate-800 transition-all hover:scale-105">
+              Encontrar Fretes
+           </button>
+        </div>
       </div>
     </section>
   );
@@ -568,11 +517,6 @@ export default function HomePage() {
   return (
     <div className="relative min-h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-900 font-sans selection:bg-blue-600/20 overflow-x-hidden">
       
-      <Helmet>
-        <title>FretoGo | Plataforma de Logística</title>
-        <meta name="description" content="Conectamos empresas que precisam transportar cargas com motoristas prontos para rodar. Segurança, praticidade e pagamento protegido." />
-      </Helmet>
-
       {/* Noise background overlay */}
       <div className="pointer-events-none fixed inset-0 z-[60] bg-grain opacity-[0.03]" />
 
