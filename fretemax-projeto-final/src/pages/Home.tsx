@@ -1,123 +1,191 @@
-// =========================================================
-// NOME DO ARQUIVO: src/pages/Home.tsx
-// CTO-Log: HOME MASTER - UX, COPY & CONVERSÃO.
-// Status: Landing Page Oficial FretoGo elevada ao nível master de 
-// comunicação logística, com base na premissa "A carga precisa chegar. 
-// O motorista precisa rodar".
-// BUILD FIX: Componente 100% blindado contra erros da Vercel. 
-// Ausência total de imports problemáticos (Seo, Reveal, react-helmet).
-// Todas as rotas de conversão (/cliente, /motorista, whatsapp e grupo) 
-// estão perfeitamente preservadas.
-// =========================================================
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
-import { 
-  ArrowRight, 
-  Package, 
-  Truck, 
-  ShieldCheck, 
-  Search, 
-  Clock, 
-  CreditCard, 
-  Camera, 
-  ChevronRight, 
-  CheckCircle2, 
-  MessageCircle, 
-  Users, 
+import {
+  ArrowRight,
+  Camera,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  LockKeyhole,
   MapPin,
   Menu,
+  MessageCircle,
+  Package,
+  Search,
+  ShieldCheck,
+  Truck,
+  Users,
   X,
   Zap,
-  BellRing,
-  Route,
-  MapPinned,
-  ArrowDown
 } from 'lucide-react';
 
+/**
+ * Home FretoGo — evolução visual, comunicação e navegação.
+ *
+ * Escopo preservado:
+ * - Mantém as rotas /cliente e /motorista.
+ * - Mantém o suporte pelo PLATFORM_LINKS.SUPPORT_WHATSAPP.
+ * - Mantém o destino atual do grupo de motoristas.
+ * - Não cria rotas, fluxos operacionais ou regras de negócio.
+ */
 const HERO_IMG = 'https://images.hostinger.com/f09fbe30-dd15-4b3b-aede-622f9534802d.png';
+const DRIVER_GROUP_URL = 'https://chat.whatsapp.com/IGylgsZPYhsDfMZDKzVjHT';
 
-// =========================================================
-// 1. HEADER / NAVBAR
-// =========================================================
-interface NavProps {
+function scrollToId(id: string) {
+  document.getElementById(id)?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  });
+}
+
+interface NavigationProps {
   onClient: () => void;
   onDriver: () => void;
   onSupport: () => void;
 }
 
-function HomeNavbar({ onClient, onDriver, onSupport }: NavProps) {
+function HomeNavbar({ onClient, onDriver, onSupport }: NavigationProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll);
+    const handleScroll = () => setScrolled(window.scrollY > 12);
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const closeAndRun = (action: () => void) => {
+    setMobileMenuOpen(false);
+    action();
+  };
+
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-300 ${scrolled ? 'bg-slate-900 shadow-lg border-b border-slate-800' : 'bg-slate-900 border-b border-transparent'}`}>
-      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-        
-        {/* LOGO FRETOGO */}
-        <div className="flex items-center cursor-pointer" onClick={() => window.scrollTo(0, 0)}>
-          <img 
-            src="/icon-192.png" 
-            alt="FretoGo" 
-            className="h-10 sm:h-12 w-auto object-contain rounded-md" 
-            title="FretoGo"
+    <header
+      className={`fixed inset-x-0 top-0 z-50 border-b transition-all duration-200 ${
+        scrolled
+          ? 'border-slate-800/90 bg-slate-950/95 shadow-lg shadow-slate-950/20 backdrop-blur'
+          : 'border-transparent bg-slate-950/75 backdrop-blur-sm'
+      }`}
+    >
+      <nav
+        className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8"
+        aria-label="Navegação principal"
+      >
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="flex items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+          aria-label="Voltar ao início"
+        >
+          <img
+            src="/icon-192.png"
+            alt="FretoGo"
+            className="h-10 w-auto rounded-md object-contain sm:h-11"
           />
-        </div>
-        
-        {/* DESKTOP NAV */}
-        <div className="hidden md:flex items-center gap-8">
-          <button onClick={onClient} className="text-sm font-bold text-slate-300 hover:text-white transition-colors">Para Empresas</button>
-          <button onClick={onDriver} className="text-sm font-bold text-slate-300 hover:text-white transition-colors">Para Motoristas</button>
-          <button onClick={onSupport} className="text-sm font-bold text-slate-300 hover:text-white transition-colors">Suporte</button>
+        </button>
+
+        <div className="hidden items-center gap-7 md:flex">
+          <button
+            type="button"
+            onClick={() => scrollToId('empresas')}
+            className="text-sm font-bold text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:text-white"
+          >
+            Para empresas
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToId('motoristas')}
+            className="text-sm font-bold text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:text-white"
+          >
+            Para motoristas
+          </button>
+          <button
+            type="button"
+            onClick={onSupport}
+            className="text-sm font-bold text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:text-white"
+          >
+            Suporte
+          </button>
         </div>
 
-        {/* DESKTOP CTAS */}
-        <div className="hidden md:flex items-center gap-4">
-          <button onClick={onDriver} className="flex h-11 items-center justify-center rounded-xl bg-slate-800 border border-slate-700 px-5 text-sm font-black uppercase tracking-widest text-white hover:bg-slate-700 transition-all active:scale-95">
-            Sou Motorista
+        <div className="hidden items-center gap-3 md:flex">
+          <button
+            type="button"
+            onClick={onDriver}
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:border-slate-600 hover:bg-slate-800 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          >
+            Sou motorista
           </button>
-          <button onClick={onClient} className="flex h-11 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-black uppercase tracking-widest text-white shadow-lg hover:bg-blue-500 transition-all active:scale-95">
-            Publicar Carga
+          <button
+            type="button"
+            onClick={onClient}
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-5 text-xs font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          >
+            Publicar carga
           </button>
         </div>
 
-        {/* MOBILE TOGGLE */}
-        <div className="md:hidden flex items-center">
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-slate-300 hover:text-white p-2">
-            {mobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+          className="inline-flex rounded-lg p-2 text-slate-100 transition hover:bg-slate-800 md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-navigation"
+          aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+        >
+          {mobileMenuOpen ? <X size={25} aria-hidden="true" /> : <Menu size={25} aria-hidden="true" />}
+        </button>
       </nav>
 
-      {/* MOBILE MENU */}
       {mobileMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 w-full bg-slate-900 border-b border-slate-800 shadow-2xl flex flex-col py-6 px-4 gap-4 animate-in slide-in-from-top-2">
-          <button onClick={() => { setMobileMenuOpen(false); onClient(); }} className="w-full text-left px-4 py-3 text-lg font-bold text-white hover:bg-slate-800 rounded-xl">Para Empresas</button>
-          <button onClick={() => { setMobileMenuOpen(false); onDriver(); }} className="w-full text-left px-4 py-3 text-lg font-bold text-white hover:bg-slate-800 rounded-xl">Para Motoristas</button>
-          <button onClick={() => { setMobileMenuOpen(false); onSupport(); }} className="w-full text-left px-4 py-3 text-lg font-bold text-white hover:bg-slate-800 rounded-xl">Suporte WhatsApp</button>
-          <div className="h-px w-full bg-slate-800 my-2"></div>
-          <button onClick={() => { setMobileMenuOpen(false); onClient(); }} className="w-full h-14 rounded-xl bg-blue-600 text-sm font-black uppercase tracking-widest text-white shadow-lg active:scale-95">
-            Publicar Carga
-          </button>
-          <button onClick={() => { setMobileMenuOpen(false); onDriver(); }} className="w-full h-14 rounded-xl bg-slate-800 border border-slate-700 text-sm font-black uppercase tracking-widest text-white active:scale-95">
-            Sou Motorista
-          </button>
+        <div id="mobile-navigation" className="border-t border-slate-800 bg-slate-950 px-4 py-5 md:hidden">
+          <div className="mx-auto flex max-w-7xl flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => closeAndRun(() => scrollToId('empresas'))}
+              className="rounded-xl px-4 py-3 text-left text-base font-bold text-white transition hover:bg-slate-900"
+            >
+              Para empresas
+            </button>
+            <button
+              type="button"
+              onClick={() => closeAndRun(() => scrollToId('motoristas'))}
+              className="rounded-xl px-4 py-3 text-left text-base font-bold text-white transition hover:bg-slate-900"
+            >
+              Para motoristas
+            </button>
+            <button
+              type="button"
+              onClick={() => closeAndRun(onSupport)}
+              className="rounded-xl px-4 py-3 text-left text-base font-bold text-white transition hover:bg-slate-900"
+            >
+              Suporte WhatsApp
+            </button>
+            <div className="my-3 h-px bg-slate-800" />
+            <button
+              type="button"
+              onClick={() => closeAndRun(onClient)}
+              className="inline-flex min-h-14 items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 active:scale-[0.97]"
+            >
+              Publicar carga
+            </button>
+            <button
+              type="button"
+              onClick={() => closeAndRun(onDriver)}
+              className="inline-flex min-h-14 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-white transition hover:bg-slate-800 active:scale-[0.97]"
+            >
+              Encontrar fretes
+            </button>
+          </div>
         </div>
       )}
     </header>
   );
 }
 
-// =========================================================
-// 2. HERO / PRIMEIRA DOBRA
-// =========================================================
 interface HeroProps {
   onClient: () => void;
   onDriver: () => void;
@@ -125,376 +193,43 @@ interface HeroProps {
 
 function Hero({ onClient, onDriver }: HeroProps) {
   return (
-    <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-slate-900 min-h-[90vh] flex items-center">
-      <div className="absolute inset-0 z-0">
-        <img src={HERO_IMG} alt="Estrada e Logística" className="h-full w-full object-cover opacity-20 mix-blend-overlay" />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-slate-900"></div>
-      </div>
+    <section className="relative isolate flex min-h-[720px] items-center overflow-hidden bg-slate-950 pt-24 sm:min-h-[680px] lg:min-h-[720px]">
+      <img
+        src={HERO_IMG}
+        alt="Caminhões em uma rodovia, representando uma operação logística em movimento"
+        className="absolute inset-0 -z-20 h-full w-full object-cover object-[62%_center] opacity-90 sm:object-center"
+      />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950 via-slate-950/78 via-44% to-slate-950/10" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950/90 via-transparent to-slate-950/20" />
+      <div className="pointer-events-none absolute -right-40 top-10 -z-10 h-96 w-96 rounded-full bg-cyan-400/15 blur-3xl" />
 
-      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
-        <h1 className="max-w-4xl mx-auto font-display text-4xl sm:text-5xl lg:text-7xl font-black text-white leading-[1.1] tracking-tight">
-          A carga precisa chegar. <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-            O motorista precisa rodar.
-          </span>
-        </h1>
-        
-        <p className="mt-8 max-w-2xl mx-auto text-lg sm:text-xl text-slate-300 font-medium leading-relaxed">
-          A FretoGo conecta empresas que precisam transportar com motoristas prontos para rodar.
-        </p>
-
-        <div className="mt-12 flex flex-col sm:flex-row gap-5 justify-center items-center">
-          <button 
-            onClick={onClient}
-            className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-10 text-sm font-black uppercase tracking-[0.2em] text-white shadow-xl transition-all hover:scale-105 hover:bg-blue-500"
-          >
-            Publicar uma carga
-          </button>
-          <button 
-            onClick={onDriver}
-            className="w-full sm:w-auto flex h-16 items-center justify-center gap-3 rounded-2xl bg-slate-800 border border-slate-700 px-10 text-sm font-black uppercase tracking-[0.2em] text-white transition-all hover:scale-105 hover:bg-slate-700 hover:border-cyan-500/50"
-          >
-            Encontrar fretes
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// =========================================================
-// 3. EDUCAÇÃO: O PROBLEMA E A SOLUÇÃO
-// =========================================================
-function EducationSection() {
-  return (
-    <section className="py-24 bg-white border-t border-slate-200">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-3xl mx-auto mb-16 animate-in fade-in duration-700">
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            O problema não é falta de frete. <br/><span className="text-blue-600">É falta de conexão.</span>
-          </h2>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-8 mb-16">
-          <div className="bg-slate-50 border border-slate-200 rounded-3xl p-8 sm:p-10 shadow-sm">
-            <div className="h-14 w-14 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-6">
-              <Package size={28} />
-            </div>
-            <h3 className="text-xl font-black text-slate-900 mb-4">Para Empresas</h3>
-            <p className="text-slate-600 leading-relaxed font-medium">
-              Ligar de motorista em motorista, negociar no escuro e esperar alguém aparecer não deveria fazer parte da rotina.
-            </p>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-3xl p-8 sm:p-10 shadow-sm">
-            <div className="h-14 w-14 bg-cyan-100 text-cyan-600 rounded-xl flex items-center justify-center mb-6">
-              <Truck size={28} />
-            </div>
-            <h3 className="text-xl font-black text-slate-900 mb-4">Para Motoristas</h3>
-            <p className="text-slate-600 leading-relaxed font-medium">
-              Ter um caminhão parado também custa dinheiro. Rodar sem saber quanto vai receber ou terminar uma rota sem encontrar uma boa oportunidade também pesa.
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-slate-900 rounded-[2.5rem] p-10 text-center shadow-2xl">
-          <h3 className="text-2xl sm:text-3xl font-black text-white mb-6">A FretoGo organiza a conexão.</h3>
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-12 text-slate-300 font-bold">
-            <span className="flex items-center gap-2"><CheckCircle2 className="text-blue-500"/> Empresa publica a carga</span>
-            <ArrowRight className="hidden sm:block text-slate-700" />
-            <span className="flex items-center gap-2"><CheckCircle2 className="text-cyan-400"/> Motorista encontra oportunidades</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// =========================================================
-// 4. INTERDEPENDÊNCIA & CONSCIENTIZAÇÃO
-// =========================================================
-function InterdependenceSection() {
-  return (
-    <section className="py-24 bg-slate-50 border-t border-slate-200">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-4">
-            Uma operação depende dos dois lados.
-          </h2>
-          <p className="text-lg text-slate-600 font-medium">
-            Quem precisa transportar precisa de quem possa transportar.<br/>
-            Quem transporta precisa de uma carga para rodar.
+      <div className="mx-auto w-full max-w-7xl px-4 py-24 sm:px-6 sm:py-28 lg:px-8 lg:py-32">
+        <div className="max-w-2xl">
+          <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-slate-950/45 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-cyan-100 backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" aria-hidden="true" />
+            Operação logística conectada
           </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-lg">
-            <h3 className="text-lg font-black text-blue-600 uppercase tracking-widest mb-6">Empresa</h3>
-            <ul className="space-y-4 text-slate-700 font-medium">
-              <li className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-blue-600"></span> Tem uma carga.</li>
-              <li className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-blue-600"></span> Precisa transportar.</li>
-              <li className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-blue-600"></span> Precisa acompanhar.</li>
-              <li className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-blue-600"></span> Precisa receber confirmação.</li>
-            </ul>
-          </div>
-          <div className="bg-slate-900 p-8 rounded-[2rem] border border-slate-800 shadow-xl text-white">
-            <h3 className="text-lg font-black text-cyan-400 uppercase tracking-widest mb-6">Motorista</h3>
-            <ul className="space-y-4 text-slate-300 font-medium">
-              <li className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Tem um veículo.</li>
-              <li className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Precisa encontrar fretes.</li>
-              <li className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Precisa saber o que foi combinado.</li>
-              <li className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Precisa receber pelo trabalho.</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="text-center mt-16 max-w-2xl mx-auto">
-          <p className="text-2xl font-black text-slate-800 leading-snug">
-            É simples. Um lado precisa do outro. <br/><span className="text-blue-600">A FretoGo aproxima os dois.</span>
+          <h1 className="max-w-xl text-4xl font-black leading-[1.05] tracking-[-0.04em] text-white sm:text-5xl lg:text-7xl">
+            Carga e veículo.{' '}
+            <span className="text-cyan-300">Conectados.</span>
+          </h1>
+          <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-200 sm:text-xl">
+            A FretoGo conecta empresas que precisam transportar com motoristas prontos para rodar.
           </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// =========================================================
-// 5. DO PEQUENO AO PESADO (CATEGORIAS)
-// =========================================================
-function CategoriesSection() {
-  const categories = [
-    { icon: <Zap size={24} />, name: 'MOTO' },
-    { icon: <Package size={24} />, name: 'CARRO' },
-    { icon: <Package size={24} />, name: 'UTILITÁRIO' },
-    { icon: <Truck size={24} />, name: 'TOCO' },
-    { icon: <Truck size={24} />, name: 'TRUCK' },
-    { icon: <Truck size={24} />, name: 'CARRETA' },
-    { icon: <Truck size={24} />, name: 'BITREM' },
-  ];
-
-  return (
-    <section className="py-24 bg-white border-t border-slate-200">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-4">
-          Do pequeno ao pesado.
-        </h2>
-        <p className="text-lg text-slate-600 font-medium mb-12">Um veículo para cada tipo de operação.</p>
-        
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
-          {categories.map((c, i) => (
-            <div key={i} className="bg-slate-50 rounded-2xl border border-slate-200 p-6 flex flex-col items-center justify-center gap-4 hover:shadow-md transition-shadow">
-              <div className="h-12 w-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                {c.icon}
-              </div>
-              <span className="text-sm font-black text-slate-900">{c.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// =========================================================
-// 6. CARROSSEL EDUCATIVO
-// =========================================================
-function Carousel() {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(0);
-
-  const slides = [
-    { icon: <Search />, title: 'ENCONTRE O VEÍCULO CERTO', desc: 'Moto ao Bitrem. Operações sob medida.' },
-    { icon: <Package />, title: 'PUBLIQUE EM POUCOS PASSOS', desc: 'Informe origem, destino, veículo e valor.' },
-    { icon: <MapPin />, title: 'ACOMPANHE A OPERAÇÃO', desc: 'Veja o andamento da coleta e da entrega.' },
-    { icon: <ShieldCheck />, title: 'PAGAMENTO PROTEGIDO', desc: 'O processo financeiro acontece dentro do fluxo da plataforma.' },
-    { icon: <Route />, title: 'FRETES QUE FAZEM SENTIDO', desc: 'Informe sua cidade de interesse e encontre oportunidades naquela direção.' },
-  ];
-
-  const handleScroll = () => {
-    const el = trackRef.current;
-    if (!el) return;
-    const index = Math.round(el.scrollLeft / el.clientWidth);
-    setActive(index);
-  };
-
-  const goToSlide = (index: number) => {
-    const el = trackRef.current;
-    if (!el) return;
-    el.scrollTo({ left: index * el.clientWidth, behavior: 'smooth' });
-  };
-
-  return (
-    <section className="py-16 bg-slate-900 border-t border-slate-800">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <div
-          ref={trackRef}
-          onScroll={handleScroll}
-          className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth gap-6 pb-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {slides.map((s, i) => (
-            <div key={i} className="snap-center shrink-0 w-full sm:w-[380px] bg-slate-800 rounded-3xl border border-slate-700 p-8 flex flex-col items-start gap-4">
-              <div className="h-12 w-12 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
-                {s.icon}
-              </div>
-              <div>
-                <h4 className="font-black text-white text-lg tracking-wide mb-2">{s.title}</h4>
-                <p className="text-sm text-slate-400 font-medium leading-relaxed">{s.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-center gap-2 mt-4">
-          {slides.map((_, i) => (
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
             <button
-              key={i}
-              onClick={() => goToSlide(i)}
-              aria-label={`Ir para o slide ${i + 1}`}
-              className={`h-2 rounded-full transition-all ${active === i ? 'w-8 bg-blue-500' : 'w-2 bg-slate-700'}`}
-            />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// =========================================================
-// 7. SEÇÃO EMPRESA & VALOR DO FRETE
-// =========================================================
-function CompanySection({ onClient }: { onClient: () => void }) {
-  return (
-    <section className="py-24 bg-white border-t border-slate-200">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          <div>
-            <h2 className="text-3xl sm:text-5xl font-black text-slate-900 mb-6 leading-tight tracking-tight">
-              Tem uma carga para transportar?
-            </h2>
-            <p className="text-lg text-slate-600 font-medium mb-8">
-              Publique seu frete e encontre o veículo certo para sua operação.
-            </p>
-            <ul className="space-y-6 mb-10">
-              <li className="flex gap-4">
-                <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-600 shrink-0"><Truck size={20}/></div>
-                <div>
-                  <strong className="block text-slate-900 text-lg">Veículo certo</strong>
-                  <span className="text-slate-600">Encontre a categoria adequada para sua carga.</span>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-600 shrink-0"><MapPinned size={20}/></div>
-                <div>
-                  <strong className="block text-slate-900 text-lg">Acompanhamento</strong>
-                  <span className="text-slate-600">Acompanhe a operação durante o percurso.</span>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-600 shrink-0"><CheckCircle2 size={20}/></div>
-                <div>
-                  <strong className="block text-slate-900 text-lg">Confirmação</strong>
-                  <span className="text-slate-600">Receba a confirmação documental da entrega.</span>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="mt-1 bg-blue-50 p-2 rounded-lg text-blue-600 shrink-0"><ShieldCheck size={20}/></div>
-                <div>
-                  <strong className="block text-slate-900 text-lg">Pagamento seguro</strong>
-                  <span className="text-slate-600">O fluxo de pagamento é retido e liberado no momento correto, respeitando o funcionamento da plataforma.</span>
-                </div>
-              </li>
-            </ul>
-            <button onClick={onClient} className="w-full sm:w-auto h-16 bg-blue-600 hover:bg-blue-700 text-white px-10 rounded-2xl font-black uppercase tracking-widest text-sm transition-all shadow-xl">
-              Publicar minha carga
+              type="button"
+              onClick={onClient}
+              className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/50 transition hover:bg-blue-500 active:scale-[0.97] sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              Publicar uma carga <ArrowRight size={18} aria-hidden="true" />
             </button>
-          </div>
-          
-          <div className="bg-slate-50 border border-slate-200 rounded-[2rem] p-8 sm:p-10 shadow-lg">
-            <h3 className="text-2xl font-black text-slate-900 mb-6">Como funciona o valor do frete?</h3>
-            <p className="text-slate-600 font-medium leading-relaxed mb-6">
-              A empresa informa o valor que deseja oferecer pelo frete. A plataforma apresenta uma <strong>referência de valor</strong> para ajudar na construção de uma oferta mais compatível com a operação e com a categoria do veículo.
-            </p>
-            <div className="bg-amber-50 border border-amber-200 p-5 rounded-xl">
-              <p className="text-amber-800 text-sm font-bold">
-                Uma oferta muito abaixo da referência pode reduzir o interesse dos motoristas na plataforma. Uma oferta justa acelera a conexão.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// =========================================================
-// 8. SEÇÃO MOTORISTA & CIDADE DE INTERESSE
-// =========================================================
-function DriverSection({ onDriver }: { onDriver: () => void }) {
-  return (
-    <section className="py-24 bg-slate-900 border-t border-slate-800 text-white">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          <div className="order-2 lg:order-1">
-            <div className="bg-slate-800 border border-slate-700 rounded-[2rem] p-8 sm:p-10 shadow-2xl">
-              <h3 className="text-2xl font-black text-cyan-400 mb-6 uppercase tracking-tight">
-                Encontre fretes que façam sentido para sua rota.
-              </h3>
-              <p className="text-slate-300 font-medium leading-relaxed mb-8">
-                O motorista pode informar uma <strong>cidade de interesse</strong> e o sistema pode ajudá-lo a encontrar oportunidades naquela direção.
-              </p>
-              <div className="bg-slate-950 p-6 rounded-2xl border border-slate-700 mb-6 text-center">
-                <p className="text-sm text-slate-400 font-bold mb-3">Exemplo da operação:</p>
-                <div className="flex flex-col gap-2 font-black tracking-widest text-sm">
-                  <span className="text-white">ENTREGA ATUAL</span>
-                  <ArrowDown className="mx-auto text-cyan-500" size={16}/>
-                  <span className="text-cyan-400">CIDADE DE INTERESSE</span>
-                  <ArrowDown className="mx-auto text-cyan-500" size={16}/>
-                  <span className="text-emerald-400">NOVA OPORTUNIDADE</span>
-                </div>
-              </div>
-              <p className="text-slate-400 text-sm font-medium">
-                Assim, o motorista pode procurar uma oportunidade que ajude a aproximá-lo do destino que deseja (limitado pelo sistema para evitar abusos).
-              </p>
-            </div>
-          </div>
-
-          <div className="order-1 lg:order-2">
-            <h2 className="text-3xl sm:text-5xl font-black text-white mb-6 leading-tight tracking-tight">
-              Tem um veículo e quer encontrar fretes?
-            </h2>
-            <p className="text-lg text-slate-400 font-medium mb-8">
-              Encontre oportunidades compatíveis com seu veículo e que façam sentido para sua rota.
-            </p>
-            <ul className="space-y-6 mb-10">
-              <li className="flex gap-4">
-                <div className="mt-1 bg-slate-800 p-2 rounded-lg text-cyan-400 shrink-0"><Search size={20}/></div>
-                <div>
-                  <strong className="block text-white text-lg">Fretes</strong>
-                  <span className="text-slate-400">Encontre oportunidades disponíveis para sua categoria.</span>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="mt-1 bg-slate-800 p-2 rounded-lg text-cyan-400 shrink-0"><CreditCard size={20}/></div>
-                <div>
-                  <strong className="block text-white text-lg">Valor</strong>
-                  <span className="text-slate-400">Veja o valor da oportunidade antes de aceitar.</span>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="mt-1 bg-slate-800 p-2 rounded-lg text-cyan-400 shrink-0"><Route size={20}/></div>
-                <div>
-                  <strong className="block text-white text-lg">Rota</strong>
-                  <span className="text-slate-400">Escolha oportunidades que façam sentido para seu caminho.</span>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="mt-1 bg-slate-800 p-2 rounded-lg text-cyan-400 shrink-0"><ShieldCheck size={20}/></div>
-                <div>
-                  <strong className="block text-white text-lg">Pagamento</strong>
-                  <span className="text-slate-400">Entenda claramente quando e como o processo de recebimento acontece.</span>
-                </div>
-              </li>
-            </ul>
-            <button onClick={onDriver} className="w-full sm:w-auto h-16 bg-cyan-500 hover:bg-cyan-400 text-slate-900 px-10 rounded-2xl font-black uppercase tracking-widest text-sm transition-all shadow-[0_10px_30px_rgba(6,182,212,0.2)]">
+            <button
+              type="button"
+              onClick={onDriver}
+              className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl border border-slate-300/30 bg-slate-950/35 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white backdrop-blur-sm transition hover:border-cyan-300/60 hover:bg-slate-900/75 active:scale-[0.97] sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              <Truck size={18} className="text-cyan-300" aria-hidden="true" />
               Encontrar fretes
             </button>
           </div>
@@ -504,152 +239,265 @@ function DriverSection({ onDriver }: { onDriver: () => void }) {
   );
 }
 
-// =========================================================
-// 9. COMO FUNCIONA (DIAGRAMA EDUCATIVO)
-// =========================================================
-function HowItWorksDetailed() {
+
+function ProblemSection() {
   return (
-    <section className="py-24 bg-slate-50 border-t border-slate-200">
+    <section className="border-b border-slate-200 bg-slate-50 py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-16 mb-24">
-          {/* COMO FUNCIONA EMPRESA */}
+        <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-start lg:gap-16">
           <div>
-            <h3 className="text-2xl font-black text-blue-600 mb-8 uppercase tracking-tight">Como funciona para Empresas</h3>
-            <div className="space-y-6">
-              <div className="flex gap-4">
-                <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black shrink-0">1</span>
-                <div>
-                  <h4 className="font-black text-slate-900">Publique sua carga</h4>
-                  <p className="text-slate-600 text-sm mt-1">Informe origem, destino, tipo de veículo e valor da oferta.</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black shrink-0">2</span>
-                <div>
-                  <h4 className="font-black text-slate-900">Encontre um motorista</h4>
-                  <p className="text-slate-600 text-sm mt-1">A carga fica disponível para motoristas compatíveis.</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black shrink-0">3</span>
-                <div>
-                  <h4 className="font-black text-slate-900">Confirme e acompanhe</h4>
-                  <p className="text-slate-600 text-sm mt-1">Quando um motorista aceita, a empresa visualiza as informações da operação e acompanha o processo.</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black shrink-0">4</span>
-                <div>
-                  <h4 className="font-black text-slate-900">Acompanhe a entrega</h4>
-                  <p className="text-slate-600 text-sm mt-1">A operação segue até a confirmação documental da entrega.</p>
-                </div>
-              </div>
-            </div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">O problema real</p>
+            <h2 className="mt-3 max-w-xl text-3xl font-black leading-tight tracking-[-0.035em] text-slate-950 sm:text-5xl">O problema não é falta de frete. É falta de conexão.</h2>
           </div>
-
-          {/* COMO FUNCIONA MOTORISTA */}
-          <div>
-            <h3 className="text-2xl font-black text-cyan-600 mb-8 uppercase tracking-tight">Como funciona para Motoristas</h3>
-            <div className="space-y-6">
-              <div className="flex gap-4">
-                <span className="w-8 h-8 rounded-full bg-cyan-100 text-cyan-600 flex items-center justify-center font-black shrink-0">1</span>
-                <div>
-                  <h4 className="font-black text-slate-900">Encontre oportunidades</h4>
-                  <p className="text-slate-600 text-sm mt-1">Veja cargas disponíveis compatíveis com seu veículo.</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <span className="w-8 h-8 rounded-full bg-cyan-100 text-cyan-600 flex items-center justify-center font-black shrink-0">2</span>
-                <div>
-                  <h4 className="font-black text-slate-900">Escolha o frete</h4>
-                  <p className="text-slate-600 text-sm mt-1">Analise a oportunidade e o valor antes de aceitar.</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <span className="w-8 h-8 rounded-full bg-cyan-100 text-cyan-600 flex items-center justify-center font-black shrink-0">3</span>
-                <div>
-                  <h4 className="font-black text-slate-900">Realize o transporte</h4>
-                  <p className="text-slate-600 text-sm mt-1">Faça a coleta e siga para as entregas com as garantias da plataforma.</p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <span className="w-8 h-8 rounded-full bg-cyan-100 text-cyan-600 flex items-center justify-center font-black shrink-0">4</span>
-                <div>
-                  <h4 className="font-black text-slate-900">Confirme a entrega</h4>
-                  <p className="text-slate-600 text-sm mt-1">Após o descarregamento, o motorista registra a foto e informa o PIN. A confirmação final acontece pelo fluxo existente.</p>
-                </div>
-              </div>
-            </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <article className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+              <span className="text-xs font-black uppercase tracking-[0.14em] text-blue-600">Para empresas</span>
+              <p className="mt-4 text-lg font-bold leading-relaxed text-slate-800">Ligar de motorista em motorista, negociar no escuro e esperar alguém aparecer não deveria fazer parte da rotina.</p>
+              <p className="mt-5 text-sm font-medium leading-relaxed text-slate-600">A empresa publica a carga e organiza as informações da operação em um só lugar.</p>
+            </article>
+            <article className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+              <span className="text-xs font-black uppercase tracking-[0.14em] text-cyan-700">Para motoristas</span>
+              <p className="mt-4 text-lg font-bold leading-relaxed text-slate-800">Ter um caminhão parado também custa. Rodar sem saber o que foi combinado também pesa.</p>
+              <p className="mt-5 text-sm font-medium leading-relaxed text-slate-600">O motorista encontra oportunidades e analisa o frete antes de escolher.</p>
+            </article>
           </div>
         </div>
-
-        {/* FLUXO COMPLETO VISUAL */}
-        <div className="bg-white border border-slate-200 rounded-[2rem] p-10 text-center shadow-lg">
-          <h3 className="text-xl font-black text-slate-900 mb-8 uppercase tracking-widest">Fluxo Completo da Operação</h3>
-          <div className="flex flex-wrap justify-center items-center gap-3 font-bold text-sm text-slate-600">
-            <span className="bg-slate-100 px-4 py-2 rounded-lg">Empresa publica</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-slate-100 px-4 py-2 rounded-lg">Frete fica disponível</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-slate-100 px-4 py-2 rounded-lg">Motorista encontra</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-slate-100 px-4 py-2 rounded-lg">Motorista aceita</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-slate-100 px-4 py-2 rounded-lg">Empresa acompanha</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg border border-blue-100">Pagamento</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-slate-100 px-4 py-2 rounded-lg">Coleta</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-slate-100 px-4 py-2 rounded-lg">Transporte</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-slate-100 px-4 py-2 rounded-lg">Entrega</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-cyan-50 text-cyan-600 px-4 py-2 rounded-lg border border-cyan-100">Foto + PIN</span> <ArrowRight size={16} className="text-slate-300"/>
-            <span className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg border border-emerald-100">Entrega confirmada</span>
-          </div>
+        <div className="mx-auto mt-10 flex max-w-3xl flex-col items-center justify-center gap-3 text-center sm:flex-row">
+          <span className="rounded-full bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">Empresa publica a carga</span>
+          <ArrowRight className="hidden text-slate-400 sm:block" size={18} aria-hidden="true" />
+          <span className="rounded-full bg-cyan-50 px-4 py-2 text-sm font-black text-cyan-800">Motorista encontra oportunidades</span>
+          <ArrowRight className="hidden text-slate-400 sm:block" size={18} aria-hidden="true" />
+          <span className="rounded-full bg-slate-900 px-4 py-2 text-sm font-black text-white">A FretoGo organiza a conexão</span>
         </div>
       </div>
     </section>
   );
 }
 
-// =========================================================
-// 10. SEGURANÇA E CONFIANÇA
-// =========================================================
-function TrustSection() {
+function EducationalCarousel() {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+  const slides = [
+    { title: 'Encontre o veículo certo', text: 'Moto ao bitrem, com categorias para diferentes necessidades de transporte.', icon: <Truck size={22} aria-hidden="true" /> },
+    { title: 'Publique em poucos passos', text: 'Informe origem, destino, veículo e valor da oferta.', icon: <Package size={22} aria-hidden="true" /> },
+    { title: 'Acompanhe a operação', text: 'Veja o andamento da coleta e da entrega pelo fluxo da plataforma.', icon: <MapPin size={22} aria-hidden="true" /> },
+    { title: 'Pagamento protegido', text: 'O processo de pagamento acontece dentro do fluxo da plataforma.', icon: <CreditCard size={22} aria-hidden="true" /> },
+    { title: 'Fretes que fazem sentido', text: 'O motorista pode informar uma cidade de interesse para encontrar oportunidades naquela direção.', icon: <Search size={22} aria-hidden="true" /> },
+  ];
+  const goTo = (index: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    track.scrollTo({ left: index * track.clientWidth, behavior: 'smooth' });
+    setActive(index);
+  };
   return (
-    <section className="py-24 bg-white border-t border-slate-200">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight mb-4">
-          Confiança não é uma promessa. <br/><span className="text-blue-600">É um processo.</span>
-        </h2>
-        <p className="text-lg text-slate-600 font-medium mb-16 max-w-2xl mx-auto">
-          Veja como a plataforma organiza as etapas para proteger a operação.
-        </p>
+    <section className="border-b border-slate-200 bg-white py-14 sm:py-16">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-7 flex items-end justify-between gap-4">
+          <div><p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Para entender a plataforma</p><h2 className="mt-2 text-2xl font-black tracking-[-0.025em] text-slate-950 sm:text-3xl">Informação para decidir com clareza</h2></div>
+          <div className="hidden gap-2 sm:flex"><button type="button" onClick={() => goTo(Math.max(active - 1, 0))} className="rounded-full border border-slate-200 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50" aria-label="Slide anterior">←</button><button type="button" onClick={() => goTo(Math.min(active + 1, slides.length - 1))} className="rounded-full border border-slate-200 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50" aria-label="Próximo slide">→</button></div>
+        </div>
+        <div ref={trackRef} className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" onScroll={(event) => setActive(Math.round(event.currentTarget.scrollLeft / event.currentTarget.clientWidth))}>
+          {slides.map((slide) => <article key={slide.title} className="w-full shrink-0 snap-start rounded-[1.75rem] border border-slate-200 bg-slate-50 p-7 sm:p-9"><div className="flex max-w-2xl items-start gap-4"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">{slide.icon}</span><div><h3 className="text-xl font-black text-slate-950 sm:text-2xl">{slide.title}</h3><p className="mt-2 text-base font-medium leading-relaxed text-slate-600">{slide.text}</p></div></div></article>)}
+        </div>
+        <div className="mt-5 flex justify-center gap-2" aria-label="Navegação do carrossel">{slides.map((slide, index) => <button key={slide.title} type="button" onClick={() => goTo(index)} aria-label={`Ir para ${slide.title}`} className={`h-2 rounded-full transition-all ${index === active ? 'w-7 bg-blue-600' : 'w-2 bg-slate-300'}`} />)}</div>
+      </div>
+    </section>
+  );
+}
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          <div className="bg-slate-50 border border-slate-200 p-8 rounded-[2rem] flex flex-col items-center hover:shadow-md transition-shadow">
-            <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6"><CreditCard size={28}/></div>
-            <h3 className="font-black text-slate-900 mb-3">Pagamento Protegido</h3>
-            <p className="text-sm text-slate-600 font-medium">O fluxo financeiro passa pela plataforma antes de ser liberado.</p>
+function InterdependenceSection() {
+  return (
+    <section className="bg-slate-950 py-20 text-white sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center"><p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">A conexão</p><h2 className="mt-3 text-3xl font-black tracking-[-0.035em] sm:text-5xl">Uma operação depende dos dois lados.</h2><p className="mt-5 text-lg font-medium leading-relaxed text-slate-300">Quem precisa transportar precisa de quem possa transportar. Quem transporta precisa de uma carga para rodar.</p></div>
+        <div className="mx-auto mt-12 grid max-w-5xl gap-4 md:grid-cols-[1fr_auto_1fr] md:items-stretch">
+          <article className="rounded-[1.75rem] border border-slate-800 bg-slate-900 p-7 sm:p-8"><p className="text-xs font-black uppercase tracking-[0.15em] text-blue-300">Empresa</p><ul className="mt-5 space-y-3 text-sm font-bold leading-relaxed text-slate-200"><li>Tem uma carga.</li><li>Precisa transportar.</li><li>Precisa acompanhar.</li><li>Precisa receber confirmação.</li></ul></article>
+          <div className="flex items-center justify-center text-cyan-300"><ArrowRight className="hidden md:block" size={28} aria-hidden="true" /><span className="md:hidden">↕</span></div>
+          <article className="rounded-[1.75rem] border border-slate-800 bg-slate-900 p-7 sm:p-8"><p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">Motorista</p><ul className="mt-5 space-y-3 text-sm font-bold leading-relaxed text-slate-200"><li>Tem um veículo.</li><li>Precisa encontrar fretes.</li><li>Precisa saber o que foi combinado.</li><li>Precisa receber pelo trabalho.</li></ul></article>
+        </div>
+        <p className="mx-auto mt-10 max-w-2xl text-center text-lg font-black leading-relaxed text-cyan-100">É simples. Um lado precisa do outro. A FretoGo aproxima os dois.</p>
+      </div>
+    </section>
+  );
+}
+
+interface AudienceChoiceProps {
+  onClient: () => void;
+  onDriver: () => void;
+}
+
+function AudienceChoice({ onClient, onDriver }: AudienceChoiceProps) {
+  return (
+    <section id="perfil" className="scroll-mt-24 bg-white py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Comece pelo seu perfil</p>
+          <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
+            Qual é o seu perfil?
+          </h2>
+          <p className="mt-4 text-lg font-medium leading-relaxed text-slate-600">
+            Escolha o caminho que corresponde à sua operação.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-12 grid max-w-5xl gap-6 md:grid-cols-2 lg:gap-8">
+          <article className="flex min-h-full flex-col rounded-[2rem] border border-slate-200 bg-slate-50 p-7 shadow-[0_18px_45px_rgba(15,23,42,0.07)] sm:p-9">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
+              <Package size={28} aria-hidden="true" />
+            </div>
+            <p className="mt-7 text-xs font-black uppercase tracking-[0.16em] text-blue-600">Empresa</p>
+            <h3 className="mt-3 text-2xl font-black tracking-[-0.025em] text-slate-950">
+              Tem uma carga para transportar?
+            </h3>
+            <p className="mt-4 flex-grow text-base font-medium leading-relaxed text-slate-600">
+              Publique a carga, encontre o veículo adequado e acompanhe cada etapa da operação.
+            </p>
+            <button
+              type="button"
+              onClick={onClient}
+              className="mt-8 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-blue-950/15 transition hover:bg-blue-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+            >
+              Publicar minha carga <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </article>
+
+          <article className="flex min-h-full flex-col rounded-[2rem] border border-slate-800 bg-slate-950 p-7 shadow-[0_18px_45px_rgba(15,23,42,0.16)] sm:p-9">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-300/15 bg-cyan-300/10 text-cyan-300">
+              <Truck size={28} aria-hidden="true" />
+            </div>
+            <p className="mt-7 text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Motorista</p>
+            <h3 className="mt-3 text-2xl font-black tracking-[-0.025em] text-white">
+              Tem um veículo e quer encontrar fretes?
+            </h3>
+            <p className="mt-4 flex-grow text-base font-medium leading-relaxed text-slate-300">
+              Encontre oportunidades compatíveis com seu veículo, veja o valor antes de aceitar e escolha rotas que façam sentido.
+            </p>
+            <button
+              type="button"
+              onClick={onDriver}
+              className="mt-8 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-slate-950 shadow-lg shadow-cyan-950/20 transition hover:bg-cyan-300 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              Encontrar fretes <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </article>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CompanySection({ onClient }: Pick<NavigationProps, 'onClient'>) {
+  const process = [
+    { title: 'Publique', detail: 'Informe a carga e o que sua operação precisa.' },
+    { title: 'Encontre', detail: 'Conecte-se ao veículo certo para o transporte.' },
+    { title: 'Acompanhe', detail: 'Veja o andamento da operação pelo fluxo da plataforma.' },
+    { title: 'Confirme', detail: 'Valide a entrega com os recursos disponíveis.' },
+  ];
+
+  return (
+    <section id="empresas" className="scroll-mt-24 border-y border-slate-200 bg-slate-50 py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid items-center gap-10 lg:grid-cols-[1fr_0.9fr] lg:gap-16">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Para empresas</p>
+            <h2 className="mt-3 max-w-xl text-3xl font-black leading-tight tracking-[-0.035em] text-slate-950 sm:text-5xl">
+              Publique sua carga. Encontre o veículo certo.
+            </h2>
+            <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-600">
+              Organize a operação em um só caminho: publique, acompanhe e confirme a entrega com clareza.
+            </p>
+            <p className="mt-4 max-w-xl text-sm font-medium leading-relaxed text-slate-500">
+              Você informa o valor que deseja oferecer. A plataforma apresenta uma referência para ajudar na construção de uma oferta compatível com a operação e a categoria do veículo.
+            </p>
+            <button
+              type="button"
+              onClick={onClient}
+              className="mt-8 inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/15 transition hover:bg-blue-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+            >
+              Publicar minha carga <ArrowRight size={18} aria-hidden="true" />
+            </button>
           </div>
-          <div className="bg-slate-50 border border-slate-200 p-8 rounded-[2rem] flex flex-col items-center hover:shadow-md transition-shadow">
-            <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6"><Route size={28}/></div>
-            <h3 className="font-black text-slate-900 mb-3">Acompanhamento</h3>
-            <p className="text-sm text-slate-600 font-medium">Visibilidade do deslocamento da carga durante a rota.</p>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 p-8 rounded-[2rem] flex flex-col items-center hover:shadow-md transition-shadow">
-            <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6"><Camera size={28}/></div>
-            <h3 className="font-black text-slate-900 mb-3">Foto da Entrega</h3>
-            <p className="text-sm text-slate-600 font-medium">Registro obrigatório da mercadoria no local de destino.</p>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 p-8 rounded-[2rem] flex flex-col items-center hover:shadow-md transition-shadow">
-            <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6"><LockKeyhole size={28}/></div>
-            <h3 className="font-black text-slate-900 mb-3">Confirmação por PIN</h3>
-            <p className="text-sm text-slate-600 font-medium">Código de segurança necessário para fechar a operação.</p>
+
+          <div className="relative overflow-hidden rounded-[2rem] bg-slate-950 shadow-2xl shadow-slate-950/20">
+            <img
+              src={HERO_IMG}
+              alt="Operação logística com veículos em rota"
+              className="h-72 w-full object-cover object-center opacity-95 sm:h-80"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/10 to-transparent" />
+            <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-white/15 bg-slate-950/75 p-4 text-white backdrop-blur-sm">
+              <p className="text-sm font-black">Operação com mais contexto</p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-300">Do anúncio da carga à confirmação da entrega.</p>
+            </div>
           </div>
         </div>
 
-        <div className="mt-16 grid md:grid-cols-2 gap-8 max-w-4xl mx-auto text-left">
-          <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-            <h4 className="font-black text-blue-800 mb-2">Para a Empresa</h4>
-            <p className="text-blue-900/80 text-sm font-medium">Você acompanha quem aceitou, acompanha a operação e recebe a confirmação da entrega.</p>
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {process.map((item, index) => (
+            <article key={item.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
+                {index + 1}
+              </span>
+              <h3 className="mt-5 font-black text-slate-950">{item.title}</h3>
+              <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DriverSection({ onDriver }: Pick<NavigationProps, 'onDriver'>) {
+  const capabilities = [
+    { icon: <Search size={19} aria-hidden="true" />, text: 'Oportunidades disponíveis para consulta' },
+    { icon: <MapPin size={19} aria-hidden="true" />, text: 'Filtro por cidade de interesse' },
+    { icon: <Truck size={19} aria-hidden="true" />, text: 'Categorias de veículos' },
+    { icon: <CheckCircle2 size={19} aria-hidden="true" />, text: 'Acompanhamento e confirmação da entrega' },
+  ];
+
+  return (
+    <section id="motoristas" className="scroll-mt-24 bg-slate-950 py-20 text-white sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid items-center gap-10 lg:grid-cols-[0.9fr_1fr] lg:gap-16">
+          <div className="order-2 relative overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-900 shadow-2xl shadow-slate-950/30 lg:order-1">
+            <img
+              src={HERO_IMG}
+              alt="Veículos em deslocamento numa rota logística"
+              className="h-72 w-full object-cover object-[70%_center] opacity-85 sm:h-80"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+            <div className="absolute bottom-6 left-6 right-6">
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-slate-950/75 px-4 py-2 text-xs font-black uppercase tracking-[0.13em] text-cyan-200 backdrop-blur-sm">
+                <MapPin size={15} aria-hidden="true" /> Escolha suas rotas
+              </div>
+            </div>
           </div>
-          <div className="bg-cyan-50 p-6 rounded-2xl border border-cyan-100">
-            <h4 className="font-black text-cyan-800 mb-2">Para o Motorista</h4>
-            <p className="text-cyan-900/80 text-sm font-medium">Você sabe o valor da oportunidade antes de aceitar e acompanha o fluxo da operação.</p>
+
+          <div className="order-1 lg:order-2">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Para motoristas</p>
+            <h2 className="mt-3 max-w-xl text-3xl font-black leading-tight tracking-[-0.035em] text-white sm:text-5xl">
+              Encontre fretes. Escolha suas rotas.
+            </h2>
+            <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-300">
+              Encontre oportunidades compatíveis com seu veículo, veja o valor antes de aceitar e escolha os fretes que façam sentido para sua rota.
+            </p>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              {capabilities.map((item) => (
+                <div key={item.text} className="flex gap-3 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+                  <span className="mt-0.5 shrink-0 text-cyan-300">{item.icon}</span>
+                  <p className="text-sm font-bold leading-relaxed text-slate-200">{item.text}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={onDriver}
+              className="mt-8 inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-slate-950 shadow-xl shadow-cyan-950/20 transition hover:bg-cyan-300 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              Encontrar fretes <ArrowRight size={18} aria-hidden="true" />
+            </button>
           </div>
         </div>
       </div>
@@ -657,150 +505,363 @@ function TrustSection() {
   );
 }
 
-// =========================================================
-// 11. CADA UM TEM SEU PAPEL (INSTITUCIONAL)
-// =========================================================
+
+function CityInterestSection() {
+  return (
+    <section className="border-y border-slate-200 bg-slate-50 py-20 sm:py-24">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="grid items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-700">Um diferencial para o motorista</p>
+            <h2 className="mt-3 text-3xl font-black leading-tight tracking-[-0.035em] text-slate-950 sm:text-5xl">Encontre fretes que façam sentido para sua rota.</h2>
+            <p className="mt-6 text-lg font-medium leading-relaxed text-slate-600">O motorista pode informar uma cidade de interesse e o sistema pode ajudá-lo a encontrar oportunidades naquela direção.</p>
+            <p className="mt-5 text-sm font-bold leading-relaxed text-slate-500">Isso não garante disponibilidade. Ajuda a procurar uma oportunidade que aproxime o motorista do destino que deseja.</p>
+          </div>
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <div className="rounded-2xl bg-slate-950 p-5 text-center text-white"><span className="text-xs font-black uppercase tracking-[0.15em] text-slate-400">Exemplo</span><p className="mt-2 text-xl font-black">“Quero voltar para Campinas.”</p></div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:items-center"><div className="rounded-xl bg-blue-50 p-4 text-center text-sm font-black text-blue-800">Entrega atual</div><span className="text-center text-xl font-black text-slate-400 sm:block">→</span><div className="rounded-xl bg-cyan-50 p-4 text-center text-sm font-black text-cyan-800">Cidade de interesse</div><span className="hidden text-center text-xl font-black text-slate-400 sm:block">→</span><div className="rounded-xl bg-slate-100 p-4 text-center text-sm font-black text-slate-800 sm:col-start-3">Nova oportunidade</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OperationFlowSection() {
+  const steps = ['Empresa publica', 'Frete fica disponível', 'Motorista encontra', 'Motorista aceita', 'Empresa acompanha', 'Pagamento', 'Coleta', 'Transporte', 'Entrega', 'Foto + PIN', 'Entrega confirmada'];
+  return (
+    <section className="bg-white py-20 sm:py-24">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-2xl text-center"><p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">O fluxo completo</p><h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">Agora você entende o caminho da operação.</h2><p className="mt-4 text-lg font-medium leading-relaxed text-slate-600">Cada etapa tem uma função clara, do anúncio da carga à confirmação da entrega.</p></div>
+        <ol className="mx-auto mt-12 grid max-w-3xl gap-3 sm:grid-cols-2 lg:grid-cols-3">{steps.map((step, index) => <li key={step} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white">{index + 1}</span><span className="text-sm font-bold text-slate-800">{step}</span></li>)}</ol>
+      </div>
+    </section>
+  );
+}
+
 function RolesSection() {
   return (
-    <section className="py-24 bg-slate-900 text-center text-white border-t border-slate-800">
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-        <h2 className="text-3xl sm:text-4xl font-black mb-12 tracking-tight">CADA UM TEM SEU PAPEL.</h2>
-        
-        <div className="flex flex-col sm:flex-row justify-center items-stretch gap-6 mb-16">
-          <div className="flex-1 bg-slate-800 p-8 rounded-3xl border border-slate-700">
-            <h3 className="text-xl font-black text-blue-400 mb-2 uppercase">Empresa</h3>
-            <p className="text-slate-300 font-medium">Tem uma necessidade.</p>
-          </div>
-          <div className="flex-1 bg-slate-800 p-8 rounded-3xl border border-slate-700">
-            <h3 className="text-xl font-black text-cyan-400 mb-2 uppercase">Motorista</h3>
-            <p className="text-slate-300 font-medium">Tem uma capacidade de transporte.</p>
-          </div>
-          <div className="flex-1 bg-blue-600 p-8 rounded-3xl shadow-lg">
-            <h3 className="text-xl font-black text-white mb-2 uppercase">FretoGo</h3>
-            <p className="text-blue-100 font-medium">Organiza a conexão.</p>
-          </div>
-        </div>
-
-        <p className="text-xl text-slate-300 font-medium leading-relaxed max-w-2xl mx-auto">
-          Quando os dois lados entendem o que precisam e o que foi combinado, a operação fica mais clara para todos.
-        </p>
-
-        <div className="mt-12 flex justify-center gap-6 text-xs font-black uppercase tracking-widest text-slate-500">
-          <span>RESPEITO</span> &bull; <span>CLAREZA</span> &bull; <span>CONFIANÇA</span>
-        </div>
-      </div>
+    <section className="border-y border-slate-800 bg-slate-900 py-16 text-white sm:py-20">
+      <div className="mx-auto max-w-5xl px-4 text-center sm:px-6 lg:px-8"><p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Uma relação mais clara</p><h2 className="mt-3 text-3xl font-black tracking-[-0.035em] sm:text-4xl">Cada um tem seu papel.</h2><div className="mt-10 grid gap-4 text-left sm:grid-cols-3"><div className="rounded-2xl border border-slate-700 bg-slate-800 p-6"><p className="text-xs font-black uppercase tracking-[0.15em] text-blue-300">Empresa</p><p className="mt-3 font-bold leading-relaxed text-slate-100">Tem uma necessidade.</p></div><div className="rounded-2xl border border-slate-700 bg-slate-800 p-6"><p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">Motorista</p><p className="mt-3 font-bold leading-relaxed text-slate-100">Tem uma capacidade de transporte.</p></div><div className="rounded-2xl border border-slate-700 bg-slate-800 p-6"><p className="text-xs font-black uppercase tracking-[0.15em] text-amber-300">FretoGo</p><p className="mt-3 font-bold leading-relaxed text-slate-100">Organiza a conexão.</p></div></div><p className="mx-auto mt-9 max-w-2xl text-base font-medium leading-relaxed text-slate-300">Quando os dois lados entendem o que precisam e o que foi combinado, a operação fica mais clara para todos.</p><div className="mt-6 flex justify-center gap-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-200"><span>Respeito</span><span>•</span><span>Clareza</span><span>•</span><span>Confiança</span></div></div>
     </section>
   );
 }
 
-// =========================================================
-// 12. CTA FINAL
-// =========================================================
-interface FinalCtaProps {
-  onClient: () => void;
-  onDriver: () => void;
-}
+function CategoriesSection() {
+  const categories = [
+    { name: 'Moto', icon: <Zap size={24} aria-hidden="true" /> },
+    { name: 'Carro', icon: <Package size={24} aria-hidden="true" /> },
+    { name: 'Utilitário', icon: <Package size={24} aria-hidden="true" /> },
+    { name: 'Toco', icon: <Truck size={24} aria-hidden="true" /> },
+    { name: 'Truck', icon: <Truck size={24} aria-hidden="true" /> },
+    { name: 'Carreta', icon: <Truck size={24} aria-hidden="true" /> },
+    { name: 'Bitrem', icon: <Truck size={24} aria-hidden="true" /> },
+  ];
 
-function FinalCta({ onClient, onDriver }: FinalCtaProps) {
   return (
-    <section className="py-32 bg-white">
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight mb-4">
-          Pronto para começar?
-        </h2>
-        <p className="text-xl text-slate-600 font-medium mb-12">
-          Escolha o seu caminho.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-           <button onClick={onClient} className="w-full sm:w-auto flex h-16 items-center justify-center rounded-2xl bg-blue-600 px-12 text-sm font-black uppercase tracking-[0.2em] text-white shadow-xl hover:bg-blue-700 transition-all hover:scale-105">
-              Publicar uma carga
-           </button>
-           <button onClick={onDriver} className="w-full sm:w-auto flex h-16 items-center justify-center rounded-2xl bg-slate-900 px-12 text-sm font-black uppercase tracking-[0.2em] text-white shadow-xl hover:bg-slate-800 transition-all hover:scale-105">
-              Encontrar Fretes
-           </button>
+    <section className="border-y border-slate-200 bg-white py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Categorias</p>
+          <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
+            Do pequeno ao pesado
+          </h2>
+          <p className="mt-4 text-lg font-medium leading-relaxed text-slate-600">
+            Da entrega local ao transporte de maior porte, escolha a categoria adequada para sua carga ou veículo.
+          </p>
+        </div>
+        <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          {categories.map((category) => (
+            <div
+              key={category.name}
+              className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center shadow-sm"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                {category.icon}
+              </span>
+              <span className="text-sm font-black text-slate-900">{category.name}</span>
+            </div>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-// =========================================================
-// 13. FOOTER
-// =========================================================
-interface FooterProps {
-  onClient: () => void;
-  onDriver: () => void;
-  onSupport: () => void;
+function HowItWorksSection() {
+  const companySteps = [
+    'Publicação da carga',
+    'Pagamento protegido',
+    'Acompanhamento',
+    'Confirmação da entrega',
+  ];
+  const driverSteps = [
+    'Encontre oportunidades',
+    'Escolha o frete',
+    'Realize o transporte',
+    'Entrega e recebimento',
+  ];
+
+  const renderSteps = (steps: string[], accent: 'blue' | 'cyan') =>
+    steps.map((step, index) => (
+      <li key={step} className="flex items-start gap-4">
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+            accent === 'blue' ? 'bg-blue-600 text-white' : 'bg-cyan-400 text-slate-950'
+          }`}
+        >
+          {index + 1}
+        </span>
+        <span className="pt-1 text-sm font-bold leading-relaxed text-slate-700">{step}</span>
+      </li>
+    ));
+
+  return (
+    <section id="como-funciona" className="scroll-mt-24 bg-slate-50 py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Como funciona</p>
+          <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
+            Um processo simples de acompanhar
+          </h2>
+          <p className="mt-4 text-lg font-medium leading-relaxed text-slate-600">
+            Cada perfil segue etapas claras para manter a operação organizada.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-12 grid max-w-5xl gap-6 lg:grid-cols-2">
+          <article className="rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-sm sm:p-8">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <Package size={22} aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.15em] text-blue-600">Empresa</p>
+                <h3 className="mt-1 text-xl font-black text-slate-950">Da carga à confirmação</h3>
+              </div>
+            </div>
+            <ol className="mt-7 space-y-5">{renderSteps(companySteps, 'blue')}</ol>
+          </article>
+
+          <article className="rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-sm sm:p-8">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-50 text-cyan-700">
+                <Truck size={22} aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-700">Motorista</p>
+                <h3 className="mt-1 text-xl font-black text-slate-950">Da oportunidade à entrega</h3>
+              </div>
+            </div>
+            <ol className="mt-7 space-y-5">{renderSteps(driverSteps, 'cyan')}</ol>
+          </article>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TrustSection() {
+  const points = [
+    {
+      icon: <CreditCard size={23} aria-hidden="true" />,
+      title: 'Pagamento protegido',
+      description: 'O pagamento acompanha o fluxo da plataforma até a confirmação da operação.',
+    },
+    {
+      icon: <Camera size={23} aria-hidden="true" />,
+      title: 'Foto da entrega',
+      description: 'O registro da entrega faz parte da confirmação disponível na operação.',
+    },
+    {
+      icon: <LockKeyhole size={23} aria-hidden="true" />,
+      title: 'Confirmação por PIN',
+      description: 'A confirmação utiliza o PIN conforme o fluxo da plataforma.',
+    },
+    {
+      icon: <ShieldCheck size={23} aria-hidden="true" />,
+      title: 'Acompanhamento',
+      description: 'As etapas visíveis ajudam os dois lados a entender o andamento do transporte.',
+    },
+  ];
+
+  return (
+    <section className="bg-slate-950 py-20 text-white sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid items-start gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Segurança e confiança</p>
+            <h2 className="mt-3 text-3xl font-black leading-tight tracking-[-0.035em] text-white sm:text-5xl">
+              Confiança não é uma promessa. É um processo.
+            </h2>
+            <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-300">
+              A segurança aparece no processo: pagamento protegido, acompanhamento, registro da entrega e confirmação por PIN quando aplicável.
+            </p>
+            <blockquote className="mt-8 border-l-2 border-cyan-300 pl-4 text-base font-bold leading-relaxed text-cyan-100">
+              Existe um processo organizado para reduzir problemas.
+            </blockquote>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {points.map((point) => (
+              <article key={point.title} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-300">
+                  {point.icon}
+                </span>
+                <h3 className="mt-5 text-lg font-black text-white">{point.title}</h3>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-slate-300">{point.description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface GroupProps {
   onDriverGroup: () => void;
 }
 
-function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProps) {
+function DriverGroupSection({ onDriverGroup }: GroupProps) {
   return (
-    <footer className="bg-slate-950 text-slate-400 py-16 border-t border-slate-900 relative z-10">
+    <section className="bg-white py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-
-        {/* CTA GRUPO DE MOTORISTAS EM DESTAQUE */}
-        <div className="mb-16 rounded-[2rem] bg-slate-900 border border-slate-800 p-8 sm:p-10 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
-          <div className="flex items-center gap-5 text-center sm:text-left flex-col sm:flex-row">
-            <div className="h-14 w-14 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center shrink-0">
-              <Users size={28} />
+        <div className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 p-7 shadow-2xl shadow-slate-950/15 sm:p-10">
+          <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-300">
+                <Users size={30} aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Para motoristas</p>
+                <h2 className="mt-2 text-2xl font-black tracking-[-0.025em] text-white sm:text-3xl">
+                  Quer receber oportunidades?
+                </h2>
+                <p className="mt-2 text-base font-medium text-slate-300">Entre no grupo oficial de motoristas FretoGo.</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-xl font-black text-white">Motorista, quer receber oportunidades?</h3>
-              <p className="text-sm text-slate-400 mt-1 font-medium">Entre no grupo oficial de motoristas FretoGo.</p>
-            </div>
+            <button
+              type="button"
+              onClick={onDriverGroup}
+              className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-xl bg-cyan-400 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-slate-950 transition hover:bg-cyan-300 active:scale-[0.97] lg:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              Entrar no grupo <ArrowRight size={18} aria-hidden="true" />
+            </button>
           </div>
-          <button onClick={onDriverGroup} className="w-full sm:w-auto shrink-0 h-14 px-8 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black uppercase tracking-widest text-sm transition-all active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.2)]">
-            Entrar no grupo
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface FinalCtaProps extends NavigationProps {}
+
+function FinalCta({ onClient, onDriver }: FinalCtaProps) {
+  return (
+    <section className="border-t border-slate-200 bg-slate-50 py-20 sm:py-24">
+      <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-5xl">
+          Pronto para começar?
+        </h2>
+        <p className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600">
+          Acesse a área específica para entender os próximos passos da sua operação.
+        </p>
+        <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
+          <button
+            type="button"
+            onClick={onClient}
+            className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/15 transition hover:bg-blue-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          >
+            Publicar minha carga <ArrowRight size={18} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={onDriver}
+            className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-slate-950 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-slate-950/15 transition hover:bg-slate-800 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2"
+          >
+            Encontrar fretes <ArrowRight size={18} aria-hidden="true" />
           </button>
         </div>
+      </div>
+    </section>
+  );
+}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
-          
-          {/* Logo & Sobre */}
-          <div className="lg:col-span-1">
-            <div className="flex items-center gap-3 mb-6 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
-              <img src="/icon-192.png" alt="FretoGo Logo" className="h-10 w-auto rounded-md" />
-            </div>
-            <p className="text-sm font-medium leading-relaxed pr-4 text-slate-500">
-              Logística com clareza, respeito e conexão entre empresas e motoristas.
+interface FooterProps extends NavigationProps, GroupProps {}
+
+function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProps) {
+  return (
+    <footer className="border-t border-slate-900 bg-slate-950 py-14 text-slate-400 sm:py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid gap-11 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="sm:col-span-2 lg:col-span-1">
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+              aria-label="Voltar ao início"
+            >
+              <img src="/icon-192.png" alt="FretoGo" className="h-10 w-auto rounded-md" />
+            </button>
+            <p className="mt-5 max-w-xs text-sm font-medium leading-relaxed text-slate-500">
+              Uma plataforma para conectar quem precisa transportar a quem está pronto para levar.
             </p>
           </div>
 
-          {/* Links Empresa */}
           <div>
-            <h4 className="text-xs font-black uppercase tracking-widest text-white mb-6">Empresas</h4>
-            <ul className="space-y-4">
-              <li><button onClick={onClient} className="text-sm font-bold hover:text-blue-400 transition-colors">Publicar frete</button></li>
+            <h2 className="text-xs font-black uppercase tracking-[0.15em] text-white">Empresas</h2>
+            <ul className="mt-5 space-y-3">
+              <li>
+                <button type="button" onClick={onClient} className="text-sm font-bold transition hover:text-blue-300 focus-visible:outline-none focus-visible:text-blue-300">
+                  Publicar carga
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick={() => scrollToId('como-funciona')} className="text-sm font-bold transition hover:text-blue-300 focus-visible:outline-none focus-visible:text-blue-300">
+                  Como funciona
+                </button>
+              </li>
             </ul>
           </div>
 
-          {/* Links Motorista */}
           <div>
-            <h4 className="text-xs font-black uppercase tracking-widest text-white mb-6">Motoristas</h4>
-            <ul className="space-y-4">
-              <li><button onClick={onDriver} className="text-sm font-bold hover:text-cyan-400 transition-colors">Encontrar fretes</button></li>
-              <li><button onClick={onDriverGroup} className="text-sm font-bold hover:text-cyan-400 transition-colors">Grupo de Motoristas</button></li>
+            <h2 className="text-xs font-black uppercase tracking-[0.15em] text-white">Motoristas</h2>
+            <ul className="mt-5 space-y-3">
+              <li>
+                <button type="button" onClick={onDriver} className="text-sm font-bold transition hover:text-cyan-300 focus-visible:outline-none focus-visible:text-cyan-300">
+                  Encontrar fretes
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick={onDriverGroup} className="text-sm font-bold transition hover:text-cyan-300 focus-visible:outline-none focus-visible:text-cyan-300">
+                  Grupo de motoristas
+                </button>
+              </li>
             </ul>
           </div>
 
-          {/* Suporte & Outros */}
           <div>
-            <h4 className="text-xs font-black uppercase tracking-widest text-white mb-6">Suporte & Mais</h4>
-            <ul className="space-y-4">
-              <li><button onClick={onSupport} className="text-sm font-bold text-emerald-400 hover:text-emerald-300 transition-colors">WhatsApp Oficial</button></li>
-              <li><button className="text-sm font-bold text-slate-500 hover:text-white transition-colors cursor-not-allowed" title="Em breve">Blog</button></li>
+            <h2 className="text-xs font-black uppercase tracking-[0.15em] text-white">Suporte &amp; mais</h2>
+            <ul className="mt-5 space-y-3">
+              <li>
+                <button type="button" onClick={onSupport} className="inline-flex items-center gap-2 text-sm font-bold text-emerald-400 transition hover:text-emerald-300 focus-visible:outline-none focus-visible:text-emerald-300">
+                  <MessageCircle size={16} aria-hidden="true" /> WhatsApp
+                </button>
+              </li>
+              <li>
+                <span className="text-sm font-bold text-slate-600" title="Preparado para uso futuro">Blog</span>
+              </li>
             </ul>
           </div>
-
         </div>
 
-        <div className="border-t border-slate-900 pt-8 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-6">
+        <div className="mt-12 flex flex-col gap-4 border-t border-slate-900 pt-7 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 sm:justify-start">
             <p className="text-xs font-bold text-slate-600">FretoGo Tecnologia</p>
             <p className="text-xs font-bold text-slate-600">CNPJ: 64.172.243/0001-90</p>
           </div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-700">
             © {new Date().getFullYear()} FretoGo — Todos os direitos reservados.
           </p>
         </div>
@@ -809,64 +870,58 @@ function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProp
   );
 }
 
-// =========================================================
-// COMPONENTE PRINCIPAL (EXPORT DEFAULT)
-// =========================================================
+function FloatingWhatsApp({ onSupport }: Pick<NavigationProps, 'onSupport'>) {
+  return (
+    <button
+      type="button"
+      onClick={onSupport}
+      title="Fale com nosso suporte"
+      aria-label="Falar com o suporte pelo WhatsApp"
+      className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_10px_30px_rgba(37,211,102,0.38)] transition hover:scale-105 hover:shadow-[0_15px_35px_rgba(37,211,102,0.48)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
+    >
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.885-9.885 9.885m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+      </svg>
+    </button>
+  );
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
 
-  // Handlers Preservados
+  // Rotas e destinos preservados conforme a modelagem atual da plataforma.
   const goToClient = () => navigate('/cliente');
   const goToDriver = () => navigate('/motorista');
   const handleWhatsAppSupport = () => openExternalLink(PLATFORM_LINKS.SUPPORT_WHATSAPP);
-  const handleDriverGroup = () => openExternalLink('https://chat.whatsapp.com/IGylgsZPYhsDfMZDKzVjHT');
+  const handleDriverGroup = () => openExternalLink(DRIVER_GROUP_URL);
 
   return (
-    <div className="relative min-h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-900 font-sans selection:bg-blue-600/20 overflow-x-hidden">
-      
-      {/* Noise background overlay */}
-      <div className="pointer-events-none fixed inset-0 z-[60] bg-grain opacity-[0.03]" />
-
-      <HomeNavbar 
-        onClient={goToClient} 
-        onDriver={goToDriver} 
-        onSupport={handleWhatsAppSupport} 
-      />
-
-      <main className="flex-grow flex flex-col pt-16">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-white font-sans text-slate-900 selection:bg-cyan-200 selection:text-slate-950">
+      <HomeNavbar onClient={goToClient} onDriver={goToDriver} onSupport={handleWhatsAppSupport} />
+      <main>
         <Hero onClient={goToClient} onDriver={goToDriver} />
-        <EducationSection />
+        <ProblemSection />
+        <EducationalCarousel />
+        <AudienceChoice onClient={goToClient} onDriver={goToDriver} />
         <InterdependenceSection />
-        <CategoriesSection />
-        <Carousel />
         <CompanySection onClient={goToClient} />
         <DriverSection onDriver={goToDriver} />
-        <HowItWorksDetailed />
+        <CityInterestSection />
+        <CategoriesSection />
+        <HowItWorksSection />
+        <OperationFlowSection />
         <TrustSection />
         <RolesSection />
-        <FinalCta onClient={goToClient} onDriver={goToDriver} />
+        <DriverGroupSection onDriverGroup={handleDriverGroup} />
+        <FinalCta onClient={goToClient} onDriver={goToDriver} onSupport={handleWhatsAppSupport} />
       </main>
-
-      <HomeFooter 
-        onClient={goToClient} 
-        onDriver={goToDriver} 
-        onSupport={handleWhatsAppSupport} 
+      <HomeFooter
+        onClient={goToClient}
+        onDriver={goToDriver}
+        onSupport={handleWhatsAppSupport}
         onDriverGroup={handleDriverGroup}
       />
-
-      {/* ======================================================= */}
-      {/* WHATSAPP FLUTUANTE (PRESERVADO INTACTO) */}
-      {/* ======================================================= */}
-      <button 
-        onClick={handleWhatsAppSupport}
-        title="Fale com nosso suporte"
-        className="fixed bottom-6 right-6 z-[100] flex h-14 w-14 lg:h-16 lg:w-16 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_10px_30px_rgba(37,211,102,0.4)] transition-all hover:scale-110 hover:shadow-[0_15px_35px_rgba(37,211,102,0.5)] active:scale-95 group"
-      >
-        <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" className="text-white relative z-10">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.885-9.885 9.885m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
-        </svg>
-      </button>
-
+      <FloatingWhatsApp onSupport={handleWhatsAppSupport} />
     </div>
   );
 }
