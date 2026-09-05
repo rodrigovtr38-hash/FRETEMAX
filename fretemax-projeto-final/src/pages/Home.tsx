@@ -1,3 +1,10 @@
+// =========================================================
+// NOME DO ARQUIVO: src/pages/Home.tsx
+// CTO-Log: HOME-3.0 — Conexão, consciência e jornada.
+// Hero: CTAs levam à conscientização (não ao cadastro).
+// Cadastro (/cliente, /motorista) só após entender o papel.
+// Rotas, WhatsApp e grupo de motoristas preservados.
+// =========================================================
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
@@ -6,7 +13,6 @@ import {
   Camera,
   CheckCircle2,
   ChevronRight,
-  Clock,
   CreditCard,
   LockKeyhole,
   MapPin,
@@ -22,13 +28,13 @@ import {
 } from 'lucide-react';
 
 /**
- * Home FretoGo — evolução visual, comunicação e navegação.
+ * Home FretoGo — conexão entre quem precisa transportar e quem transporta.
  *
  * Escopo preservado:
- * - Mantém as rotas /cliente e /motorista.
- * - Mantém o suporte pelo PLATFORM_LINKS.SUPPORT_WHATSAPP.
- * - Mantém o destino atual do grupo de motoristas.
- * - Não cria rotas, fluxos operacionais ou regras de negócio.
+ * - Rotas /cliente e /motorista
+ * - PLATFORM_LINKS.SUPPORT_WHATSAPP
+ * - Grupo de motoristas (URL atual)
+ * - Sem novas regras de negócio
  */
 const HERO_IMG = 'https://images.hostinger.com/f09fbe30-dd15-4b3b-aede-622f9534802d.png';
 const DRIVER_GROUP_URL = 'https://chat.whatsapp.com/IGylgsZPYhsDfMZDKzVjHT';
@@ -40,13 +46,16 @@ function scrollToId(id: string) {
   });
 }
 
-interface NavigationProps {
-  onClient: () => void;
-  onDriver: () => void;
+// =========================================================
+// NAVBAR
+// =========================================================
+interface NavHandlers {
+  onUnderstandCompany: () => void;
+  onUnderstandDriver: () => void;
   onSupport: () => void;
 }
 
-function HomeNavbar({ onClient, onDriver, onSupport }: NavigationProps) {
+function HomeNavbar({ onUnderstandCompany, onUnderstandDriver, onSupport }: NavHandlers) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -90,14 +99,14 @@ function HomeNavbar({ onClient, onDriver, onSupport }: NavigationProps) {
         <div className="hidden items-center gap-7 md:flex">
           <button
             type="button"
-            onClick={() => scrollToId('empresas')}
+            onClick={onUnderstandCompany}
             className="text-sm font-bold text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:text-white"
           >
             Para empresas
           </button>
           <button
             type="button"
-            onClick={() => scrollToId('motoristas')}
+            onClick={onUnderstandDriver}
             className="text-sm font-bold text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:text-white"
           >
             Para motoristas
@@ -114,17 +123,17 @@ function HomeNavbar({ onClient, onDriver, onSupport }: NavigationProps) {
         <div className="hidden items-center gap-3 md:flex">
           <button
             type="button"
-            onClick={onDriver}
+            onClick={onUnderstandDriver}
             className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:border-slate-600 hover:bg-slate-800 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
           >
-            Sou motorista
+            Entender o meu lado
           </button>
           <button
             type="button"
-            onClick={onClient}
+            onClick={onUnderstandCompany}
             className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-5 text-xs font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
           >
-            Publicar carga
+            Entender como funciona
           </button>
         </div>
 
@@ -145,14 +154,14 @@ function HomeNavbar({ onClient, onDriver, onSupport }: NavigationProps) {
           <div className="mx-auto flex max-w-7xl flex-col gap-1">
             <button
               type="button"
-              onClick={() => closeAndRun(() => scrollToId('empresas'))}
+              onClick={() => closeAndRun(onUnderstandCompany)}
               className="rounded-xl px-4 py-3 text-left text-base font-bold text-white transition hover:bg-slate-900"
             >
               Para empresas
             </button>
             <button
               type="button"
-              onClick={() => closeAndRun(() => scrollToId('motoristas'))}
+              onClick={() => closeAndRun(onUnderstandDriver)}
               className="rounded-xl px-4 py-3 text-left text-base font-bold text-white transition hover:bg-slate-900"
             >
               Para motoristas
@@ -167,17 +176,17 @@ function HomeNavbar({ onClient, onDriver, onSupport }: NavigationProps) {
             <div className="my-3 h-px bg-slate-800" />
             <button
               type="button"
-              onClick={() => closeAndRun(onClient)}
+              onClick={() => closeAndRun(onUnderstandCompany)}
               className="inline-flex min-h-14 items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 active:scale-[0.97]"
             >
-              Publicar carga
+              Entender como funciona
             </button>
             <button
               type="button"
-              onClick={() => closeAndRun(onDriver)}
+              onClick={() => closeAndRun(onUnderstandDriver)}
               className="inline-flex min-h-14 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-white transition hover:bg-slate-800 active:scale-[0.97]"
             >
-              Encontrar fretes
+              Entender o meu lado
             </button>
           </div>
         </div>
@@ -186,12 +195,15 @@ function HomeNavbar({ onClient, onDriver, onSupport }: NavigationProps) {
   );
 }
 
+// =========================================================
+// HERO — curiosidade, não cadastro
+// =========================================================
 interface HeroProps {
-  onClient: () => void;
-  onDriver: () => void;
+  onUnderstandCompany: () => void;
+  onUnderstandDriver: () => void;
 }
 
-function Hero({ onClient, onDriver }: HeroProps) {
+function Hero({ onUnderstandCompany, onUnderstandDriver }: HeroProps) {
   return (
     <section className="relative isolate flex min-h-[720px] items-center overflow-hidden bg-slate-950 pt-24 sm:min-h-[680px] lg:min-h-[720px]">
       <img
@@ -207,178 +219,112 @@ function Hero({ onClient, onDriver }: HeroProps) {
         <div className="max-w-2xl">
           <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-slate-950/45 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-cyan-100 backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" aria-hidden="true" />
-            Operação logística conectada
+            Uma conexão que move o Brasil
           </p>
           <h1 className="max-w-xl text-4xl font-black leading-[1.05] tracking-[-0.04em] text-white sm:text-5xl lg:text-7xl">
             Carga e veículo.{' '}
             <span className="text-cyan-300">Conectados.</span>
           </h1>
           <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-200 sm:text-xl">
-            A FretoGo conecta empresas que precisam transportar com motoristas prontos para rodar.
+            Quem precisa transportar precisa de quem possa transportar. A FretoGo aproxima os dois lados para a operação acontecer melhor.
           </p>
           <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
             <button
               type="button"
-              onClick={onClient}
+              onClick={onUnderstandCompany}
               className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/50 transition hover:bg-blue-500 active:scale-[0.97] sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
-              Publicar uma carga <ArrowRight size={18} aria-hidden="true" />
+              Entender como funciona <ArrowRight size={18} aria-hidden="true" />
             </button>
             <button
               type="button"
-              onClick={onDriver}
+              onClick={onUnderstandDriver}
               className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl border border-slate-300/30 bg-slate-950/35 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white backdrop-blur-sm transition hover:border-cyan-300/60 hover:bg-slate-900/75 active:scale-[0.97] sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
               <Truck size={18} className="text-cyan-300" aria-hidden="true" />
-              Encontrar fretes
+              Entender o meu lado
             </button>
           </div>
+          <p className="mt-5 text-sm font-medium text-slate-400">
+            Antes de escolher, entenda como cada lado funciona.
+          </p>
         </div>
       </div>
     </section>
   );
 }
 
-
-function ProblemSection() {
+// =========================================================
+// POR QUE CONTINUAR
+// =========================================================
+function WhyContinueSection() {
   return (
     <section className="border-b border-slate-200 bg-slate-50 py-20 sm:py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-start lg:gap-16">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">O problema real</p>
-            <h2 className="mt-3 max-w-xl text-3xl font-black leading-tight tracking-[-0.035em] text-slate-950 sm:text-5xl">O problema não é falta de frete. É falta de conexão.</h2>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <article className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
-              <span className="text-xs font-black uppercase tracking-[0.14em] text-blue-600">Para empresas</span>
-              <p className="mt-4 text-lg font-bold leading-relaxed text-slate-800">Ligar de motorista em motorista, negociar no escuro e esperar alguém aparecer não deveria fazer parte da rotina.</p>
-              <p className="mt-5 text-sm font-medium leading-relaxed text-slate-600">A empresa publica a carga e organiza as informações da operação em um só lugar.</p>
-            </article>
-            <article className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
-              <span className="text-xs font-black uppercase tracking-[0.14em] text-cyan-700">Para motoristas</span>
-              <p className="mt-4 text-lg font-bold leading-relaxed text-slate-800">Ter um caminhão parado também custa. Rodar sem saber o que foi combinado também pesa.</p>
-              <p className="mt-5 text-sm font-medium leading-relaxed text-slate-600">O motorista encontra oportunidades e analisa o frete antes de escolher.</p>
-            </article>
-          </div>
-        </div>
-        <div className="mx-auto mt-10 flex max-w-3xl flex-col items-center justify-center gap-3 text-center sm:flex-row">
-          <span className="rounded-full bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">Empresa publica a carga</span>
-          <ArrowRight className="hidden text-slate-400 sm:block" size={18} aria-hidden="true" />
-          <span className="rounded-full bg-cyan-50 px-4 py-2 text-sm font-black text-cyan-800">Motorista encontra oportunidades</span>
-          <ArrowRight className="hidden text-slate-400 sm:block" size={18} aria-hidden="true" />
-          <span className="rounded-full bg-slate-900 px-4 py-2 text-sm font-black text-white">A FretoGo organiza a conexão</span>
-        </div>
+      <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Antes de conectar</p>
+        <h2 className="mt-3 text-3xl font-black leading-tight tracking-[-0.035em] text-slate-950 sm:text-5xl">
+          Todo transporte começa com uma necessidade.
+        </h2>
+        <p className="mt-6 text-lg font-medium leading-relaxed text-slate-600">
+          Uma empresa precisa levar algo até alguém. Um motorista precisa encontrar uma oportunidade que faça sentido para sua rota. Parece simples. Mas quando os dois lados não se entendem, a operação fica mais difícil para todo mundo.
+        </p>
+        <p className="mt-5 text-lg font-bold leading-relaxed text-slate-800">
+          A FretoGo existe para aproximar essas duas necessidades com mais clareza.
+        </p>
       </div>
     </section>
   );
 }
 
-function EducationalCarousel() {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(0);
-  const slides = [
-    { title: 'Encontre o veículo certo', text: 'Moto ao bitrem, com categorias para diferentes necessidades de transporte.', icon: <Truck size={22} aria-hidden="true" /> },
-    { title: 'Publique em poucos passos', text: 'Informe origem, destino, veículo e valor da oferta.', icon: <Package size={22} aria-hidden="true" /> },
-    { title: 'Acompanhe a operação', text: 'Veja o andamento da coleta e da entrega pelo fluxo da plataforma.', icon: <MapPin size={22} aria-hidden="true" /> },
-    { title: 'Pagamento protegido', text: 'O processo de pagamento acontece dentro do fluxo da plataforma.', icon: <CreditCard size={22} aria-hidden="true" /> },
-    { title: 'Fretes que fazem sentido', text: 'O motorista pode informar uma cidade de interesse para encontrar oportunidades naquela direção.', icon: <Search size={22} aria-hidden="true" /> },
-  ];
-  const goTo = (index: number) => {
-    const track = trackRef.current;
-    if (!track) return;
-    track.scrollTo({ left: index * track.clientWidth, behavior: 'smooth' });
-    setActive(index);
-  };
-  return (
-    <section className="border-b border-slate-200 bg-white py-14 sm:py-16">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-7 flex items-end justify-between gap-4">
-          <div><p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Para entender a plataforma</p><h2 className="mt-2 text-2xl font-black tracking-[-0.025em] text-slate-950 sm:text-3xl">Informação para decidir com clareza</h2></div>
-          <div className="hidden gap-2 sm:flex"><button type="button" onClick={() => goTo(Math.max(active - 1, 0))} className="rounded-full border border-slate-200 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50" aria-label="Slide anterior">←</button><button type="button" onClick={() => goTo(Math.min(active + 1, slides.length - 1))} className="rounded-full border border-slate-200 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50" aria-label="Próximo slide">→</button></div>
-        </div>
-        <div ref={trackRef} className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" onScroll={(event) => setActive(Math.round(event.currentTarget.scrollLeft / event.currentTarget.clientWidth))}>
-          {slides.map((slide) => <article key={slide.title} className="w-full shrink-0 snap-start rounded-[1.75rem] border border-slate-200 bg-slate-50 p-7 sm:p-9"><div className="flex max-w-2xl items-start gap-4"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">{slide.icon}</span><div><h3 className="text-xl font-black text-slate-950 sm:text-2xl">{slide.title}</h3><p className="mt-2 text-base font-medium leading-relaxed text-slate-600">{slide.text}</p></div></div></article>)}
-        </div>
-        <div className="mt-5 flex justify-center gap-2" aria-label="Navegação do carrossel">{slides.map((slide, index) => <button key={slide.title} type="button" onClick={() => goTo(index)} aria-label={`Ir para ${slide.title}`} className={`h-2 rounded-full transition-all ${index === active ? 'w-7 bg-blue-600' : 'w-2 bg-slate-300'}`} />)}</div>
-      </div>
-    </section>
-  );
+// =========================================================
+// QUAL É O SEU LADO?
+// =========================================================
+interface AudienceProps {
+  onUnderstandCompany: () => void;
+  onUnderstandDriver: () => void;
 }
 
-function InterdependenceSection() {
+function AudienceChoice({ onUnderstandCompany, onUnderstandDriver }: AudienceProps) {
   return (
-    <section className="bg-slate-950 py-20 text-white sm:py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-3xl text-center"><p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">A conexão</p><h2 className="mt-3 text-3xl font-black tracking-[-0.035em] sm:text-5xl">Uma operação depende dos dois lados.</h2><p className="mt-5 text-lg font-medium leading-relaxed text-slate-300">Quem precisa transportar precisa de quem possa transportar. Quem transporta precisa de uma carga para rodar.</p></div>
-        <div className="mx-auto mt-12 grid max-w-5xl gap-4 md:grid-cols-[1fr_auto_1fr] md:items-stretch">
-          <article className="rounded-[1.75rem] border border-slate-800 bg-slate-900 p-7 sm:p-8"><p className="text-xs font-black uppercase tracking-[0.15em] text-blue-300">Empresa</p><ul className="mt-5 space-y-3 text-sm font-bold leading-relaxed text-slate-200"><li>Tem uma carga.</li><li>Precisa transportar.</li><li>Precisa acompanhar.</li><li>Precisa receber confirmação.</li></ul></article>
-          <div className="flex items-center justify-center text-cyan-300"><ArrowRight className="hidden md:block" size={28} aria-hidden="true" /><span className="md:hidden">↕</span></div>
-          <article className="rounded-[1.75rem] border border-slate-800 bg-slate-900 p-7 sm:p-8"><p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">Motorista</p><ul className="mt-5 space-y-3 text-sm font-bold leading-relaxed text-slate-200"><li>Tem um veículo.</li><li>Precisa encontrar fretes.</li><li>Precisa saber o que foi combinado.</li><li>Precisa receber pelo trabalho.</li></ul></article>
-        </div>
-        <p className="mx-auto mt-10 max-w-2xl text-center text-lg font-black leading-relaxed text-cyan-100">É simples. Um lado precisa do outro. A FretoGo aproxima os dois.</p>
-      </div>
-    </section>
-  );
-}
-
-interface AudienceChoiceProps {
-  onClient: () => void;
-  onDriver: () => void;
-}
-
-function AudienceChoice({ onClient, onDriver }: AudienceChoiceProps) {
-  return (
-    <section id="perfil" className="scroll-mt-24 bg-white py-20 sm:py-24">
+    <section id="escolha" className="scroll-mt-24 border-b border-slate-200 bg-white py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Comece pelo seu perfil</p>
-          <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
-            Qual é o seu perfil?
+          <h2 className="text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
+            Qual lado você conhece melhor?
           </h2>
-          <p className="mt-4 text-lg font-medium leading-relaxed text-slate-600">
-            Escolha o caminho que corresponde à sua operação.
+          <p className="mt-4 text-lg font-medium text-slate-600">
+            Escolha um caminho. Depois veja o outro.
           </p>
         </div>
 
-        <div className="mx-auto mt-12 grid max-w-5xl gap-6 md:grid-cols-2 lg:gap-8">
-          <article className="flex min-h-full flex-col rounded-[2rem] border border-slate-200 bg-slate-50 p-7 shadow-[0_18px_45px_rgba(15,23,42,0.07)] sm:p-9">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
-              <Package size={28} aria-hidden="true" />
-            </div>
-            <p className="mt-7 text-xs font-black uppercase tracking-[0.16em] text-blue-600">Empresa</p>
-            <h3 className="mt-3 text-2xl font-black tracking-[-0.025em] text-slate-950">
-              Tem uma carga para transportar?
-            </h3>
+        <div className="mx-auto mt-12 grid max-w-5xl gap-6 md:grid-cols-2">
+          <article className="flex flex-col rounded-[1.75rem] border border-slate-200 bg-slate-50 p-7 shadow-sm sm:p-8">
+            <p className="text-xs font-black uppercase tracking-[0.15em] text-blue-600">Para empresas</p>
+            <h3 className="mt-3 text-2xl font-black text-slate-950">Você precisa transportar?</h3>
             <p className="mt-4 flex-grow text-base font-medium leading-relaxed text-slate-600">
-              Publique a carga, encontre o veículo adequado e acompanhe cada etapa da operação.
+              Veja o que acontece do lado de quem precisa fazer uma carga chegar ao destino.
             </p>
             <button
               type="button"
-              onClick={onClient}
-              className="mt-8 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-blue-950/15 transition hover:bg-blue-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+              onClick={onUnderstandCompany}
+              className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-white transition hover:bg-blue-500 active:scale-[0.97]"
             >
-              Publicar minha carga <ChevronRight size={18} aria-hidden="true" />
+              Entender a empresa <ChevronRight size={18} aria-hidden="true" />
             </button>
           </article>
 
-          <article className="flex min-h-full flex-col rounded-[2rem] border border-slate-800 bg-slate-950 p-7 shadow-[0_18px_45px_rgba(15,23,42,0.16)] sm:p-9">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-300/15 bg-cyan-300/10 text-cyan-300">
-              <Truck size={28} aria-hidden="true" />
-            </div>
-            <p className="mt-7 text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Motorista</p>
-            <h3 className="mt-3 text-2xl font-black tracking-[-0.025em] text-white">
-              Tem um veículo e quer encontrar fretes?
-            </h3>
+          <article className="flex flex-col rounded-[1.75rem] border border-slate-800 bg-slate-900 p-7 text-white shadow-xl sm:p-8">
+            <p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">Para motoristas</p>
+            <h3 className="mt-3 text-2xl font-black text-white">Você transporta?</h3>
             <p className="mt-4 flex-grow text-base font-medium leading-relaxed text-slate-300">
-              Encontre oportunidades compatíveis com seu veículo, veja o valor antes de aceitar e escolha rotas que façam sentido.
+              Veja o que acontece do lado de quem coloca o veículo na estrada para fazer uma entrega acontecer.
             </p>
             <button
               type="button"
-              onClick={onDriver}
-              className="mt-8 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-slate-950 shadow-lg shadow-cyan-950/20 transition hover:bg-cyan-300 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              onClick={onUnderstandDriver}
+              className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-slate-950 transition hover:bg-cyan-300 active:scale-[0.97]"
             >
-              Encontrar fretes <ChevronRight size={18} aria-hidden="true" />
+              Entender o motorista <ChevronRight size={18} aria-hidden="true" />
             </button>
           </article>
         </div>
@@ -387,166 +333,394 @@ function AudienceChoice({ onClient, onDriver }: AudienceChoiceProps) {
   );
 }
 
-function CompanySection({ onClient }: Pick<NavigationProps, 'onClient'>) {
-  const process = [
-    { title: 'Publique', detail: 'Informe a carga e o que sua operação precisa.' },
-    { title: 'Encontre', detail: 'Conecte-se ao veículo certo para o transporte.' },
-    { title: 'Acompanhe', detail: 'Veja o andamento da operação pelo fluxo da plataforma.' },
-    { title: 'Confirme', detail: 'Valide a entrega com os recursos disponíveis.' },
-  ];
-
-  return (
-    <section id="empresas" className="scroll-mt-24 border-y border-slate-200 bg-slate-50 py-20 sm:py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid items-center gap-10 lg:grid-cols-[1fr_0.9fr] lg:gap-16">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Para empresas</p>
-            <h2 className="mt-3 max-w-xl text-3xl font-black leading-tight tracking-[-0.035em] text-slate-950 sm:text-5xl">
-              Publique sua carga. Encontre o veículo certo.
-            </h2>
-            <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-600">
-              Organize a operação em um só caminho: publique, acompanhe e confirme a entrega com clareza.
-            </p>
-            <p className="mt-4 max-w-xl text-sm font-medium leading-relaxed text-slate-500">
-              Você informa o valor que deseja oferecer. A plataforma apresenta uma referência para ajudar na construção de uma oferta compatível com a operação e a categoria do veículo.
-            </p>
-            <button
-              type="button"
-              onClick={onClient}
-              className="mt-8 inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/15 transition hover:bg-blue-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-            >
-              Publicar minha carga <ArrowRight size={18} aria-hidden="true" />
-            </button>
-          </div>
-
-          <div className="relative overflow-hidden rounded-[2rem] bg-slate-950 shadow-2xl shadow-slate-950/20">
-            <img
-              src={HERO_IMG}
-              alt="Operação logística com veículos em rota"
-              className="h-72 w-full object-cover object-center opacity-95 sm:h-80"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/10 to-transparent" />
-            <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-white/15 bg-slate-950/75 p-4 text-white backdrop-blur-sm">
-              <p className="text-sm font-black">Operação com mais contexto</p>
-              <p className="mt-1 text-sm leading-relaxed text-slate-300">Do anúncio da carga à confirmação da entrega.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {process.map((item, index) => (
-            <article key={item.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
-                {index + 1}
-              </span>
-              <h3 className="mt-5 font-black text-slate-950">{item.title}</h3>
-              <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">{item.detail}</p>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
+// =========================================================
+// EMPRESA — conscientização completa
+// =========================================================
+interface ActionProps {
+  onAction: () => void;
 }
 
-function DriverSection({ onDriver }: Pick<NavigationProps, 'onDriver'>) {
-  const capabilities = [
-    { icon: <Search size={19} aria-hidden="true" />, text: 'Oportunidades disponíveis para consulta' },
-    { icon: <MapPin size={19} aria-hidden="true" />, text: 'Filtro por cidade de interesse' },
-    { icon: <Truck size={19} aria-hidden="true" />, text: 'Categorias de veículos' },
-    { icon: <CheckCircle2 size={19} aria-hidden="true" />, text: 'Acompanhamento e confirmação da entrega' },
+function CompanySection({ onAction }: ActionProps) {
+  const steps = [
+    { title: 'Publique', desc: 'Informe o que precisa transportar.' },
+    { title: 'Conecte', desc: 'Encontre uma possibilidade compatível.' },
+    { title: 'Acompanhe', desc: 'Tenha mais clareza sobre o andamento.' },
+    { title: 'Confirme', desc: 'Registre a conclusão da operação.' },
+  ];
+
+  const benefits = [
+    { title: 'Mais organização', desc: 'As informações da operação ficam reunidas em um só lugar.' },
+    { title: 'Mais clareza', desc: 'A empresa consegue visualizar melhor o que está sendo combinado.' },
+    { title: 'Mais controle', desc: 'Acompanhe as etapas da operação.' },
+    { title: 'Mais conexão', desc: 'Aproxime sua necessidade de quem possui capacidade para transportar.' },
+  ];
+
+  const objections = [
+    {
+      q: 'Vou encontrar qualquer motorista?',
+      a: 'A plataforma organiza as informações para facilitar a busca por veículos e oportunidades compatíveis com a operação.',
+    },
+    {
+      q: 'Preciso ficar negociando tudo no escuro?',
+      a: 'A proposta é trazer mais informação para que as partes entendam melhor o que está sendo combinado.',
+    },
+    {
+      q: 'E se eu não souber usar?',
+      a: 'O processo foi pensado para ser simples e dividido em etapas claras.',
+    },
+    {
+      q: 'Vou perder o controle da operação?',
+      a: 'Não. A ideia é justamente dar mais visibilidade para acompanhar o caminho da carga.',
+    },
   ];
 
   return (
-    <section id="motoristas" className="scroll-mt-24 bg-slate-950 py-20 text-white sm:py-24">
+    <section id="empresas" className="scroll-mt-24 border-b border-slate-200 bg-white py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid items-center gap-10 lg:grid-cols-[0.9fr_1fr] lg:gap-16">
-          <div className="order-2 relative overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-900 shadow-2xl shadow-slate-950/30 lg:order-1">
-            <img
-              src={HERO_IMG}
-              alt="Veículos em deslocamento numa rota logística"
-              className="h-72 w-full object-cover object-[70%_center] opacity-85 sm:h-80"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
-            <div className="absolute bottom-6 left-6 right-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-slate-950/75 px-4 py-2 text-xs font-black uppercase tracking-[0.13em] text-cyan-200 backdrop-blur-sm">
-                <MapPin size={15} aria-hidden="true" /> Escolha suas rotas
-              </div>
-            </div>
-          </div>
+        {/* Intro */}
+        <div className="max-w-3xl">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">O lado da empresa</p>
+          <h2 className="mt-3 text-3xl font-black leading-tight tracking-[-0.035em] text-slate-950 sm:text-5xl">
+            Transportar bem começa antes do caminhão sair.
+          </h2>
+          <p className="mt-5 text-lg font-medium leading-relaxed text-slate-600">
+            Quando uma empresa precisa transportar, não está simplesmente procurando um veículo. Está tentando fazer uma operação acontecer no prazo, com clareza e menos imprevistos.
+          </p>
+        </div>
 
-          <div className="order-1 lg:order-2">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Para motoristas</p>
-            <h2 className="mt-3 max-w-xl text-3xl font-black leading-tight tracking-[-0.035em] text-white sm:text-5xl">
-              Encontre fretes. Escolha suas rotas.
-            </h2>
-            <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-300">
-              Encontre oportunidades compatíveis com seu veículo, veja o valor antes de aceitar e escolha os fretes que façam sentido para sua rota.
+        {/* Problema */}
+        <div className="mt-14 grid gap-10 lg:grid-cols-2 lg:items-start">
+          <div>
+            <h3 className="text-2xl font-black text-slate-950">O problema nem sempre é encontrar um motorista.</h3>
+            <p className="mt-4 text-base font-medium leading-relaxed text-slate-600">
+              É encontrar alguém que entenda a operação, aceite as condições combinadas e faça a sua parte até a entrega.
             </p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              {capabilities.map((item) => (
-                <div key={item.text} className="flex gap-3 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-                  <span className="mt-0.5 shrink-0 text-cyan-300">{item.icon}</span>
-                  <p className="text-sm font-bold leading-relaxed text-slate-200">{item.text}</p>
-                </div>
+          </div>
+          <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-7">
+            <ol className="space-y-4">
+              {['Carga precisa sair.', 'Veículo precisa chegar.', 'O combinado precisa ser cumprido.'].map((item, i) => (
+                <li key={item} className="flex items-start gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">
+                    {i + 1}
+                  </span>
+                  <span className="pt-1 text-base font-bold text-slate-800">{item}</span>
+                </li>
               ))}
-            </div>
-            <button
-              type="button"
-              onClick={onDriver}
-              className="mt-8 inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-slate-950 shadow-xl shadow-cyan-950/20 transition hover:bg-cyan-300 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-            >
-              Encontrar fretes <ArrowRight size={18} aria-hidden="true" />
-            </button>
+            </ol>
           </div>
+        </div>
+
+        {/* Consciência */}
+        <div className="mt-14 rounded-[1.75rem] border border-blue-100 bg-blue-50/60 p-7 sm:p-9">
+          <h3 className="text-2xl font-black text-slate-950">Do outro lado existe alguém esperando.</h3>
+          <p className="mt-4 max-w-3xl text-base font-medium leading-relaxed text-slate-700">
+            Uma carga parada pode significar atraso para uma loja, uma indústria, um cliente ou para toda uma operação. Por isso, quem publica uma carga também tem uma responsabilidade: informar corretamente, combinar com clareza e respeitar quem vai fazer o transporte.
+          </p>
+          <p className="mt-5 text-base font-black text-blue-800">
+            A conexão só funciona quando os dois lados fazem a sua parte.
+          </p>
+        </div>
+
+        {/* Solução */}
+        <div className="mt-14">
+          <h3 className="text-2xl font-black text-slate-950 sm:text-3xl">A FretoGo organiza essa conexão.</h3>
+          <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-slate-600">
+            A empresa publica as informações da carga, acompanha o andamento da operação e encontra oportunidades de conexão com veículos compatíveis com a necessidade do transporte.
+          </p>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {steps.map((s, i) => (
+              <div key={s.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">
+                  {i + 1}
+                </span>
+                <h4 className="mt-3 text-sm font-black uppercase tracking-wide text-slate-950">{s.title}</h4>
+                <p className="mt-1 text-sm font-medium text-slate-600">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Benefícios */}
+        <div className="mt-14">
+          <h3 className="text-2xl font-black text-slate-950">Menos dúvida. Mais clareza.</h3>
+          <div className="mt-7 grid gap-4 sm:grid-cols-2">
+            {benefits.map((b) => (
+              <div key={b.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h4 className="text-base font-black text-slate-950">{b.title}</h4>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">{b.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Objeções */}
+        <div className="mt-14">
+          <h3 className="text-2xl font-black text-slate-950">
+            “Mas será que isso realmente funciona para mim?”
+          </h3>
+          <div className="mt-7 space-y-4">
+            {objections.map((o) => (
+              <div key={o.q} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-black text-slate-900">“{o.q}”</p>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">{o.a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* CTA ação — só depois da consciência */}
+        <div className="mt-14 text-center">
+          <button
+            type="button"
+            onClick={onAction}
+            className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-8 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/20 transition hover:bg-blue-500 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          >
+            Publicar minha carga <ArrowRight size={18} aria-hidden="true" />
+          </button>
         </div>
       </div>
     </section>
   );
 }
 
+// =========================================================
+// MOTORISTA — conscientização completa
+// =========================================================
+function DriverSection({ onAction }: ActionProps) {
+  const steps = [
+    { title: 'Encontre', desc: 'Veja oportunidades disponíveis.' },
+    { title: 'Analise', desc: 'Confira as informações antes de escolher.' },
+    { title: 'Transporte', desc: 'Realize o trabalho conforme combinado.' },
+    { title: 'Entregue', desc: 'Finalize a operação com registro da entrega.' },
+  ];
 
-function CityInterestSection() {
+  const benefits = [
+    { title: 'Veja oportunidades', desc: 'Tenha acesso às oportunidades disponíveis para consulta.' },
+    { title: 'Conheça a operação', desc: 'Analise as informações antes de escolher.' },
+    { title: 'Pense na sua rota', desc: 'Considere cidades e caminhos que façam sentido para você.' },
+    { title: 'Acompanhe a entrega', desc: 'Tenha etapas mais claras durante a operação.' },
+  ];
+
+  const objections = [
+    {
+      q: 'E se a rota não compensar?',
+      a: 'A decisão continua sendo sua. O objetivo é oferecer mais informação antes de você escolher.',
+    },
+    {
+      q: 'E se eu aceitar e depois descobrir outro problema?',
+      a: 'Por isso as informações da operação devem ser analisadas antes da escolha e acompanhadas durante o processo.',
+    },
+    {
+      q: 'Preciso aceitar qualquer carga?',
+      a: 'Não. Você deve avaliar as oportunidades e escolher aquelas que façam sentido para seu veículo e sua operação.',
+    },
+    {
+      q: 'Isso garante que sempre vou encontrar uma carga?',
+      a: 'Não. A FretoGo organiza oportunidades e conexões; a disponibilidade depende das operações existentes.',
+    },
+  ];
+
   return (
-    <section className="border-y border-slate-200 bg-slate-50 py-20 sm:py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <div className="grid items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
+    <section id="motoristas" className="scroll-mt-24 border-b border-slate-800 bg-slate-950 py-20 text-white sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">O lado do motorista</p>
+          <h2 className="mt-3 text-3xl font-black leading-tight tracking-[-0.035em] text-white sm:text-5xl">
+            Seu veículo parado também tem um custo.
+          </h2>
+          <p className="mt-5 text-lg font-medium leading-relaxed text-slate-300">
+            Quem vive da estrada sabe: não basta ter um caminhão pronto para rodar. É preciso encontrar uma oportunidade que faça sentido, saber o que está sendo combinado e chegar ao destino sabendo pelo que está trabalhando.
+          </p>
+        </div>
+
+        <div className="mt-14 grid gap-10 lg:grid-cols-2 lg:items-start">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-700">Um diferencial para o motorista</p>
-            <h2 className="mt-3 text-3xl font-black leading-tight tracking-[-0.035em] text-slate-950 sm:text-5xl">Encontre fretes que façam sentido para sua rota.</h2>
-            <p className="mt-6 text-lg font-medium leading-relaxed text-slate-600">O motorista pode informar uma cidade de interesse e o sistema pode ajudá-lo a encontrar oportunidades naquela direção.</p>
-            <p className="mt-5 text-sm font-bold leading-relaxed text-slate-500">Isso não garante disponibilidade. Ajuda a procurar uma oportunidade que aproxime o motorista do destino que deseja.</p>
+            <h3 className="text-2xl font-black text-white">Rodar sem saber também pesa.</h3>
+            <p className="mt-4 text-base font-medium leading-relaxed text-slate-400">
+              Tempo parado custa. Combinar sem clareza custa. Rodar uma rota que não faz sentido custa. E quando as informações não estão claras, quem está na estrada acaba assumindo uma parte do problema que não deveria assumir sozinho.
+            </p>
           </div>
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <div className="rounded-2xl bg-slate-950 p-5 text-center text-white"><span className="text-xs font-black uppercase tracking-[0.15em] text-slate-400">Exemplo</span><p className="mt-2 text-xl font-black">“Quero voltar para Campinas.”</p></div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:items-center"><div className="rounded-xl bg-blue-50 p-4 text-center text-sm font-black text-blue-800">Entrega atual</div><span className="text-center text-xl font-black text-slate-400 sm:block">→</span><div className="rounded-xl bg-cyan-50 p-4 text-center text-sm font-black text-cyan-800">Cidade de interesse</div><span className="hidden text-center text-xl font-black text-slate-400 sm:block">→</span><div className="rounded-xl bg-slate-100 p-4 text-center text-sm font-black text-slate-800 sm:col-start-3">Nova oportunidade</div></div>
+          <div className="rounded-[1.75rem] border border-slate-800 bg-slate-900 p-7">
+            <h3 className="text-xl font-black text-white">Do outro lado também existe alguém esperando.</h3>
+            <p className="mt-4 text-sm font-medium leading-relaxed text-slate-300">
+              Quando você aceita uma operação, existe uma empresa contando com aquela entrega. Por isso, assim como a empresa precisa fazer a sua parte, o motorista também precisa cumprir o que foi combinado, cuidar da carga e manter a comunicação durante a operação.
+            </p>
+            <p className="mt-5 text-sm font-black text-cyan-300">
+              Conexão não é só encontrar uma carga. É fazer o combinado acontecer.
+            </p>
           </div>
+        </div>
+
+        <div className="mt-14">
+          <h3 className="text-2xl font-black text-white sm:text-3xl">Encontre oportunidades com mais contexto.</h3>
+          <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-slate-400">
+            A FretoGo ajuda o motorista a visualizar oportunidades, analisar informações da operação e considerar o que faz sentido para sua rota e seu veículo.
+          </p>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {steps.map((s, i) => (
+              <div key={s.title} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-400 text-xs font-black text-slate-950">
+                  {i + 1}
+                </span>
+                <h4 className="mt-3 text-sm font-black uppercase tracking-wide text-white">{s.title}</h4>
+                <p className="mt-1 text-sm font-medium text-slate-400">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-14">
+          <h3 className="text-2xl font-black text-white">Mais informação antes de decidir.</h3>
+          <div className="mt-7 grid gap-4 sm:grid-cols-2">
+            {benefits.map((b) => (
+              <div key={b.title} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <h4 className="text-base font-black text-white">{b.title}</h4>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-slate-400">{b.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-14">
+          <h3 className="text-2xl font-black text-white">
+            “Mas será que essa oportunidade faz sentido para mim?”
+          </h3>
+          <div className="mt-7 space-y-4">
+            {objections.map((o) => (
+              <div key={o.q} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <p className="text-sm font-black text-white">“{o.q}”</p>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-slate-400">{o.a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-14 text-center">
+          <button
+            type="button"
+            onClick={onAction}
+            className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-8 py-4 text-sm font-black uppercase tracking-[0.13em] text-slate-950 shadow-xl transition hover:bg-cyan-300 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+          >
+            Encontrar oportunidades <ArrowRight size={18} aria-hidden="true" />
+          </button>
         </div>
       </div>
     </section>
   );
 }
 
-function OperationFlowSection() {
-  const steps = ['Empresa publica', 'Frete fica disponível', 'Motorista encontra', 'Motorista aceita', 'Empresa acompanha', 'Pagamento', 'Coleta', 'Transporte', 'Entrega', 'Foto + PIN', 'Entrega confirmada'];
+// =========================================================
+// OS DOIS LADOS + FRETOGO
+// =========================================================
+function ConnectionSection() {
   return (
-    <section className="bg-white py-20 sm:py-24">
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center"><p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">O fluxo completo</p><h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">Agora você entende o caminho da operação.</h2><p className="mt-4 text-lg font-medium leading-relaxed text-slate-600">Cada etapa tem uma função clara, do anúncio da carga à confirmação da entrega.</p></div>
-        <ol className="mx-auto mt-12 grid max-w-3xl gap-3 sm:grid-cols-2 lg:grid-cols-3">{steps.map((step, index) => <li key={step} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white">{index + 1}</span><span className="text-sm font-bold text-slate-800">{step}</span></li>)}</ol>
+    <section className="border-b border-slate-200 bg-slate-50 py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">A conexão</p>
+          <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-5xl">
+            Uma operação depende dos dois lados.
+          </h2>
+          <p className="mt-5 text-lg font-medium leading-relaxed text-slate-600">
+            Quem precisa transportar precisa de quem possa transportar. Quem transporta precisa de uma carga para rodar. E no meio dessa relação existe algo que os dois precisam: clareza.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-12 grid max-w-5xl gap-4 md:grid-cols-[1fr_auto_1fr] md:items-stretch">
+          <article className="rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.15em] text-blue-600">Empresa</p>
+            <ul className="mt-5 space-y-3 text-sm font-bold leading-relaxed text-slate-700">
+              <li>Tem uma necessidade.</li>
+              <li>Precisa transportar.</li>
+              <li>Precisa informar.</li>
+              <li>Precisa acompanhar.</li>
+            </ul>
+          </article>
+          <div className="flex flex-col items-center justify-center gap-2 py-4 text-center">
+            <ArrowRight className="hidden text-slate-400 md:block" size={24} aria-hidden="true" />
+            <span className="rounded-full bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-wide text-white">
+              FretoGo
+            </span>
+            <p className="max-w-[8rem] text-xs font-bold text-slate-500">Organiza a conexão</p>
+            <span className="md:hidden text-slate-400">↕</span>
+          </div>
+          <article className="rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-700">Motorista</p>
+            <ul className="mt-5 space-y-3 text-sm font-bold leading-relaxed text-slate-700">
+              <li>Tem capacidade de transporte.</li>
+              <li>Precisa encontrar oportunidades.</li>
+              <li>Precisa analisar.</li>
+              <li>Precisa cumprir o combinado.</li>
+            </ul>
+          </article>
+        </div>
+
+        <p className="mx-auto mt-10 max-w-2xl text-center text-lg font-black leading-relaxed text-slate-800">
+          Uma empresa precisa de um bom transporte.
+          <br />
+          Um bom transporte precisa de uma empresa que saiba o que precisa.
+          <br />
+          Um depende do outro.
+        </p>
+        <p className="mx-auto mt-4 max-w-xl text-center text-base font-medium text-slate-600">
+          Quando existe clareza dos dois lados, o trabalho fica melhor para todos.
+        </p>
       </div>
     </section>
   );
 }
 
-function RolesSection() {
+// =========================================================
+// TODOS SOMOS CLIENTES
+// =========================================================
+function HumanPrincipleSection() {
   return (
-    <section className="border-y border-slate-800 bg-slate-900 py-16 text-white sm:py-20">
-      <div className="mx-auto max-w-5xl px-4 text-center sm:px-6 lg:px-8"><p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Uma relação mais clara</p><h2 className="mt-3 text-3xl font-black tracking-[-0.035em] sm:text-4xl">Cada um tem seu papel.</h2><div className="mt-10 grid gap-4 text-left sm:grid-cols-3"><div className="rounded-2xl border border-slate-700 bg-slate-800 p-6"><p className="text-xs font-black uppercase tracking-[0.15em] text-blue-300">Empresa</p><p className="mt-3 font-bold leading-relaxed text-slate-100">Tem uma necessidade.</p></div><div className="rounded-2xl border border-slate-700 bg-slate-800 p-6"><p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">Motorista</p><p className="mt-3 font-bold leading-relaxed text-slate-100">Tem uma capacidade de transporte.</p></div><div className="rounded-2xl border border-slate-700 bg-slate-800 p-6"><p className="text-xs font-black uppercase tracking-[0.15em] text-amber-300">FretoGo</p><p className="mt-3 font-bold leading-relaxed text-slate-100">Organiza a conexão.</p></div></div><p className="mx-auto mt-9 max-w-2xl text-base font-medium leading-relaxed text-slate-300">Quando os dois lados entendem o que precisam e o que foi combinado, a operação fica mais clara para todos.</p><div className="mt-6 flex justify-center gap-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-200"><span>Respeito</span><span>•</span><span>Clareza</span><span>•</span><span>Confiança</span></div></div>
+    <section className="bg-slate-950 py-20 text-white sm:py-24">
+      <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-black tracking-[-0.035em] text-white sm:text-5xl">
+          No fim, todos nós somos clientes.
+        </h2>
+        <p className="mt-6 text-lg font-medium leading-relaxed text-slate-300">
+          Hoje você pode estar contratando um transporte. Amanhã pode estar esperando uma entrega. Em outro momento, pode ser quem está levando algo até alguém.
+        </p>
+        <p className="mt-5 text-lg font-medium leading-relaxed text-slate-300">
+          Todos nós dependemos de alguém fazendo bem o seu trabalho.
+        </p>
+        <blockquote className="mt-10 border-l-2 border-cyan-300 pl-5 text-left text-xl font-black leading-relaxed text-cyan-100 sm:text-2xl">
+          Por isso, fazer a nossa parte não é só uma obrigação. É respeito pelo trabalho do outro.
+        </blockquote>
+        <p className="mt-8 text-lg font-bold text-white">
+          Quando cada pessoa entrega o seu melhor, os problemas diminuem para todos.
+        </p>
+      </div>
     </section>
   );
 }
 
+// =========================================================
+// FUTURO
+// =========================================================
+function FutureSection() {
+  return (
+    <section className="border-b border-slate-200 bg-white py-20 sm:py-24">
+      <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
+          Uma logística melhor começa com relações melhores.
+        </h2>
+        <p className="mt-5 text-lg font-medium leading-relaxed text-slate-600">
+          Não é sobre empresa contra motorista. Não é sobre motorista contra empresa. É sobre pessoas que precisam umas das outras para fazer a operação acontecer.
+        </p>
+        <p className="mt-8 text-xl font-black text-slate-900">
+          Mais clareza. Mais respeito. Mais confiança.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// CATEGORIAS
+// =========================================================
 function CategoriesSection() {
   const categories = [
     { name: 'Moto', icon: <Zap size={24} aria-hidden="true" /> },
@@ -559,7 +733,7 @@ function CategoriesSection() {
   ];
 
   return (
-    <section className="border-y border-slate-200 bg-white py-20 sm:py-24">
+    <section className="border-b border-slate-200 bg-slate-50 py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Categorias</p>
@@ -567,14 +741,14 @@ function CategoriesSection() {
             Do pequeno ao pesado
           </h2>
           <p className="mt-4 text-lg font-medium leading-relaxed text-slate-600">
-            Da entrega local ao transporte de maior porte, escolha a categoria adequada para sua carga ou veículo.
+            Da entrega local ao transporte de maior porte — escolha a categoria adequada para a carga ou o veículo.
           </p>
         </div>
         <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
           {categories.map((category) => (
             <div
               key={category.name}
-              className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center shadow-sm"
+              className="flex min-h-28 flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                 {category.icon}
@@ -588,120 +762,51 @@ function CategoriesSection() {
   );
 }
 
-function HowItWorksSection() {
-  const companySteps = [
-    'Publicação da carga',
-    'Pagamento protegido',
-    'Acompanhamento',
-    'Confirmação da entrega',
-  ];
-  const driverSteps = [
-    'Encontre oportunidades',
-    'Escolha o frete',
-    'Realize o transporte',
-    'Entrega e recebimento',
-  ];
-
-  const renderSteps = (steps: string[], accent: 'blue' | 'cyan') =>
-    steps.map((step, index) => (
-      <li key={step} className="flex items-start gap-4">
-        <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-            accent === 'blue' ? 'bg-blue-600 text-white' : 'bg-cyan-400 text-slate-950'
-          }`}
-        >
-          {index + 1}
-        </span>
-        <span className="pt-1 text-sm font-bold leading-relaxed text-slate-700">{step}</span>
-      </li>
-    ));
-
-  return (
-    <section id="como-funciona" className="scroll-mt-24 bg-slate-50 py-20 sm:py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Como funciona</p>
-          <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
-            Um processo simples de acompanhar
-          </h2>
-          <p className="mt-4 text-lg font-medium leading-relaxed text-slate-600">
-            Cada perfil segue etapas claras para manter a operação organizada.
-          </p>
-        </div>
-
-        <div className="mx-auto mt-12 grid max-w-5xl gap-6 lg:grid-cols-2">
-          <article className="rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-sm sm:p-8">
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                <Package size={22} aria-hidden="true" />
-              </span>
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.15em] text-blue-600">Empresa</p>
-                <h3 className="mt-1 text-xl font-black text-slate-950">Da carga à confirmação</h3>
-              </div>
-            </div>
-            <ol className="mt-7 space-y-5">{renderSteps(companySteps, 'blue')}</ol>
-          </article>
-
-          <article className="rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-sm sm:p-8">
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-50 text-cyan-700">
-                <Truck size={22} aria-hidden="true" />
-              </span>
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-700">Motorista</p>
-                <h3 className="mt-1 text-xl font-black text-slate-950">Da oportunidade à entrega</h3>
-              </div>
-            </div>
-            <ol className="mt-7 space-y-5">{renderSteps(driverSteps, 'cyan')}</ol>
-          </article>
-        </div>
-      </div>
-    </section>
-  );
-}
-
+// =========================================================
+// SEGURANÇA
+// =========================================================
 function TrustSection() {
   const points = [
     {
-      icon: <CreditCard size={23} aria-hidden="true" />,
+      icon: <CreditCard size={22} aria-hidden="true" />,
       title: 'Pagamento protegido',
-      description: 'O pagamento acompanha o fluxo da plataforma até a confirmação da operação.',
+      description: 'O pagamento acompanha o fluxo definido na plataforma.',
     },
     {
-      icon: <Camera size={23} aria-hidden="true" />,
-      title: 'Foto da entrega',
-      description: 'O registro da entrega faz parte da confirmação disponível na operação.',
+      icon: <Camera size={22} aria-hidden="true" />,
+      title: 'Registro da entrega',
+      description: 'A operação conta com registro para ajudar na confirmação.',
     },
     {
-      icon: <LockKeyhole size={23} aria-hidden="true" />,
-      title: 'Confirmação por PIN',
-      description: 'A confirmação utiliza o PIN conforme o fluxo da plataforma.',
+      icon: <LockKeyhole size={22} aria-hidden="true" />,
+      title: 'Confirmação',
+      description: 'A conclusão utiliza os mecanismos definidos no processo.',
     },
     {
-      icon: <ShieldCheck size={23} aria-hidden="true" />,
+      icon: <ShieldCheck size={22} aria-hidden="true" />,
       title: 'Acompanhamento',
-      description: 'As etapas visíveis ajudam os dois lados a entender o andamento do transporte.',
+      description: 'As etapas ajudam os dois lados a visualizar o andamento da operação.',
     },
   ];
 
   return (
     <section className="bg-slate-950 py-20 text-white sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid items-start gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+        <div className="grid items-start gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Segurança e confiança</p>
-            <h2 className="mt-3 text-3xl font-black leading-tight tracking-[-0.035em] text-white sm:text-5xl">
-              Confiança não é uma promessa. É um processo.
+            <h2 className="mt-3 text-3xl font-black leading-tight tracking-[-0.035em] text-white sm:text-4xl">
+              Confiança não nasce de uma promessa.
+              <br />
+              Nasce quando cada etapa é clara.
             </h2>
             <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-300">
-              A segurança aparece no processo: pagamento protegido, acompanhamento, registro da entrega e confirmação por PIN quando aplicável.
+              A FretoGo organiza o caminho da operação para que empresa e motorista saibam melhor o que acontece em cada etapa.
             </p>
             <blockquote className="mt-8 border-l-2 border-cyan-300 pl-4 text-base font-bold leading-relaxed text-cyan-100">
               Existe um processo organizado para reduzir problemas.
             </blockquote>
           </div>
-
           <div className="grid gap-4 sm:grid-cols-2">
             {points.map((point) => (
               <article key={point.title} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
@@ -719,26 +824,128 @@ function TrustSection() {
   );
 }
 
+// =========================================================
+// CADA UM TEM UM PAPEL
+// =========================================================
+function RolesSection() {
+  return (
+    <section className="border-b border-slate-200 bg-white py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
+            Cada um tem um papel.
+          </h2>
+        </div>
+        <div className="mx-auto mt-12 grid max-w-5xl gap-5 md:grid-cols-3">
+          <article className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-7">
+            <p className="text-xs font-black uppercase tracking-[0.15em] text-blue-600">Empresa</p>
+            <p className="mt-2 text-sm font-black text-slate-900">Tem uma necessidade.</p>
+            <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">
+              Deve informar corretamente, combinar com clareza e respeitar quem fará o transporte.
+            </p>
+          </article>
+          <article className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-7">
+            <p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-700">Motorista</p>
+            <p className="mt-2 text-sm font-black text-slate-900">Tem uma capacidade.</p>
+            <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">
+              Deve avaliar a oportunidade, cumprir o combinado e cuidar da operação até a entrega.
+            </p>
+          </article>
+          <article className="rounded-[1.75rem] border border-slate-800 bg-slate-900 p-7 text-white">
+            <p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">FretoGo</p>
+            <p className="mt-2 text-sm font-black text-white">Tem uma missão.</p>
+            <p className="mt-3 text-sm font-medium leading-relaxed text-slate-300">
+              Organizar a conexão entre os dois lados.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// FECHAMENTO DA CONSCIÊNCIA
+// =========================================================
+function ClosingConsciousness() {
+  return (
+    <section className="bg-slate-50 py-16 sm:py-20">
+      <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
+        <p className="text-2xl font-black leading-relaxed text-slate-950 sm:text-3xl">
+          Quando cada lado entende o que o outro precisa, a operação fica mais simples.
+        </p>
+        <p className="mt-5 text-base font-medium leading-relaxed text-slate-600">
+          É assim que uma conexão deixa de ser apenas uma oportunidade e começa a construir uma relação melhor.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// CTA FINAL — agora sim ação
+// =========================================================
+interface FinalCtaProps {
+  onClient: () => void;
+  onDriver: () => void;
+}
+
+function FinalCta({ onClient, onDriver }: FinalCtaProps) {
+  return (
+    <section className="border-t border-slate-200 bg-white py-20 sm:py-24">
+      <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-5xl">
+          Agora você conhece os dois lados.
+        </h2>
+        <p className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600">
+          Escolha o próximo passo da sua operação.
+        </p>
+        <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
+          <button
+            type="button"
+            onClick={onClient}
+            className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/15 transition hover:bg-blue-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          >
+            Publicar minha carga <ArrowRight size={18} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={onDriver}
+            className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-slate-950 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-slate-950/15 transition hover:bg-slate-800 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2"
+          >
+            Encontrar oportunidades <ArrowRight size={18} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// GRUPO DE MOTORISTAS
+// =========================================================
 interface GroupProps {
   onDriverGroup: () => void;
 }
 
 function DriverGroupSection({ onDriverGroup }: GroupProps) {
   return (
-    <section className="bg-white py-20 sm:py-24">
+    <section className="border-t border-slate-200 bg-white py-16 sm:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 p-7 shadow-2xl shadow-slate-950/15 sm:p-10">
           <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
               <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-300">
-                <Users size={30} aria-hidden="true" />
+                <Users size={28} aria-hidden="true" />
               </span>
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-300">Para motoristas</p>
                 <h2 className="mt-2 text-2xl font-black tracking-[-0.025em] text-white sm:text-3xl">
-                  Quer receber oportunidades?
+                  Quer continuar conectado?
                 </h2>
-                <p className="mt-2 text-base font-medium text-slate-300">Entre no grupo oficial de motoristas FretoGo.</p>
+                <p className="mt-2 text-base font-medium text-slate-300">
+                  Entre no grupo oficial de motoristas FretoGo e acompanhe as próximas oportunidades e informações da plataforma.
+                </p>
               </div>
             </div>
             <button
@@ -755,40 +962,15 @@ function DriverGroupSection({ onDriverGroup }: GroupProps) {
   );
 }
 
-interface FinalCtaProps extends NavigationProps {}
-
-function FinalCta({ onClient, onDriver }: FinalCtaProps) {
-  return (
-    <section className="border-t border-slate-200 bg-slate-50 py-20 sm:py-24">
-      <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-5xl">
-          Pronto para começar?
-        </h2>
-        <p className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600">
-          Acesse a área específica para entender os próximos passos da sua operação.
-        </p>
-        <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
-          <button
-            type="button"
-            onClick={onClient}
-            className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/15 transition hover:bg-blue-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-          >
-            Publicar minha carga <ArrowRight size={18} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={onDriver}
-            className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-slate-950 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-slate-950/15 transition hover:bg-slate-800 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2"
-          >
-            Encontrar fretes <ArrowRight size={18} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-    </section>
-  );
+// =========================================================
+// FOOTER
+// =========================================================
+interface FooterProps {
+  onClient: () => void;
+  onDriver: () => void;
+  onSupport: () => void;
+  onDriverGroup: () => void;
 }
-
-interface FooterProps extends NavigationProps, GroupProps {}
 
 function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProps) {
   return (
@@ -813,12 +995,20 @@ function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProp
             <h2 className="text-xs font-black uppercase tracking-[0.15em] text-white">Empresas</h2>
             <ul className="mt-5 space-y-3">
               <li>
-                <button type="button" onClick={onClient} className="text-sm font-bold transition hover:text-blue-300 focus-visible:outline-none focus-visible:text-blue-300">
+                <button
+                  type="button"
+                  onClick={onClient}
+                  className="text-sm font-bold transition hover:text-blue-300 focus-visible:outline-none focus-visible:text-blue-300"
+                >
                   Publicar carga
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => scrollToId('como-funciona')} className="text-sm font-bold transition hover:text-blue-300 focus-visible:outline-none focus-visible:text-blue-300">
+                <button
+                  type="button"
+                  onClick={() => scrollToId('empresas')}
+                  className="text-sm font-bold transition hover:text-blue-300 focus-visible:outline-none focus-visible:text-blue-300"
+                >
                   Como funciona
                 </button>
               </li>
@@ -829,12 +1019,20 @@ function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProp
             <h2 className="text-xs font-black uppercase tracking-[0.15em] text-white">Motoristas</h2>
             <ul className="mt-5 space-y-3">
               <li>
-                <button type="button" onClick={onDriver} className="text-sm font-bold transition hover:text-cyan-300 focus-visible:outline-none focus-visible:text-cyan-300">
-                  Encontrar fretes
+                <button
+                  type="button"
+                  onClick={onDriver}
+                  className="text-sm font-bold transition hover:text-cyan-300 focus-visible:outline-none focus-visible:text-cyan-300"
+                >
+                  Encontrar oportunidades
                 </button>
               </li>
               <li>
-                <button type="button" onClick={onDriverGroup} className="text-sm font-bold transition hover:text-cyan-300 focus-visible:outline-none focus-visible:text-cyan-300">
+                <button
+                  type="button"
+                  onClick={onDriverGroup}
+                  className="text-sm font-bold transition hover:text-cyan-300 focus-visible:outline-none focus-visible:text-cyan-300"
+                >
                   Grupo de motoristas
                 </button>
               </li>
@@ -845,12 +1043,18 @@ function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProp
             <h2 className="text-xs font-black uppercase tracking-[0.15em] text-white">Suporte &amp; mais</h2>
             <ul className="mt-5 space-y-3">
               <li>
-                <button type="button" onClick={onSupport} className="inline-flex items-center gap-2 text-sm font-bold text-emerald-400 transition hover:text-emerald-300 focus-visible:outline-none focus-visible:text-emerald-300">
+                <button
+                  type="button"
+                  onClick={onSupport}
+                  className="inline-flex items-center gap-2 text-sm font-bold text-emerald-400 transition hover:text-emerald-300 focus-visible:outline-none focus-visible:text-emerald-300"
+                >
                   <MessageCircle size={16} aria-hidden="true" /> WhatsApp
                 </button>
               </li>
               <li>
-                <span className="text-sm font-bold text-slate-600" title="Preparado para uso futuro">Blog</span>
+                <span className="text-sm font-bold text-slate-600" title="Preparado para uso futuro">
+                  Blog
+                </span>
               </li>
             </ul>
           </div>
@@ -870,7 +1074,10 @@ function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProp
   );
 }
 
-function FloatingWhatsApp({ onSupport }: Pick<NavigationProps, 'onSupport'>) {
+// =========================================================
+// WHATSAPP FLUTUANTE
+// =========================================================
+function FloatingWhatsApp({ onSupport }: { onSupport: () => void }) {
   return (
     <button
       type="button"
@@ -886,34 +1093,43 @@ function FloatingWhatsApp({ onSupport }: Pick<NavigationProps, 'onSupport'>) {
   );
 }
 
+// =========================================================
+// PÁGINA PRINCIPAL
+// =========================================================
 export default function HomePage() {
   const navigate = useNavigate();
 
-  // Rotas e destinos preservados conforme a modelagem atual da plataforma.
   const goToClient = () => navigate('/cliente');
   const goToDriver = () => navigate('/motorista');
   const handleWhatsAppSupport = () => openExternalLink(PLATFORM_LINKS.SUPPORT_WHATSAPP);
   const handleDriverGroup = () => openExternalLink(DRIVER_GROUP_URL);
 
+  // Primeira dobra e escolha de perfil → conscientização (não cadastro)
+  const understandCompany = () => scrollToId('empresas');
+  const understandDriver = () => scrollToId('motoristas');
+
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-white font-sans text-slate-900 selection:bg-cyan-200 selection:text-slate-950">
-      <HomeNavbar onClient={goToClient} onDriver={goToDriver} onSupport={handleWhatsAppSupport} />
+      <HomeNavbar
+        onUnderstandCompany={understandCompany}
+        onUnderstandDriver={understandDriver}
+        onSupport={handleWhatsAppSupport}
+      />
       <main>
-        <Hero onClient={goToClient} onDriver={goToDriver} />
-        <ProblemSection />
-        <EducationalCarousel />
-        <AudienceChoice onClient={goToClient} onDriver={goToDriver} />
-        <InterdependenceSection />
-        <CompanySection onClient={goToClient} />
-        <DriverSection onDriver={goToDriver} />
-        <CityInterestSection />
+        <Hero onUnderstandCompany={understandCompany} onUnderstandDriver={understandDriver} />
+        <WhyContinueSection />
+        <AudienceChoice onUnderstandCompany={understandCompany} onUnderstandDriver={understandDriver} />
+        <CompanySection onAction={goToClient} />
+        <DriverSection onAction={goToDriver} />
+        <ConnectionSection />
+        <HumanPrincipleSection />
+        <FutureSection />
         <CategoriesSection />
-        <HowItWorksSection />
-        <OperationFlowSection />
         <TrustSection />
         <RolesSection />
+        <ClosingConsciousness />
+        <FinalCta onClient={goToClient} onDriver={goToDriver} />
         <DriverGroupSection onDriverGroup={handleDriverGroup} />
-        <FinalCta onClient={goToClient} onDriver={goToDriver} onSupport={handleWhatsAppSupport} />
       </main>
       <HomeFooter
         onClient={goToClient}
