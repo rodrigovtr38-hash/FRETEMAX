@@ -1,8 +1,9 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Home.tsx
-// CTO-Log: HOME-3.1 — Refinamento cirúrgico 10/10.
-// Copy, hierarquia de CTAs, diferenciação e transição.
-// Rotas /cliente e /motorista, WhatsApp e grupo preservados.
+// CTO-Log: HOME-3.2 — Correção de navegação dos CTAs.
+// Conscientização e caminho = scroll interno (não cadastro).
+// Conversão final e footer = /cliente e /motorista.
+// WhatsApp e grupo preservados.
 // =========================================================
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -888,7 +889,7 @@ interface FinalCtaProps {
 
 function FinalCta({ onClient, onDriver }: FinalCtaProps) {
   return (
-    <section className="border-t border-slate-200 bg-white py-20 sm:py-24">
+    <section id="conversao" className="scroll-mt-24 border-t border-slate-200 bg-white py-20 sm:py-24">
       <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
         <h2 className="text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-5xl">
           Agora você conhece os dois lados.
@@ -1095,26 +1096,38 @@ function FloatingWhatsApp({ onSupport }: { onSupport: () => void }) {
 export default function HomePage() {
   const navigate = useNavigate();
 
+  // CONVERSÃO / CADASTRO — somente estes vão para as rotas
   const goToClient = () => navigate('/cliente');
   const goToDriver = () => navigate('/motorista');
   const handleWhatsAppSupport = () => openExternalLink(PLATFORM_LINKS.SUPPORT_WHATSAPP);
   const handleDriverGroup = () => openExternalLink(DRIVER_GROUP_URL);
+
+  // NAVEGAÇÃO INTERNA — conscientização e caminho (NÃO abrem cadastro)
+  const goToCompanyConsciousness = () => scrollToId('empresas');
+  const goToDriverConsciousness = () => scrollToId('motoristas');
   const goToConnection = () => scrollToId('conexao');
+  const goToConversion = () => scrollToId('conversao');
 
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-white font-sans text-slate-900 selection:bg-cyan-200 selection:text-slate-950">
       <HomeNavbar
-        onCompanyPath={goToClient}
-        onDriverPath={goToDriver}
+        onCompanyPath={goToCompanyConsciousness}
+        onDriverPath={goToDriverConsciousness}
         onSupport={handleWhatsAppSupport}
         onConnection={goToConnection}
       />
       <main>
-        <Hero onCompanyPath={goToClient} onDriverPath={goToDriver} />
+        <Hero
+          onCompanyPath={goToCompanyConsciousness}
+          onDriverPath={goToDriverConsciousness}
+        />
         <WhyContinueSection />
-        <AudienceChoice onCompanyPath={goToClient} onDriverPath={goToDriver} />
-        <CompanySection onAction={goToClient} />
-        <DriverSection onAction={goToDriver} />
+        <AudienceChoice
+          onCompanyPath={goToCompanyConsciousness}
+          onDriverPath={goToDriverConsciousness}
+        />
+        <CompanySection onAction={goToConversion} />
+        <DriverSection onAction={goToConversion} />
         <ConnectionSection />
         <HumanPrincipleSection />
         <FutureSection />
