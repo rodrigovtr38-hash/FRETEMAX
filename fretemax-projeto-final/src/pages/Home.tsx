@@ -1,25 +1,21 @@
 // =========================================================
 // NOME DO ARQUIVO: src/pages/Home.tsx
-// CTO-Log: HOME-3.0 — Conexão, consciência e jornada.
-// Hero: CTAs levam à conscientização (não ao cadastro).
-// Cadastro (/cliente, /motorista) só após entender o papel.
-// Rotas, WhatsApp e grupo de motoristas preservados.
+// CTO-Log: HOME-3.1 — Refinamento cirúrgico 10/10.
+// Copy, hierarquia de CTAs, diferenciação e transição.
+// Rotas /cliente e /motorista, WhatsApp e grupo preservados.
 // =========================================================
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LINKS, openExternalLink } from '../config/platformLinks';
 import {
   ArrowRight,
   Camera,
-  CheckCircle2,
   ChevronRight,
   CreditCard,
   LockKeyhole,
-  MapPin,
   Menu,
   MessageCircle,
   Package,
-  Search,
   ShieldCheck,
   Truck,
   Users,
@@ -50,12 +46,13 @@ function scrollToId(id: string) {
 // NAVBAR
 // =========================================================
 interface NavHandlers {
-  onUnderstandCompany: () => void;
-  onUnderstandDriver: () => void;
+  onCompanyPath: () => void;
+  onDriverPath: () => void;
   onSupport: () => void;
+  onConnection: () => void;
 }
 
-function HomeNavbar({ onUnderstandCompany, onUnderstandDriver, onSupport }: NavHandlers) {
+function HomeNavbar({ onCompanyPath, onDriverPath, onSupport, onConnection }: NavHandlers) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -99,14 +96,14 @@ function HomeNavbar({ onUnderstandCompany, onUnderstandDriver, onSupport }: NavH
         <div className="hidden items-center gap-7 md:flex">
           <button
             type="button"
-            onClick={onUnderstandCompany}
+            onClick={() => scrollToId('empresas')}
             className="text-sm font-bold text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:text-white"
           >
             Para empresas
           </button>
           <button
             type="button"
-            onClick={onUnderstandDriver}
+            onClick={() => scrollToId('motoristas')}
             className="text-sm font-bold text-slate-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:text-white"
           >
             Para motoristas
@@ -123,17 +120,17 @@ function HomeNavbar({ onUnderstandCompany, onUnderstandDriver, onSupport }: NavH
         <div className="hidden items-center gap-3 md:flex">
           <button
             type="button"
-            onClick={onUnderstandDriver}
+            onClick={onDriverPath}
             className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-4 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:border-slate-600 hover:bg-slate-800 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
           >
-            Entender o meu lado
+            Ver meu lado
           </button>
           <button
             type="button"
-            onClick={onUnderstandCompany}
+            onClick={onConnection}
             className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-5 text-xs font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
           >
-            Entender como funciona
+            Ver como a conexão acontece
           </button>
         </div>
 
@@ -154,14 +151,14 @@ function HomeNavbar({ onUnderstandCompany, onUnderstandDriver, onSupport }: NavH
           <div className="mx-auto flex max-w-7xl flex-col gap-1">
             <button
               type="button"
-              onClick={() => closeAndRun(onUnderstandCompany)}
+              onClick={() => closeAndRun(() => scrollToId('empresas'))}
               className="rounded-xl px-4 py-3 text-left text-base font-bold text-white transition hover:bg-slate-900"
             >
               Para empresas
             </button>
             <button
               type="button"
-              onClick={() => closeAndRun(onUnderstandDriver)}
+              onClick={() => closeAndRun(() => scrollToId('motoristas'))}
               className="rounded-xl px-4 py-3 text-left text-base font-bold text-white transition hover:bg-slate-900"
             >
               Para motoristas
@@ -176,17 +173,17 @@ function HomeNavbar({ onUnderstandCompany, onUnderstandDriver, onSupport }: NavH
             <div className="my-3 h-px bg-slate-800" />
             <button
               type="button"
-              onClick={() => closeAndRun(onUnderstandCompany)}
+              onClick={() => closeAndRun(onCompanyPath)}
               className="inline-flex min-h-14 items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 active:scale-[0.97]"
             >
-              Entender como funciona
+              Ver o lado da empresa
             </button>
             <button
               type="button"
-              onClick={() => closeAndRun(onUnderstandDriver)}
+              onClick={() => closeAndRun(onDriverPath)}
               className="inline-flex min-h-14 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-white transition hover:bg-slate-800 active:scale-[0.97]"
             >
-              Entender o meu lado
+              Ver o lado do motorista
             </button>
           </div>
         </div>
@@ -196,14 +193,14 @@ function HomeNavbar({ onUnderstandCompany, onUnderstandDriver, onSupport }: NavH
 }
 
 // =========================================================
-// HERO — curiosidade, não cadastro
+// HERO
 // =========================================================
 interface HeroProps {
-  onUnderstandCompany: () => void;
-  onUnderstandDriver: () => void;
+  onCompanyPath: () => void;
+  onDriverPath: () => void;
 }
 
-function Hero({ onUnderstandCompany, onUnderstandDriver }: HeroProps) {
+function Hero({ onCompanyPath, onDriverPath }: HeroProps) {
   return (
     <section className="relative isolate flex min-h-[720px] items-center overflow-hidden bg-slate-950 pt-24 sm:min-h-[680px] lg:min-h-[720px]">
       <img
@@ -226,27 +223,27 @@ function Hero({ onUnderstandCompany, onUnderstandDriver }: HeroProps) {
             <span className="text-cyan-300">Conectados.</span>
           </h1>
           <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-200 sm:text-xl">
-            Quem precisa transportar precisa de quem possa transportar. A FretoGo aproxima os dois lados para a operação acontecer melhor.
+            Quem precisa transportar precisa de quem possa transportar. A FretoGo aproxima os dois lados para a operação acontecer com mais clareza, segurança e confiança.
           </p>
           <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
             <button
               type="button"
-              onClick={onUnderstandCompany}
+              onClick={onCompanyPath}
               className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/50 transition hover:bg-blue-500 active:scale-[0.97] sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
-              Entender como funciona <ArrowRight size={18} aria-hidden="true" />
+              Ver o lado da empresa <ArrowRight size={18} aria-hidden="true" />
             </button>
             <button
               type="button"
-              onClick={onUnderstandDriver}
+              onClick={onDriverPath}
               className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl border border-slate-300/30 bg-slate-950/35 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white backdrop-blur-sm transition hover:border-cyan-300/60 hover:bg-slate-900/75 active:scale-[0.97] sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
               <Truck size={18} className="text-cyan-300" aria-hidden="true" />
-              Entender o meu lado
+              Ver o lado do motorista
             </button>
           </div>
           <p className="mt-5 text-sm font-medium text-slate-400">
-            Antes de escolher, entenda como cada lado funciona.
+            Antes de decidir, veja como cada lado funciona.
           </p>
         </div>
       </div>
@@ -255,7 +252,7 @@ function Hero({ onUnderstandCompany, onUnderstandDriver }: HeroProps) {
 }
 
 // =========================================================
-// POR QUE CONTINUAR
+// ANTES DE CONECTAR
 // =========================================================
 function WhyContinueSection() {
   return (
@@ -277,14 +274,14 @@ function WhyContinueSection() {
 }
 
 // =========================================================
-// QUAL É O SEU LADO?
+// QUAL LADO
 // =========================================================
 interface AudienceProps {
-  onUnderstandCompany: () => void;
-  onUnderstandDriver: () => void;
+  onCompanyPath: () => void;
+  onDriverPath: () => void;
 }
 
-function AudienceChoice({ onUnderstandCompany, onUnderstandDriver }: AudienceProps) {
+function AudienceChoice({ onCompanyPath, onDriverPath }: AudienceProps) {
   return (
     <section id="escolha" className="scroll-mt-24 border-b border-slate-200 bg-white py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -300,31 +297,31 @@ function AudienceChoice({ onUnderstandCompany, onUnderstandDriver }: AudiencePro
         <div className="mx-auto mt-12 grid max-w-5xl gap-6 md:grid-cols-2">
           <article className="flex flex-col rounded-[1.75rem] border border-slate-200 bg-slate-50 p-7 shadow-sm sm:p-8">
             <p className="text-xs font-black uppercase tracking-[0.15em] text-blue-600">Para empresas</p>
-            <h3 className="mt-3 text-2xl font-black text-slate-950">Você precisa transportar?</h3>
+            <h3 className="mt-3 text-2xl font-black text-slate-950">Muita coisa precisa acontecer antes do caminhão sair.</h3>
             <p className="mt-4 flex-grow text-base font-medium leading-relaxed text-slate-600">
               Veja o que acontece do lado de quem precisa fazer uma carga chegar ao destino.
             </p>
             <button
               type="button"
-              onClick={onUnderstandCompany}
+              onClick={onCompanyPath}
               className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-white transition hover:bg-blue-500 active:scale-[0.97]"
             >
-              Entender a empresa <ChevronRight size={18} aria-hidden="true" />
+              Ver o lado da empresa <ChevronRight size={18} aria-hidden="true" />
             </button>
           </article>
 
           <article className="flex flex-col rounded-[1.75rem] border border-slate-800 bg-slate-900 p-7 text-white shadow-xl sm:p-8">
             <p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">Para motoristas</p>
-            <h3 className="mt-3 text-2xl font-black text-white">Você transporta?</h3>
+            <h3 className="mt-3 text-2xl font-black text-white">Rodar também começa por encontrar uma oportunidade que faça sentido.</h3>
             <p className="mt-4 flex-grow text-base font-medium leading-relaxed text-slate-300">
               Veja o que acontece do lado de quem coloca o veículo na estrada para fazer uma entrega acontecer.
             </p>
             <button
               type="button"
-              onClick={onUnderstandDriver}
+              onClick={onDriverPath}
               className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-slate-950 transition hover:bg-cyan-300 active:scale-[0.97]"
             >
-              Entender o motorista <ChevronRight size={18} aria-hidden="true" />
+              Ver o lado do motorista <ChevronRight size={18} aria-hidden="true" />
             </button>
           </article>
         </div>
@@ -334,7 +331,7 @@ function AudienceChoice({ onUnderstandCompany, onUnderstandDriver }: AudiencePro
 }
 
 // =========================================================
-// EMPRESA — conscientização completa
+// EMPRESA
 // =========================================================
 interface ActionProps {
   onAction: () => void;
@@ -372,12 +369,15 @@ function CompanySection({ onAction }: ActionProps) {
       q: 'Vou perder o controle da operação?',
       a: 'Não. A ideia é justamente dar mais visibilidade para acompanhar o caminho da carga.',
     },
+    {
+      q: 'E se eu publicar e não aparecer uma opção que faça sentido?',
+      a: 'A disponibilidade depende das operações existentes. A FretoGo organiza as oportunidades disponíveis para que você possa analisar o que faz sentido antes de decidir.',
+    },
   ];
 
   return (
     <section id="empresas" className="scroll-mt-24 border-b border-slate-200 bg-white py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Intro */}
         <div className="max-w-3xl">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">O lado da empresa</p>
           <h2 className="mt-3 text-3xl font-black leading-tight tracking-[-0.035em] text-slate-950 sm:text-5xl">
@@ -388,7 +388,6 @@ function CompanySection({ onAction }: ActionProps) {
           </p>
         </div>
 
-        {/* Problema */}
         <div className="mt-14 grid gap-10 lg:grid-cols-2 lg:items-start">
           <div>
             <h3 className="text-2xl font-black text-slate-950">O problema nem sempre é encontrar um motorista.</h3>
@@ -410,7 +409,6 @@ function CompanySection({ onAction }: ActionProps) {
           </div>
         </div>
 
-        {/* Consciência */}
         <div className="mt-14 rounded-[1.75rem] border border-blue-100 bg-blue-50/60 p-7 sm:p-9">
           <h3 className="text-2xl font-black text-slate-950">Do outro lado existe alguém esperando.</h3>
           <p className="mt-4 max-w-3xl text-base font-medium leading-relaxed text-slate-700">
@@ -421,11 +419,10 @@ function CompanySection({ onAction }: ActionProps) {
           </p>
         </div>
 
-        {/* Solução */}
         <div className="mt-14">
           <h3 className="text-2xl font-black text-slate-950 sm:text-3xl">A FretoGo organiza essa conexão.</h3>
           <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-slate-600">
-            A empresa publica as informações da carga, acompanha o andamento da operação e encontra oportunidades de conexão com veículos compatíveis com a necessidade do transporte.
+            A FretoGo organiza essa conexão para que as informações da operação fiquem mais claras para quem precisa transportar e para quem vai transportar.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((s, i) => (
@@ -440,7 +437,6 @@ function CompanySection({ onAction }: ActionProps) {
           </div>
         </div>
 
-        {/* Benefícios */}
         <div className="mt-14">
           <h3 className="text-2xl font-black text-slate-950">Menos dúvida. Mais clareza.</h3>
           <div className="mt-7 grid gap-4 sm:grid-cols-2">
@@ -453,7 +449,6 @@ function CompanySection({ onAction }: ActionProps) {
           </div>
         </div>
 
-        {/* Objeções */}
         <div className="mt-14">
           <h3 className="text-2xl font-black text-slate-950">
             “Mas será que isso realmente funciona para mim?”
@@ -468,14 +463,13 @@ function CompanySection({ onAction }: ActionProps) {
           </div>
         </div>
 
-        {/* CTA ação — só depois da consciência */}
         <div className="mt-14 text-center">
           <button
             type="button"
             onClick={onAction}
             className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-8 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/20 transition hover:bg-blue-500 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
-            Publicar minha carga <ArrowRight size={18} aria-hidden="true" />
+            Ver o caminho da empresa <ArrowRight size={18} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -484,13 +478,13 @@ function CompanySection({ onAction }: ActionProps) {
 }
 
 // =========================================================
-// MOTORISTA — conscientização completa
+// MOTORISTA
 // =========================================================
 function DriverSection({ onAction }: ActionProps) {
   const steps = [
     { title: 'Encontre', desc: 'Veja oportunidades disponíveis.' },
     { title: 'Analise', desc: 'Confira as informações antes de escolher.' },
-    { title: 'Transporte', desc: 'Realize o trabalho conforme combinado.' },
+    { title: 'Transporte', desc: 'Realize o trabalho conforme o combinado.' },
     { title: 'Entregue', desc: 'Finalize a operação com registro da entrega.' },
   ];
 
@@ -507,12 +501,12 @@ function DriverSection({ onAction }: ActionProps) {
       a: 'A decisão continua sendo sua. O objetivo é oferecer mais informação antes de você escolher.',
     },
     {
-      q: 'E se eu aceitar e depois descobrir outro problema?',
-      a: 'Por isso as informações da operação devem ser analisadas antes da escolha e acompanhadas durante o processo.',
+      q: 'E se eu perder tempo analisando oportunidades que não servem para minha operação?',
+      a: 'As informações da operação devem ser analisadas antes da escolha, permitindo que você considere rota, veículo e condições antes de aceitar.',
     },
     {
-      q: 'Preciso aceitar qualquer carga?',
-      a: 'Não. Você deve avaliar as oportunidades e escolher aquelas que façam sentido para seu veículo e sua operação.',
+      q: 'Preciso aceitar qualquer oportunidade?',
+      a: 'Não. O objetivo é permitir que você avalie as oportunidades e escolha aquelas que fazem sentido para sua operação.',
     },
     {
       q: 'Isso garante que sempre vou encontrar uma carga?',
@@ -554,7 +548,7 @@ function DriverSection({ onAction }: ActionProps) {
         <div className="mt-14">
           <h3 className="text-2xl font-black text-white sm:text-3xl">Encontre oportunidades com mais contexto.</h3>
           <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-slate-400">
-            A FretoGo ajuda o motorista a visualizar oportunidades, analisar informações da operação e considerar o que faz sentido para sua rota e seu veículo.
+            A FretoGo ajuda o motorista a visualizar oportunidades, analisar informações da operação e considerar o que faz sentido para sua rota e seu veículo. O motorista analisa. O motorista escolhe. O motorista decide o que faz sentido.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((s, i) => (
@@ -601,7 +595,7 @@ function DriverSection({ onAction }: ActionProps) {
             onClick={onAction}
             className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-8 py-4 text-sm font-black uppercase tracking-[0.13em] text-slate-950 shadow-xl transition hover:bg-cyan-300 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           >
-            Encontrar oportunidades <ArrowRight size={18} aria-hidden="true" />
+            Ver o caminho do motorista <ArrowRight size={18} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -610,19 +604,21 @@ function DriverSection({ onAction }: ActionProps) {
 }
 
 // =========================================================
-// OS DOIS LADOS + FRETOGO
+// DIFERENCIAÇÃO + CONEXÃO
 // =========================================================
 function ConnectionSection() {
   return (
-    <section className="border-b border-slate-200 bg-slate-50 py-20 sm:py-24">
+    <section id="conexao" className="scroll-mt-24 border-b border-slate-200 bg-slate-50 py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">A conexão</p>
           <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-5xl">
-            Uma operação depende dos dois lados.
+            Não é só encontrar.
+            <br />
+            É entender o que está sendo combinado.
           </h2>
           <p className="mt-5 text-lg font-medium leading-relaxed text-slate-600">
-            Quem precisa transportar precisa de quem possa transportar. Quem transporta precisa de uma carga para rodar. E no meio dessa relação existe algo que os dois precisam: clareza.
+            A FretoGo aproxima carga e veículo com mais contexto para que cada lado consiga tomar uma decisão mais consciente sobre a operação.
           </p>
         </div>
 
@@ -642,7 +638,7 @@ function ConnectionSection() {
               FretoGo
             </span>
             <p className="max-w-[8rem] text-xs font-bold text-slate-500">Organiza a conexão</p>
-            <span className="md:hidden text-slate-400">↕</span>
+            <span className="text-slate-400 md:hidden">↕</span>
           </div>
           <article className="rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-700">Motorista</p>
@@ -801,7 +797,7 @@ function TrustSection() {
               Nasce quando cada etapa é clara.
             </h2>
             <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-slate-300">
-              A FretoGo organiza o caminho da operação para que empresa e motorista saibam melhor o que acontece em cada etapa.
+              A FretoGo organiza o caminho da operação para que empresa e motorista saibam melhor o que acontece em cada etapa: informação, combinação, acompanhamento e confirmação.
             </p>
             <blockquote className="mt-8 border-l-2 border-cyan-300 pl-4 text-base font-bold leading-relaxed text-cyan-100">
               Existe um processo organizado para reduzir problemas.
@@ -865,7 +861,7 @@ function RolesSection() {
 }
 
 // =========================================================
-// FECHAMENTO DA CONSCIÊNCIA
+// FECHAMENTO
 // =========================================================
 function ClosingConsciousness() {
   return (
@@ -883,7 +879,7 @@ function ClosingConsciousness() {
 }
 
 // =========================================================
-// CTA FINAL — agora sim ação
+// CTA FINAL
 // =========================================================
 interface FinalCtaProps {
   onClient: () => void;
@@ -898,7 +894,7 @@ function FinalCta({ onClient, onDriver }: FinalCtaProps) {
           Agora você conhece os dois lados.
         </h2>
         <p className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600">
-          Escolha o próximo passo da sua operação.
+          Agora que você entendeu como a conexão funciona, veja o que faz sentido para a sua operação.
         </p>
         <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
           <button
@@ -906,14 +902,14 @@ function FinalCta({ onClient, onDriver }: FinalCtaProps) {
             onClick={onClient}
             className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-blue-600 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-blue-950/15 transition hover:bg-blue-700 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
-            Publicar minha carga <ArrowRight size={18} aria-hidden="true" />
+            Ver o caminho da empresa <ArrowRight size={18} aria-hidden="true" />
           </button>
           <button
             type="button"
             onClick={onDriver}
             className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-slate-950 px-7 py-4 text-sm font-black uppercase tracking-[0.13em] text-white shadow-xl shadow-slate-950/15 transition hover:bg-slate-800 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2"
           >
-            Encontrar oportunidades <ArrowRight size={18} aria-hidden="true" />
+            Ver o caminho do motorista <ArrowRight size={18} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -922,7 +918,7 @@ function FinalCta({ onClient, onDriver }: FinalCtaProps) {
 }
 
 // =========================================================
-// GRUPO DE MOTORISTAS
+// GRUPO
 // =========================================================
 interface GroupProps {
   onDriverGroup: () => void;
@@ -1000,7 +996,7 @@ function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProp
                   onClick={onClient}
                   className="text-sm font-bold transition hover:text-blue-300 focus-visible:outline-none focus-visible:text-blue-300"
                 >
-                  Publicar carga
+                  Ver o caminho da empresa
                 </button>
               </li>
               <li>
@@ -1024,7 +1020,7 @@ function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProp
                   onClick={onDriver}
                   className="text-sm font-bold transition hover:text-cyan-300 focus-visible:outline-none focus-visible:text-cyan-300"
                 >
-                  Encontrar oportunidades
+                  Ver o caminho do motorista
                 </button>
               </li>
               <li>
@@ -1075,7 +1071,7 @@ function HomeFooter({ onClient, onDriver, onSupport, onDriverGroup }: FooterProp
 }
 
 // =========================================================
-// WHATSAPP FLUTUANTE
+// WHATSAPP
 // =========================================================
 function FloatingWhatsApp({ onSupport }: { onSupport: () => void }) {
   return (
@@ -1103,22 +1099,20 @@ export default function HomePage() {
   const goToDriver = () => navigate('/motorista');
   const handleWhatsAppSupport = () => openExternalLink(PLATFORM_LINKS.SUPPORT_WHATSAPP);
   const handleDriverGroup = () => openExternalLink(DRIVER_GROUP_URL);
-
-  // Primeira dobra e escolha de perfil → conscientização (não cadastro)
-  const understandCompany = () => scrollToId('empresas');
-  const understandDriver = () => scrollToId('motoristas');
+  const goToConnection = () => scrollToId('conexao');
 
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-white font-sans text-slate-900 selection:bg-cyan-200 selection:text-slate-950">
       <HomeNavbar
-        onUnderstandCompany={understandCompany}
-        onUnderstandDriver={understandDriver}
+        onCompanyPath={goToClient}
+        onDriverPath={goToDriver}
         onSupport={handleWhatsAppSupport}
+        onConnection={goToConnection}
       />
       <main>
-        <Hero onUnderstandCompany={understandCompany} onUnderstandDriver={understandDriver} />
+        <Hero onCompanyPath={goToClient} onDriverPath={goToDriver} />
         <WhyContinueSection />
-        <AudienceChoice onUnderstandCompany={understandCompany} onUnderstandDriver={understandDriver} />
+        <AudienceChoice onCompanyPath={goToClient} onDriverPath={goToDriver} />
         <CompanySection onAction={goToClient} />
         <DriverSection onAction={goToDriver} />
         <ConnectionSection />
