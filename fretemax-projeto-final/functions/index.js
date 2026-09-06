@@ -11,6 +11,7 @@
 // 7. 🔎 DIAGNOSTIC-LOG: Logs completos de rastreamento adicionados antes de cada throw em
 //    getCoords e getDistance. NENHUMA regra de negócio, cálculo ou fluxo foi alterado —
 //    apenas console.log/console.error informativos foram inseridos.
+// 8. 🔥 CTO FIX (BLOCO 02): Watchdog de Reservas. Ceifador autônomo para fretes sem pagamento após 5 minutos.
 // =========================================================
  
 const functions = require('firebase-functions');
@@ -316,11 +317,11 @@ exports.workerNotificacoes = functions.firestore.document('fretes/{freteId}').on
       const apiUrl = process.env.WHATSAPP_API_URL;
       if (apiUrl) {
          await axios.post(apiUrl, {
-            phone: telefone,
-            message: `📦 *FretoGo Network*\n\nAviso Operacional: Sua carga agendada está próxima! Status: ${newValue.tipoNotificacaoWorker}`
+           phone: telefone,
+           message: `📦 *FretoGo Network*\n\nAviso Operacional: Sua carga agendada está próxima! Status: ${newValue.tipoNotificacaoWorker}`
          }, {
-            headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}` },
-            timeout: 5000
+           headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}` },
+           timeout: 5000
          });
       }
  
@@ -523,6 +524,62 @@ exports.watchdogOfertasExpiradas = functions.runWith(runtimeOpts).pubsub.schedul
   }
  
   await batch.commit();
+  return null;
+});
+
+// ========================================================
+// 7.1. WATCHDOG DE RESERVAS (O Ceifador de Pagamentos Pendentes - 5 Minutos)
+// ========================================================
+exports.watchdogReservasExpiradas = functions.runWith(runtimeOpts).pubsub.schedule('every 1 minutes').onRun(async (context) => {
+  const agoraMs = Date.now();
+
+  // Busca reservas aguardando pagamento que já passaram do tempo limite (5 minutos gravados em milissegundos)
+  const reservasExpiradas = await db.collection('fretes')
+    .where('status', '==', 'reservado_aguardando_pagamento')
+    .where('reservaExpiraEm', '<', agoraMs)
+    .limit(100)
+    .get();
+
+  if (reservasExpiradas.empty) return null;
+
+  const batch = db.batch();
+
+  for (const docFrete of reservasExpiradas.docs) {
+    const data = docFrete.data();
+    const motoristaId = data.motoristaId;
+
+    // 1. Libera a carga e devolve para o Mural/Feed (DISPONIVEL)
+    batch.update(docFrete.ref, {
+      status: 'disponivel',
+      motoristaId: null,
+      motoristaNome: null,
+      motoristaTelefone: null,
+      motoristaZap: null,
+      motoristaLat: null,
+      motoristaLng: null,
+      alertaInsucesso: true,
+      isRecusa: true,
+      motivoCancelamento: 'O cliente não realizou o pagamento no prazo de 5 minutos (Timeout Automático Backend).',
+      atualizadoEm: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // 2. Libera o Motorista na nuvem (Firestore motoristas_online)
+    if (motoristaId) {
+      const motoristaOnlineRef = db.collection('motoristas_online').doc(motoristaId);
+      // Utilizando merge: true para evitar falha do batch inteiro caso o motorista tenha sumido do banco
+      batch.set(motoristaOnlineRef, {
+        state: 'ONLINE',
+        freteAtualId: null,
+        activeTripId: null,
+        currentTripId: null,
+        disponivel: true,
+        atualizadoEm: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+  }
+
+  await batch.commit();
+  console.log(`[WATCHDOG RESERVAS] Timeout aplicado em ${reservasExpiradas.size} operação(ões). O frete voltou ao Radar.`);
   return null;
 });
  
