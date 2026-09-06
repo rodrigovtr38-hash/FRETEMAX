@@ -104,8 +104,8 @@ class DispatchRealtimeService {
         atualizadoEm: Date.now(),
       });
 
-      // 2. Devolve o Frete do Cliente para "EXPIRADO" (Não retorna pro Feed)
-      await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.EXPIRADO, {
+      // 2. Devolve o Frete do Cliente para "DISPONIVEL" (Retorna pro Feed)
+      await TripLifecycleService.alterarStatusViagem(freteId, AppTripState.DISPONIVEL, {
         motoristaId: null,
         motoristaNome: null,
         motoristaTelefone: null,
@@ -113,6 +113,7 @@ class DispatchRealtimeService {
         motoristaLat: null,
         motoristaLng: null,
         alertaInsucesso: true,
+        isRecusa: true,
         motivoCancelamento: 'O cliente não realizou o pagamento no prazo de 5 minutos.'
       });
 
