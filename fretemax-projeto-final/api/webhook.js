@@ -5,6 +5,7 @@
 // 7. 🔥 CTO FIX (BLOCO 24): Destravamento Cirúrgico do RTDB. Webhook liberta o motorista via firebase-admin/database.
 // 8. 🔥 CTO FIX (PAGAMENTO REAL): Idempotência de String corrigida (aprovado === approved).
 // 9. 🔥 CTO FIX (BUSINESS): Rejeição não devolve ao radar automaticamente, vira EXPIRADO.
+// 10. 🔥 CTO FIX (BLOCO 03): Transação Atômica injetada para evitar Race Condition contra o Watchdog de 5 minutos.
 // =========================================================
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
@@ -100,11 +101,18 @@ export default async function handler(req, res) {
       if (!pedidoId) return res.status(400).send('Sem referência no pagamento');
 
       const freteRef = db.collection('fretes').doc(pedidoId);
-      const freteSnap = await freteRef.get();
+      const paymentMotoristaId = paymentData.metadata?.motorista_id;
 
-      if (freteSnap.exists) {
+      let rtdbUpdateNeeded = null;
+      let zapPayload = null;
+
+      // 🔥 CTO FIX: Transação Atômica para blindar contra o Watchdog
+      await db.runTransaction(async (transaction) => {
+        const freteSnap = await transaction.get(freteRef);
+
+        if (!freteSnap.exists) return;
+
         const freteData = freteSnap.data();
-        const paymentMotoristaId = paymentData.metadata?.motorista_id;
 
         // 🔥 CTO FIX: Idempotência de tradução (Português vs Inglês)
         const isAlreadyApproved = paymentData.status === 'approved' && freteData.pagamentoStatus === 'aprovado';
@@ -112,7 +120,7 @@ export default async function handler(req, res) {
 
         if ((isAlreadyApproved || isAlreadyRejected) && freteData.pagamentoId === paymentId) {
            console.log(`[IDEMPOTÊNCIA] Pagamento ${paymentId} já processado. Ignorando duplicata.`);
-           return res.status(200).send('Já processado');
+           return;
         }
 
         // ==========================================
@@ -124,12 +132,12 @@ export default async function handler(req, res) {
             
             if (paymentMotoristaId && paymentMotoristaId !== freteData.motoristaId) {
               console.error(`[CRÍTICO: SWAP EVITADO] Pertence ao motorista antigo.`);
-              await freteRef.update({ pagamentoStatus: 'aprovado_incompativel', pagamentoAtrasadoId: paymentId, atualizadoEm: FieldValue.serverTimestamp() });
-              return res.status(200).send('OK'); 
+              transaction.update(freteRef, { pagamentoStatus: 'aprovado_incompativel', pagamentoAtrasadoId: paymentId, atualizadoEm: FieldValue.serverTimestamp() });
+              return; 
             }
 
             // Liberação Firestore (SSOT)
-            await freteRef.update({
+            transaction.update(freteRef, {
               status: 'aceito', 
               pagamentoStatus: 'aprovado',
               dispatchStatus: 'confirmado', 
@@ -138,25 +146,28 @@ export default async function handler(req, res) {
               atualizadoEm: FieldValue.serverTimestamp()
             });
 
-            // Liberação RTDB (Motorista)
+            // Prepara liberação RTDB (Motorista) para rodar após a transação
             if (freteData.motoristaId) {
-               await rtdb.ref(`drivers/${freteData.motoristaId}`).update({
-                 state: 'aceitou',
-                 atualizadoEm: Date.now()
-               });
+               rtdbUpdateNeeded = {
+                 driverId: freteData.motoristaId,
+                 payload: {
+                   state: 'aceitou',
+                   atualizadoEm: Date.now()
+                 }
+               };
             }
             
-            console.log(`[SUCESSO] Escrow Validado. Pagamento Aprovado. Viagem Liberada!`);
-
             if (freteData.clienteZap || freteData.telefoneCliente) {
                const zapCliente = freteData.clienteZap || freteData.telefoneCliente;
                const linkRastreio = `https://app.fretogo.com.br/cliente?order=${pedidoId}`;
-               const mensagemZap = `✅ *FretoGo*: Pagamento Escrow confirmado!\n\nA operação foi liberada oficialmente. Acompanhe a viagem: ${linkRastreio}`;
-               await dispararWhatsAppSeguro(zapCliente, mensagemZap);
+               zapPayload = {
+                 telefone: zapCliente,
+                 mensagem: `✅ *FretoGo*: Pagamento Escrow confirmado!\n\nA operação foi liberada oficialmente. Acompanhe a viagem: ${linkRastreio}`
+               };
             }
           } else {
             console.warn(`[LATE APPROVAL] Carga em status: ${freteData.status}. Rollback Evitado.`);
-            await freteRef.update({
+            transaction.update(freteRef, {
               pagamentoStatus: 'aprovado_atrasado',
               pagamentoAtrasadoId: paymentId,
               atualizadoEm: FieldValue.serverTimestamp()
@@ -172,13 +183,13 @@ export default async function handler(req, res) {
 
             if (paymentMotoristaId && paymentMotoristaId !== freteData.motoristaId) {
               console.warn(`[ROLLBACK IGNORADO] Recusa de pagamento do motorista antigo.`);
-              return res.status(200).send('OK');
+              return;
             }
 
             console.log(`[ROLLBACK] Pagamento recusado. Expirando reserva (NÃO VOLTA AO FEED).`);
             
             // 🔥 CTO FIX: Status alterado para expirado em vez de disponivel, conforme regra comercial.
-            await freteRef.update({
+            transaction.update(freteRef, {
               status: 'expirado', 
               pagamentoStatus: paymentData.status,
               motoristaId: null,
@@ -190,19 +201,32 @@ export default async function handler(req, res) {
             });
 
             if (freteData.motoristaId) {
-               await rtdb.ref(`drivers/${freteData.motoristaId}`).update({
-                 state: 'online',
-                 freteAtualId: null,
-                 activeTripId: null,
-                 disponivel: true,
-                 atualizadoEm: Date.now()
-               });
+               rtdbUpdateNeeded = {
+                 driverId: freteData.motoristaId,
+                 payload: {
+                   state: 'online',
+                   freteAtualId: null,
+                   activeTripId: null,
+                   disponivel: true,
+                   atualizadoEm: Date.now()
+                 }
+               };
             }
 
           } else {
-            await freteRef.update({ pagamentoStatus: paymentData.status, atualizadoEm: FieldValue.serverTimestamp() });
+            transaction.update(freteRef, { pagamentoStatus: paymentData.status, atualizadoEm: FieldValue.serverTimestamp() });
           }
         }
+      });
+
+      // Side-effects executados apenas se a transação atômica commitar com sucesso
+      if (rtdbUpdateNeeded) {
+        await rtdb.ref(`drivers/${rtdbUpdateNeeded.driverId}`).update(rtdbUpdateNeeded.payload);
+      }
+
+      if (zapPayload) {
+        console.log(`[SUCESSO] Escrow Validado. Pagamento Aprovado. Viagem Liberada!`);
+        await dispararWhatsAppSeguro(zapPayload.telefone, zapPayload.mensagem);
       }
     }
     
