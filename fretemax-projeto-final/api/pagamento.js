@@ -4,6 +4,7 @@
 // Evolução Fase 5: Agora processa o checkout da "Reserva de Motorista" no momento do Match.
 // Evolução Fase 8: Trava dura de estado. Só gera cobrança para reservas ativas e motoristas vinculados.
 // Evolução Fase 11: Blindagem de Late Approval. Injeção de Metadata com motorista_id na Preferência MP.
+// Evolução Fase 12: Idempotência Atômica. Previne criação simultânea de múltiplos checkouts.
 // =========================================================
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
@@ -33,32 +34,70 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'ID do pedido é obrigatório' });
     }
 
-    // 🔒 BUSCA SEGURA VIA FIREBASE ADMIN DIRETO NO BANCO
     const freteRef = db.collection('fretes').doc(idPedido);
-    const freteSnap = await freteRef.get();
+    let freteData;
 
-    if (!freteSnap.exists) {
-      throw new Error('Pedido não encontrado no banco de dados');
-    }
+    // 🔒 BUSCA SEGURA E ATÔMICA VIA FIREBASE ADMIN
+    try {
+      freteData = await db.runTransaction(async (transaction) => {
+        const freteSnap = await transaction.get(freteRef);
 
-    const freteData = freteSnap.data();
-    
-    // 🔥 CTO FIX: Proteção de Estado da Reserva (Bloco 8)
-    if (freteData.status !== 'reservado_aguardando_pagamento') {
-      console.error(`[FRAUDE/BLOQUEIO] Tentativa de checkout para frete fora de reserva. Status atual: ${freteData.status}`);
-      return res.status(403).json({ error: 'O frete não está disponível para pagamento neste momento.' });
-    }
+        if (!freteSnap.exists) {
+          throw new Error('NOT_FOUND');
+        }
 
-    // 🔥 CTO FIX: Proteção de Motorista Fantasma
-    if (!freteData.motoristaId) {
-      console.error(`[FRAUDE/BLOQUEIO] Tentativa de checkout para frete sem motorista vinculado. ID: ${idPedido}`);
-      return res.status(403).json({ error: 'Nenhum motorista vinculado a esta reserva.' });
+        const data = freteSnap.data();
+        
+        // 🔥 CTO FIX: Proteção de Estado da Reserva (Bloco 8)
+        if (data.status !== 'reservado_aguardando_pagamento') {
+          throw new Error('INVALID_STATUS');
+        }
+
+        // 🔥 CTO FIX: Proteção de Motorista Fantasma
+        if (!data.motoristaId) {
+          throw new Error('NO_DRIVER');
+        }
+
+        // 🔥 CTO FIX: Idempotência - Bloqueio de Concorrência
+        // Previne que cliques rápidos gerem múltiplas chamadas ao Mercado Pago.
+        // O bloqueio expira em 30s caso haja pane de rede antes do release.
+        const now = Date.now();
+        if (data.checkoutLock && (now - (data.checkoutLockTime || 0) < 30000)) {
+          throw new Error('ALREADY_PROCESSING');
+        }
+
+        // Adquire o bloqueio para esta transação específica
+        transaction.update(freteRef, {
+          checkoutLock: true,
+          checkoutLockTime: now
+        });
+
+        return data;
+      });
+    } catch (txError) {
+      if (txError.message === 'NOT_FOUND') {
+        return res.status(404).json({ error: 'Pedido não encontrado no banco de dados' });
+      }
+      if (txError.message === 'INVALID_STATUS') {
+        console.error(`[FRAUDE/BLOQUEIO] Tentativa de checkout para frete fora de reserva. ID: ${idPedido}`);
+        return res.status(403).json({ error: 'O frete não está disponível para pagamento neste momento.' });
+      }
+      if (txError.message === 'NO_DRIVER') {
+        console.error(`[FRAUDE/BLOQUEIO] Tentativa de checkout para frete sem motorista vinculado. ID: ${idPedido}`);
+        return res.status(403).json({ error: 'Nenhum motorista vinculado a esta reserva.' });
+      }
+      if (txError.message === 'ALREADY_PROCESSING') {
+        console.warn(`[CONCORRÊNCIA] Checkout duplo evitado no idPedido: ${idPedido}`);
+        return res.status(429).json({ error: 'Já existe um pagamento sendo gerado para este frete. Aguarde.' });
+      }
+      throw txError; // Outros erros de banco vão para o catch geral.
     }
 
     // 🔥 CTO FIX: Leitura padronizada da chave de valor
     const valorReal = Number(freteData.valorTotal || freteData.valorBruto || 0);
 
     if (isNaN(valorReal) || valorReal <= 0) {
+      await freteRef.update({ checkoutLock: false }).catch(() => {});
       console.error(`[FRAUDE EVITADA] Valor zerado/inválido. Pedido: ${idPedido}`);
       return res.status(400).json({ error: 'Valor do frete inválido' });
     }
@@ -120,6 +159,8 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!data.init_point) {
+      // Libera o bloqueio caso o MP retorne erro
+      await freteRef.update({ checkoutLock: false }).catch(() => {});
       console.error("[ERRO MP]: O Mercado Pago não devolveu o link.", data);
       return res.status(500).json({ 
         error: 'Erro ao criar preferência no Mercado Pago',
@@ -130,6 +171,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ url: data.init_point });
 
   } catch (error) {
+    // Libera o bloqueio caso haja falha geral (rede, exceção de código, etc.)
+    if (idPedido) {
+      await db.collection('fretes').doc(idPedido).update({ checkoutLock: false }).catch(() => {});
+    }
     console.error("[ERRO PAGAMENTO]:", error.message);
     return res.status(500).json({ 
       error: 'Erro ao gerar pagamento',
