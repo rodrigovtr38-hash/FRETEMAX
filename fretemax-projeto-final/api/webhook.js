@@ -6,6 +6,7 @@
 // 8. 🔥 CTO FIX (PAGAMENTO REAL): Idempotência de String corrigida (aprovado === approved).
 // 9. 🔥 CTO FIX (BUSINESS): Rejeição não devolve ao radar automaticamente, vira EXPIRADO.
 // 10. 🔥 CTO FIX (BLOCO 03): Transação Atômica injetada para evitar Race Condition contra o Watchdog de 5 minutos.
+// 11. 🔥 CTO FIX (BLOCO 05): Sincronização da timeline visual do cliente injetada no Firestore.
 // =========================================================
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
@@ -144,6 +145,15 @@ export default async function handler(req, res) {
               pagoEm: FieldValue.serverTimestamp(),
               pagamentoId: paymentId,
               atualizadoEm: FieldValue.serverTimestamp()
+            });
+
+            // 🔥 CTO FIX (BLOCO 05): Registro na subcoleção de chat da viagem
+            const chatRef = freteRef.collection('chat').doc();
+            transaction.set(chatRef, {
+              texto: '🔔 [Torre Operacional]: Vinculação confirmada. Motorista designado para a operação.',
+              nome: 'Torre de Controle (IA)',
+              tipoUsuario: 'admin',
+              createdAt: FieldValue.serverTimestamp()
             });
 
             // Prepara liberação RTDB (Motorista) para rodar após a transação
