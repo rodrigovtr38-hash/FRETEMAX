@@ -10,6 +10,7 @@
 // CLIENTE-AUTH-01: Injeção do Gatekeeper de Autenticação (Google Auth) e bloqueio de Postagem Anônima no Firestore.
 // BLOCO 6: Injeção do Painel de Visibilidade de PINs e Automação de Envio no Chat Operacional.
 // CTO-FIX ATUAL: Chat visível imediatamente no Match. Lógica de Expiração (Publicar Novamente ou Excluir) se não pagar em 5 min.
+// CTO-FIX MATEMÁTICO: Isolamento do pedágio da base de cálculo de comissão e padronização canônica de campos.
 // =========================================================
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -30,7 +31,7 @@ import { NotificationService } from '../services/notificationService';
 
 interface AddressData { cep: string; bairro: string; rua: string; num: string; cidade?: string; uf?: string; lat?: number; lng?: number; }
 interface Coords { lat: number; lng: number; }
-interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; valorLiquidoMotorista?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; tipoMaterial?: string; qtdVolumes?: string; peso?: string; pesoKg?: string; reservadoEm?: number; transactionId?: string; }
+interface OrderData { status: string; motoristaNome?: string; motoristaZap?: string; rotaInteligente?: boolean; motoristaId?: string; veiculo?: string; distancia?: number; valorTotal?: number; origemLat?: number; origemLng?: number; destinoLat?: number; destinoLng?: number; paradas?: any[]; pinColeta?: string; pinEntregas?: string[]; multiplasEntregas?: boolean; paradaAtualIndex?: number; pagamentoStatus?: string; createdAt?: any; valorFreteBruto?: number; valorLiquidoMotorista?: number; visualizacoes?: number; motoristasNotificados?: number; interessados?: number; motoristaLat?: number; motoristaLng?: number; tipoMaterial?: string; qtdVolumes?: string; peso?: string; pesoKg?: string; reservadoEm?: number; transactionId?: string; valorPedagio?: number; }
 
 type VehicleType = 'moto' | 'carro' | 'utilitarios' | 'toco' | 'truck' | 'carreta' | 'bitrem';
 
@@ -497,10 +498,15 @@ export default function Cliente() {
       const parsedDate = tipoFrete === 'agendado' && dataAgendada ? new Date(dataAgendada) : null;
       const firebaseTimestamp = parsedDate ? Timestamp.fromDate(parsedDate) : null;
 
+      // 🔥 FIX MATEMÁTICO: Isolando o Pedágio da Tributação
       const isHeavy = ['toco', 'truck', 'carreta', 'bitrem'].includes(vehicle);
       const taxaPlataforma = isHeavy ? 0.15 : 0.20;
       const valorFreteBruto = valorOfertaNum; 
-      const lucroPlataforma = valorFreteBruto * taxaPlataforma; 
+      const valorPedagioOperacao = calculoFinanceiro.tollCost;
+      
+      // Subtrai o pedágio antes de calcular a comissão para proteger o custo operacional do motorista
+      const baseComissao = Math.max(0, valorFreteBruto - valorPedagioOperacao);
+      const lucroPlataforma = baseComissao * taxaPlataforma; 
       const valorLiquidoMotorista = valorFreteBruto - lucroPlataforma; 
 
       const docRef = await addDoc(collection(db, 'fretes'), {
@@ -529,10 +535,10 @@ export default function Cliente() {
         
         valorTotal: valorFreteBruto, 
         valorFreteBruto: valorFreteBruto,
-        valorLiquidoMotorista: Number(valorLiquidoMotorista.toFixed(2)),
         valorMotorista: Number(valorLiquidoMotorista.toFixed(2)), 
+        valorLiquidoMotorista: Number(valorLiquidoMotorista.toFixed(2)),
         lucroPlataforma: Number(lucroPlataforma.toFixed(2)),
-        valorPedagio: calculoFinanceiro.tollCost, 
+        valorPedagio: valorPedagioOperacao, 
         
         cidadeOrigem: coleta.bairro, 
         cidadeDestino: destinoFinal.bairro,
@@ -554,7 +560,7 @@ export default function Cliente() {
         
         visualizacoes: 0,
         motoristasNotificados: 0,
-        interessados: 0,
+        interressados: 0,
 
         status: tipoFrete === 'agendado' ? TripState.AGENDADO : TripState.DISPONIVEL,
         pagamentoStatus: 'pendente',
@@ -631,11 +637,15 @@ export default function Cliente() {
     try {
       showToast('Recalculando e injetando nova oferta...', 'warning');
       
+      // 🔥 FIX MATEMÁTICO NO SMART PRICING: Protegendo o pedágio na margem adicional
       const isHeavy = ['toco', 'truck', 'carreta', 'bitrem'].includes(orderData.veiculo || '');
       const taxaPlataforma = isHeavy ? 0.15 : 0.20;
       
       const novoBruto = (orderData.valorFreteBruto || 0) + valorAdicional;
-      const novoLucro = novoBruto * taxaPlataforma;
+      const valorPedagioOperacao = orderData.valorPedagio || 0;
+      
+      const baseComissao = Math.max(0, novoBruto - valorPedagioOperacao);
+      const novoLucro = baseComissao * taxaPlataforma;
       const novoLiquido = novoBruto - novoLucro;
 
       const dataExpiracao = new Date();
