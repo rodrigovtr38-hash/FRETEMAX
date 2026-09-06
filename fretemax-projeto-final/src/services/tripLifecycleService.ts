@@ -4,6 +4,7 @@
 // Status: Importação do DispatchQueueService ajustada (Maiúscula vs Minúscula).
 // Evolução Fase 12 (Escrow): Blindagem atômica injetada no runTransaction.
 // Correção Bloco 4: Injeção do status 'finalizado' no Tracker de Logs da Torre.
+// Correção Bloco 04 (Execução): Preservação de campos financeiros (pagamentoStatus, pagoEm, reservaExpiraEm) no mapeamento genérico de transição.
 // =========================================================
 
 import { doc, serverTimestamp, collection, addDoc, runTransaction } from 'firebase/firestore';
@@ -43,6 +44,7 @@ export interface TripStateTransitionContract {
   reservadoEm?: number;
   reservaExpiraEm?: number;
   pagamentoStatus?: string;
+  pagoEm?: number;
   alertaInsucesso?: boolean;
   motivoCancelamento?: string;
   isRecusa?: boolean;
@@ -233,6 +235,11 @@ export class TripLifecycleService {
               if (contract.motivoCancelamento !== undefined) payloadUpdate.motivoCancelamento = contract.motivoCancelamento;
               if (contract.entregueEm !== undefined) payloadUpdate.entregueEm = contract.entregueEm;
               if (contract.canceladoPorMotoristaEm !== undefined) payloadUpdate.canceladoPorMotoristaEm = contract.canceladoPorMotoristaEm;
+              
+              // 🔥 CTO FIX: Preservação financeira durante transições operacionais (Bloco 04)
+              if (contract.pagamentoStatus !== undefined) payloadUpdate.pagamentoStatus = contract.pagamentoStatus;
+              if (contract.pagoEm !== undefined) payloadUpdate.pagoEm = contract.pagoEm;
+              if (contract.reservaExpiraEm !== undefined) payloadUpdate.reservaExpiraEm = contract.reservaExpiraEm;
             }
 
             if (isForcedReset) {
