@@ -2,6 +2,7 @@
 // NOME DO ARQUIVO: src/pages/Admin.tsx
 // CTO-Log: Torre de Controle Inteligente (Operacional Definitivo).
 // Status: Senha hardcoded removida. Card Operacional Full-Stack (Cliente, PIX, MP, PINs).
+// Correção (Fluxo Motorista): Refatoração de leitura do payload (fotosPod e chavePixMotorista).
 // =========================================================
 
 import { useState, useEffect, useMemo } from 'react';
@@ -312,17 +313,41 @@ export default function Admin() {
                                   <p className="text-sm font-mono text-white tracking-widest">{f.pinColeta || '---'}</p>
                                </div>
                                
-                               {f.pinEntregas && Array.isArray(f.pinEntregas) ? f.pinEntregas.map((pin: string, idx: number) => (
-                                  <div key={idx} className="bg-slate-950 p-3 rounded-lg border border-white/5 flex flex-col justify-between">
-                                    <div><p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">PIN Entrega {idx + 1}</p><p className="text-sm font-mono text-emerald-400">{pin}</p></div>
-                                    {f.fotosEntregas && f.fotosEntregas[idx] ? <a href={f.fotosEntregas[idx]} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase text-cyan-400 underline mt-2">Ver Foto</a> : <p className="text-[9px] text-amber-500 mt-2">Pendente</p>}
-                                  </div>
-                               )) : (
+                               {/* Iteração de Múltiplos PINs de Entrega com resgate no Map f.fotosPod */}
+                               {f.pinEntregas && Array.isArray(f.pinEntregas) ? f.pinEntregas.map((pin: string, idx: number) => {
+                                  const fotoUrl = (f.fotosPod && f.fotosPod[`parada_${idx}`]) || (f.fotosEntregas && f.fotosEntregas[idx]);
+                                  return (
+                                      <div key={idx} className="bg-slate-950 p-3 rounded-lg border border-white/5 flex flex-col justify-between">
+                                        <div><p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">PIN Entrega {idx + 1}</p><p className="text-sm font-mono text-emerald-400">{pin}</p></div>
+                                        {fotoUrl ? <a href={fotoUrl} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase text-cyan-400 underline mt-2">Ver Foto</a> : <p className="text-[9px] text-amber-500 mt-2">Pendente</p>}
+                                      </div>
+                                  );
+                               }) : (
                                   <div className="bg-slate-950 p-3 rounded-lg border border-white/5 flex flex-col justify-between">
                                     <div><p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">PIN Final</p><p className="text-sm font-mono text-emerald-400">{typeof f.pinEntregas === 'string' ? f.pinEntregas : f.pinEntrega || '---'}</p></div>
-                                    {f.comprovanteUrl ? <a href={f.comprovanteUrl} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase text-cyan-400 underline mt-2">Ver Foto</a> : <p className="text-[9px] text-amber-500 mt-2">Pendente</p>}
+                                    {((f.fotosPod && (f.fotosPod['parada_0'] || Object.values(f.fotosPod)[0])) || f.comprovanteUrl) ? <a href={((f.fotosPod && (f.fotosPod['parada_0'] || Object.values(f.fotosPod)[0])) || f.comprovanteUrl) as string} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase text-cyan-400 underline mt-2">Ver Foto</a> : <p className="text-[9px] text-amber-500 mt-2">Pendente</p>}
                                   </div>
                                )}
+
+                               {/* Garante a exibição de fotos extras do Map fotosPod (caso a estrutura do PIN não acompanhe a quantidade de paradas) */}
+                               {f.fotosPod && Object.entries(f.fotosPod).map(([chave, url], idx) => {
+                                  if (Array.isArray(f.pinEntregas)) {
+                                      const index = parseInt(chave.replace('parada_', ''), 10);
+                                      if (!isNaN(index) && index < f.pinEntregas.length) return null; // Já mostrado
+                                  } else {
+                                      if (chave === 'parada_0') return null; // Já mostrado
+                                  }
+                                  
+                                  return (
+                                       <div key={`extra_${idx}`} className="bg-slate-950 p-3 rounded-lg border border-white/5 flex flex-col justify-between">
+                                           <div>
+                                               <p className="text-[8px] uppercase text-emerald-500 font-bold mb-1">Comprovante</p>
+                                               <p className="text-[10px] font-mono text-slate-500">Parada Extra</p>
+                                           </div>
+                                           <a href={url as string} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase text-cyan-400 underline mt-2">Ver Foto</a>
+                                       </div>
+                                  );
+                               })}
                              </div>
                           </div>
                        </div>
@@ -340,9 +365,10 @@ export default function Admin() {
                                 <div><p className="text-[8px] uppercase text-slate-500 font-bold mb-1">Status Repasse</p><p className={`text-sm font-black ${f.repasseEfetuado ? 'text-green-500' : 'text-amber-500'}`}>{f.repasseEfetuado ? 'LIQUIDADO' : 'PENDENTE'}</p></div>
                                 <div className="text-right"><p className="text-[8px] uppercase text-slate-500 font-bold mb-1">Valor</p><p className="text-lg font-black text-purple-400">R$ {Number(f.repasseValor || f.valorLiquidoMotorista || f.valorMotorista || 0).toFixed(2)}</p></div>
                              </div>
+                             
                              <div className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-white/5">
-                                <div><p className="text-[8px] uppercase text-slate-500 font-bold mb-1">Chave PIX Cadastrada</p><p className="text-sm font-mono text-white truncate max-w-[150px]">{f.motoristaPix || f.chavePix || 'Não informada na DB'}</p></div>
-                                {(f.motoristaPix || f.chavePix) && <button onClick={() => copyPix(f.motoristaPix || f.chavePix)} className="text-[10px] bg-cyan-900/30 hover:bg-cyan-900/60 px-3 py-1.5 rounded-md text-cyan-400 border border-cyan-500/20 font-bold uppercase transition-all flex gap-1"><Copy size={12}/> Copiar</button>}
+                                <div><p className="text-[8px] uppercase text-slate-500 font-bold mb-1">Chave PIX Cadastrada</p><p className="text-sm font-mono text-white truncate max-w-[150px]">{f.chavePixMotorista || f.motoristaPix || f.chavePix || 'Não informada na DB'}</p></div>
+                                {(f.chavePixMotorista || f.motoristaPix || f.chavePix) && <button onClick={() => copyPix(f.chavePixMotorista || f.motoristaPix || f.chavePix)} className="text-[10px] bg-cyan-900/30 hover:bg-cyan-900/60 px-3 py-1.5 rounded-md text-cyan-400 border border-cyan-500/20 font-bold uppercase transition-all flex gap-1"><Copy size={12}/> Copiar</button>}
                              </div>
                           </div>
 
